@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "blocks": [
+    {
+      "id": "leyforge:air",
+      "voxel_id": 0,
+      "display_name": "Air",
+      "color": "#00000000",
+      "solid": false,
+      "breakable": false,
+      "development_placeable": false
+    },
+    {
+      "id": "leyforge:grass",
+      "voxel_id": 1,
+      "display_name": "Grass",
+      "color": "#5F9D45FF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": true
+    },
+    {
+      "id": "leyforge:dirt",
+      "voxel_id": 2,
+      "display_name": "Dirt",
+      "color": "#79543AFF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": true
+    },
+    {
+      "id": "leyforge:stone",
+      "voxel_id": 3,
+      "display_name": "Stone",
+      "color": "#777D82FF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": true
+    },
+    {
+      "id": "leyforge:sand",
+      "voxel_id": 4,
+      "display_name": "Sand",
+      "color": "#D8C27AFF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": true
+    }
+  ]
+}

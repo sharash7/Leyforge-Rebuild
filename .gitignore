@@ -25,6 +25,8 @@
 /saves/
 /logs/
 /crash_reports/
+/.profiles/
+/.verification/
 
 # IDE/editor local state
 /.vscode/

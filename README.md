@@ -49,3 +49,11 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 - `docs/ARCHITECTURE_BOUNDARIES.md` — ownership between Leyforge, LFE, Forge-ENG, The Forge and canonical content.
 
 `SHOWCASE_MASTER_COVERAGE.md` and `SHOWCASE_BUILD_WAVES.md` supersede the older early-slice roadmap for current planning.
+
+## Current playable build
+
+Wave 1 — Standing in Leyforge is the current implemented slice: deterministic streamed voxel
+terrain, first-person movement, voxel targeting, and runtime break/place interaction.
+
+See `docs/WAVE_1_STANDING_IN_LEYFORGE.md` for controls, seed selection, architecture,
+verification, and the explicit boundary before Wave 2 persistence.
