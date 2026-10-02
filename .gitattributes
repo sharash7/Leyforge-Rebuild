@@ -1,0 +1,2 @@
+# Normalize line endings for Godot's text-based project files.
+* text=auto eol=lf

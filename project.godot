@@ -1,0 +1,30 @@
+; Engine configuration file.
+; Edit through Godot where practical because some parameters are not self-explanatory.
+;
+; Format:
+;   [section]
+;   param=value
+
+
+config_version=5
+
+[application]
+
+config/name="Leyforge"
+config/description="Fantasy voxel civilisation sandbox"
+config/version="0.0.0-wave0"
+run/main_scene="res://scenes/main/wave_0_bootstrap.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=960
+window/size/window_height_override=540
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
