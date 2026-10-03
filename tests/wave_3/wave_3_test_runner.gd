@@ -51,8 +51,8 @@ func _content() -> void:
 		_check(not LfeItemStack.valid(value, _catalog, false), "Invalid stack rejected: %s" % str(value))
 	_check(LfeItemStack.valid(null, _catalog), "Empty slot represented by null")
 	var fixture: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(LfeBlockCatalog.DEFAULT_CATALOG_PATH))
-	fixture["items"] = [{"id": "test:hand_token", "display_name": "Equipment fixture", "kind": "item",
-		"inventory_capable": true, "stack_limit": 1, "placeable": false, "equipment_slots": ["hand"]}]
+	fixture["items"].append({"id": "test:hand_token", "display_name": "Equipment fixture", "kind": "item",
+		"inventory_capable": true, "stack_limit": 1, "placeable": false, "equipment_slots": ["hand"]})
 	_write(_root.path_join("test_content.json"), JSON.stringify(fixture))
 	var test_catalog: LfeBlockCatalog = LfeBlockCatalog.new()
 	_check(test_catalog.load_from_path(_root.path_join("test_content.json")) == OK, "Isolated standalone item loads")
@@ -224,7 +224,7 @@ func _persistence() -> void:
 	_check(isolated.seed == loaded.seed and isolated.overrides.count() == 0 and isolated.resource_state == LfeResourceState.new(_catalog).snapshot(), "Complete same-seed isolation")
 	var envelope: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(world.get_primary_path()))
 	var original_payload: Dictionary = JSON.parse_string(envelope["payload_json"])
-	_check(original_payload["metadata"]["save_version"] == 2 and original_payload["metadata"]["worldgen_version"] == 1 and original_payload["metadata"]["content_version"] == 1, "Only save schema increments")
+	_check(original_payload["metadata"]["save_version"] == LfeWorldSave.SAVE_VERSION and original_payload["metadata"]["worldgen_version"] == 1 and original_payload["metadata"]["content_version"] == 1, "Only save schema increments")
 	var v1: Dictionary = original_payload.duplicate(true)
 	v1["metadata"]["world_id"] = "migration"
 	v1["metadata"]["save_version"] = 1

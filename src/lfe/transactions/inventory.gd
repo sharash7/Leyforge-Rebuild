@@ -41,7 +41,7 @@ func validate(values: Variant) -> bool:
 			return false
 		if values[slot] != null and not accepts(slot, StringName(values[slot]["content"])):
 			return false
-	return true
+	return LfeResourceState.unique_instances(values)
 
 
 func restore(values: Variant) -> bool:
@@ -49,7 +49,14 @@ func restore(values: Variant) -> bool:
 		return false
 	_slots = []
 	for value: Variant in values:
-		_slots.append(null if value == null else LfeItemStack.make(StringName(value["content"]), int(value["quantity"])))
+		if value == null:
+			_slots.append(null)
+		else:
+			var stack: Dictionary = value.duplicate(true)
+			stack["quantity"] = int(stack["quantity"])
+			if stack.has("durability"):
+				stack["durability"] = int(stack["durability"])
+			_slots.append(stack)
 	return true
 
 

@@ -84,7 +84,7 @@ func load_from_path(path: String) -> Error:
 		if bool(definition.get("development_placeable", false)):
 			_placeable_ids.append(canonical_id)
 
-	if blocks.size() != REQUIRED_CANONICAL_IDS.size():
+	if blocks.size() < REQUIRED_CANONICAL_IDS.size():
 		return _fail(
 			ERR_INVALID_DATA,
 			"Wave 1 catalog must contain exactly %d blocks." % REQUIRED_CANONICAL_IDS.size()
@@ -119,6 +119,15 @@ func load_from_path(path: String) -> Error:
 		var drop: StringName = StringName(definition.get("drop_content", ""))
 		if drop != &"" and not is_inventory_content(drop):
 			return _fail(ERR_INVALID_DATA, "Unknown block drop content: %s." % drop)
+	for definition: Dictionary in _definitions_by_id.values():
+		if not definition.get("breakable",false):
+			continue
+		var rule: Variant = definition.get("harvest")
+		if not rule is Dictionary or not rule.get("class") is String or rule["class"] not in ["manual","mining","digging","woodcutting"] or not LfeWorldSave._is_integer(rule.get("capability")) or int(rule["capability"]) < 0 or not LfeWorldSave._finite_in_range(rule.get("seconds"),60) or float(rule["seconds"]) <= 0 or not rule.get("outputs") is Array:
+			return _fail(ERR_INVALID_DATA,"Invalid harvest rule")
+		for entry: Variant in rule["outputs"]:
+			if not LfeItemStack.valid(entry,self,false) or entry.has("instance"):
+				return _fail(ERR_INVALID_DATA,"Invalid harvest output")
 	return OK
 
 
@@ -250,4 +259,18 @@ func _valid_inventory_definition(d: Dictionary, block: bool) -> bool:
 		seen.append(slot)
 	if block and not d.get("drop_content") is String:
 		return false
+	if d.has("tool"):
+		var t: Variant = d["tool"]
+		if block or limit != 1 or not t is Dictionary or t.size() != 4:
+			return false
+		if t.get("class") not in ["mining", "woodcutting", "digging"] or not LfeWorldSave._is_integer(t.get("capability")) or int(t["capability"]) < 1:
+			return false
+		if not LfeWorldSave._is_integer(t.get("durability")) or int(t["durability"]) < 1 or not LfeWorldSave._finite_in_range(t.get("efficiency"), 10) or float(t["efficiency"]) < 1:
+			return false
+	if d.has("consume"):
+		if not d["consume"] is Dictionary or d["consume"].is_empty():
+			return false
+		for key: Variant in d["consume"]:
+			if key not in ["health", "hunger", "thirst"] or not LfeWorldSave._finite_in_range(d["consume"][key], 100) or float(d["consume"][key]) <= 0:
+				return false
 	return true

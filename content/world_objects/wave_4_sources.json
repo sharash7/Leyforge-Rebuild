@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "fallen_oak",
+      "display_name": "Fallen Oak Heartwood",
+      "content": "leyforge:oak_heartwood",
+      "quantity": 6,
+      "count": 12,
+      "class": "woodcutting",
+      "capability": 0,
+      "seconds": 1.0,
+      "color": "#865329"
+    },
+    {
+      "id": "dense_stone",
+      "display_name": "Dense stone outcrop (mining 1)",
+      "content": "leyforge:stone",
+      "quantity": 6,
+      "count": 4,
+      "class": "mining",
+      "capability": 1,
+      "seconds": 1.5,
+      "color": "#777D82"
+    },
+    {
+      "id": "trail_food",
+      "display_name": "Trail provisions cache",
+      "content": "leyforge:provisions",
+      "quantity": 4,
+      "count": 2,
+      "class": "manual",
+      "capability": 0,
+      "seconds": 0.3,
+      "color": "#BD7459"
+    },
+    {
+      "id": "trail_water",
+      "display_name": "Drinking water cache",
+      "content": "leyforge:drinking_water",
+      "quantity": 4,
+      "count": 2,
+      "class": "manual",
+      "capability": 0,
+      "seconds": 0.3,
+      "color": "#64B9EB"
+    }
+  ]
+}

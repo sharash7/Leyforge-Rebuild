@@ -20,7 +20,7 @@ static func add(destination: LfeInventory, id: StringName, quantity: int, partia
 			var current: int = 0 if stack == null else int(stack["quantity"])
 			var accepted: int = mini(left, destination._catalog.stack_limit(id) - current)
 			if accepted > 0:
-				next[slot] = LfeItemStack.make(id, current + accepted)
+				next[slot] = LfeItemInstance.create(id, destination._catalog) if LfeItemInstance.is_stateful(id, destination._catalog) else LfeItemStack.make(id, current + accepted)
 				left -= accepted
 			if left == 0:
 				break
@@ -54,6 +54,8 @@ static func transfer(source: LfeInventory, from_slot: int, destination: LfeInven
 	if source == destination and (to_slot < 0 or to_slot == from_slot):
 		return 0
 	var id: StringName = StringName(stack["content"])
+	if LfeItemInstance.is_stateful(id, source._catalog):
+		return _transfer_instance(source, from_slot, destination, stack, to_slot)
 	var working: LfeInventory = LfeInventory.new(destination._catalog, destination.capacity(), destination._restrictions)
 	working.restore(destination.snapshot())
 	var accepted: int = 0
@@ -99,3 +101,23 @@ static func swap(a: LfeInventory, a_slot: int, b: LfeInventory, b_slot: int) -> 
 	if a != b:
 		b.restore(next_b)
 	return true
+
+
+static func _transfer_instance(source: LfeInventory, from_slot: int, destination: LfeInventory, stack: Dictionary, to_slot: int) -> int:
+	var next: Array = destination.snapshot()
+	if to_slot == -1:
+		for slot: int in destination.capacity():
+			if next[slot] == null and destination.accepts(slot, StringName(stack["content"])):
+				to_slot = slot
+				break
+	if not destination.accepts(to_slot, StringName(stack["content"])) or next[to_slot] != null:
+		return 0
+	next[to_slot] = stack.duplicate(true)
+	var source_next: Array = source.snapshot() if source != destination else next
+	source_next[from_slot] = null
+	if not source.validate(source_next) or not destination.validate(next):
+		return 0
+	if source != destination:
+		destination.restore(next)
+	source.restore(source_next)
+	return 1

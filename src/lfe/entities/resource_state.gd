@@ -105,8 +105,11 @@ func restore(data: Variant) -> bool:
 			return false
 		seen[entry["instance"]] = true
 		var coordinates: Array = entry["position"]
-		drops_next[entry["instance"]] = _drop_entry(entry["instance"], StringName(entry["stack"]["content"]), int(entry["stack"]["quantity"]),
-			Vector3(float(coordinates[0]), float(coordinates[1]), float(coordinates[2])))
+		var stack: Dictionary = entry["stack"].duplicate(true)
+		stack["quantity"] = int(stack["quantity"])
+		if stack.has("durability"):
+			stack["durability"] = int(stack["durability"])
+		drops_next[entry["instance"]] = {"instance":entry["instance"],"stack":stack,"position":_normalized_position(coordinates)}
 	for entry: Variant in data["storage"]:
 		if not entry is Dictionary or entry.size() != 4 or not _valid_identity(entry.get("instance")) or seen.has(entry["instance"]):
 			return false
@@ -120,6 +123,13 @@ func restore(data: Variant) -> bool:
 			"instance": entry["instance"], "content": entry["content"],
 			"position": _normalized_position(entry["position"]), "inventory": container,
 		}
+	var instance_slots: Array = player_next.snapshot() + equipment_next.snapshot()
+	for entry: Dictionary in drops_next.values():
+		instance_slots.append(entry["stack"])
+	for entry: Dictionary in storage_next.values():
+		instance_slots.append_array((entry["inventory"] as LfeInventory).snapshot())
+	if not unique_instances(instance_slots, seen):
+		return false
 	inventory = player_next
 	equipment = equipment_next
 	_selected = int(data["hotbar_selected"])
@@ -133,7 +143,13 @@ func pickup(id: String) -> int:
 		return 0
 	var entry: Dictionary = _drops[id]
 	var stack: Dictionary = entry["stack"]
-	var accepted: int = LfeItemTransactions.add(inventory, StringName(stack["content"]), int(stack["quantity"]), true)
+	var accepted: int = 0
+	if stack.has("instance"):
+		var temporary: LfeInventory = LfeInventory.new(_catalog, 1)
+		temporary.restore([stack])
+		accepted = LfeItemTransactions.transfer(temporary, 0, inventory, 1)
+	else:
+		accepted = LfeItemTransactions.add(inventory, StringName(stack["content"]), int(stack["quantity"]), true)
 	if accepted == 0:
 		return 0
 	var left: int = int(stack["quantity"]) - accepted
@@ -154,29 +170,41 @@ func drop_from_inventory(slot: int, quantity: int, position: Vector3) -> String:
 	if not LfeItemTransactions.remove(inventory, slot, quantity):
 		return ""
 	_drops[id] = _drop_entry(id, StringName(stack["content"]), quantity, position)
+	if stack.has("instance"):
+		_drops[id]["stack"] = stack.duplicate(true)
 	return id
 
 
 # World mutations are synchronous validated operations. The callback must return
 # OK only after the voxel and its sparse override have changed successfully.
 # The guard prevents reentrant pickup/drop/conversion while the world commits.
-func break_to_drop(block: StringName, position: Vector3, world_commit: Callable) -> bool:
-	if _busy or _drops.size() >= 10000 or not world_commit.is_valid() or not _valid_position([position.x, position.y, position.z]):
+func break_to_drop(block: StringName, position: Vector3, world_commit: Callable, outputs: Variant = null) -> bool:
+	if _busy or not world_commit.is_valid() or not _valid_position([position.x,position.y,position.z]):
 		return false
 	var definition: Dictionary = _catalog.definition_for_id(block)
-	if not bool(definition.get("breakable", false)):
+	if not bool(definition.get("breakable",false)):
 		return false
-	var output: StringName = StringName(definition.get("drop_content", ""))
-	if output != &"" and not _catalog.is_inventory_content(output):
+	var prepared: Array = []
+	if outputs != null and not outputs is Array:
 		return false
-	var id: String = _new_identity()
+	var resolved: Array = [] if outputs == null else outputs.duplicate(true)
+	if outputs == null:
+		var id: String = definition.get("drop_content","")
+		if not id.is_empty():
+			resolved.append({"content":id,"quantity":1})
+	for entry: Variant in resolved:
+		if not LfeItemStack.valid(entry,_catalog,false) or entry.has("instance"):
+			return false
+		prepared.append(_drop_entry(_new_identity(),StringName(entry["content"]),int(entry["quantity"]),position))
+	if _drops.size() + prepared.size() > 10000:
+		return false
 	_busy = true
 	var result: Variant = world_commit.call()
 	_busy = false
 	if result != OK:
 		return false
-	if output != &"":
-		_drops[id] = _drop_entry(id, output, 1, position)
+	for entry: Dictionary in prepared:
+		_drops[entry["instance"]] = entry
 	return true
 
 
@@ -241,3 +269,12 @@ static func _valid_position(value: Variant) -> bool:
 static func _normalized_position(coordinates: Array) -> Array:
 	var position: Vector3 = Vector3(float(coordinates[0]), float(coordinates[1]), float(coordinates[2]))
 	return [position.x, position.y, position.z]
+
+
+static func unique_instances(slots: Array, seen: Dictionary = {}) -> bool:
+	for stack: Variant in slots:
+		if stack != null and stack.has("instance"):
+			if seen.has(stack["instance"]):
+				return false
+			seen[stack["instance"]] = true
+	return true

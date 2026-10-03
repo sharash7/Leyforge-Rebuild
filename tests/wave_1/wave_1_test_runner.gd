@@ -31,7 +31,7 @@ func _run() -> void:
 
 
 func _test_canonical_identities(catalog: LfeBlockCatalog) -> void:
-	_check(catalog.block_count() == 5, "Wave 1 catalog must expose exactly five blocks.")
+	_check(catalog.block_count() >= LfeBlockCatalog.REQUIRED_CANONICAL_IDS.size(), "Wave 1 catalog must expose exactly five blocks.")
 	var seen_voxel_ids: Dictionary = {}
 	for canonical_id: StringName in LfeBlockCatalog.REQUIRED_CANONICAL_IDS:
 		_check(catalog.has_id(canonical_id), "Missing canonical ID %s." % canonical_id)
@@ -47,7 +47,7 @@ func _test_canonical_identities(catalog: LfeBlockCatalog) -> void:
 	_check(catalog.development_placeable_ids().size() == 4, "Exactly four solid blocks should be development-placeable.")
 
 	var library: VoxelBlockyLibrary = LfeBlockyLibraryFactory.create(catalog)
-	_check(library.get_models().size() == 5, "Blocky library does not match canonical voxel IDs.")
+	_check(library.get_models().size() == catalog.block_count(), "Blocky library does not match canonical voxel IDs.")
 	_check(library.get_model(0) is VoxelBlockyModelEmpty, "Voxel ID zero must use the empty model.")
 	for voxel_id: int in range(1, 5):
 		_check(

@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "recipes": [
+    {
+      "id": "leyforge:saw_planks",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_heartwood",
+          "quantity": 1
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 4
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:craft_stone_pickaxe",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 2
+        },
+        {
+          "content": "leyforge:stone",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:stone_pickaxe",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:craft_stone_axe",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 2
+        },
+        {
+          "content": "leyforge:stone",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:stone_axe",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:craft_stone_shovel",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 2
+        },
+        {
+          "content": "leyforge:stone",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:stone_shovel",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:build_kiln",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:stone",
+          "quantity": 6
+        },
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:kiln",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:weave_rest_mat",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:rest_mat",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:build_storage_box",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 4
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:storage_box",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:craft_lamp",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 1
+        },
+        {
+          "content": "leyforge:charcoal",
+          "quantity": 1
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:lamp",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:charcoal_burn",
+      "context": "kiln",
+      "inputs": [
+        {
+          "content": "leyforge:oak_heartwood",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:charcoal",
+          "quantity": 2
+        }
+      ],
+      "seconds": 8,
+      "fuel": [
+        {
+          "content": "leyforge:oak_heartwood",
+          "quantity": 1
+        }
+      ]
+    }
+  ]
+}

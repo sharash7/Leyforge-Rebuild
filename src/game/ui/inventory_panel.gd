@@ -118,8 +118,10 @@ func _stack_text(inventory: LfeInventory, slot: int) -> String:
 Empty"
 		return "—"
 	var name: String = _world.block_catalog.content_definition(StringName(stack["content"]))["display_name"]
-	return "%s
-×%d" % [name, int(stack["quantity"])]
+	if stack.has("durability"):
+		return "%s\n%d / %d" % [name,int(stack["durability"]),int(_world.block_catalog.content_definition(StringName(stack["content"]))["tool"]["durability"])]
+	return "%s\n×%d" % [name,int(stack["quantity"])]
+
 
 
 func _click_slot(inventory: LfeInventory, slot: int, split: bool, shift: bool) -> void:

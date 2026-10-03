@@ -64,7 +64,7 @@ func _run_a() -> void:
 	await _aim(source)
 	var block: StringName = _catalog.canonical_id_for_voxel_id(_tool.get_voxel(source))
 	var before: int = r.total(block)
-	_check(_player.try_break_target(), "Player targeting breaks voxel")
+	_check(await _harvest_target(), "Player targeting breaks voxel")
 	_check(r.total(block) == before + 1 and r.inventory.total(block) == 0, "Break creates only a physical conserved drop")
 	_edits.append(_edit(source, &"leyforge:air"))
 	await _frames(8)
@@ -80,7 +80,7 @@ func _run_a() -> void:
 	for x: int in [5, 6, 7, 8]:
 		var cell: Vector3i = _surface(x, 2)
 		await _aim(cell)
-		_check(_player.try_break_target(), "Harvest another voxel")
+		_check(await _harvest_target(), "Harvest another voxel")
 		_edits.append(_edit(cell, &"leyforge:air"))
 		var entry: Dictionary = r.drops().back()
 		_check(r.pickup(entry["instance"]) == 1, "Harvest drop collected exactly")
@@ -128,7 +128,7 @@ func _run_a() -> void:
 	_check(not _world.place_cell(Vector3i(900, 90, -900)) and r.snapshot() == before_failure, "Unloaded/range target consumes zero")
 	# Break the newly placed voxel: inventory->world->drop->inventory exact.
 	await _aim(place)
-	_check(_player.try_break_target(), "Break newly placed voxel")
+	_check(await _harvest_target(), "Break newly placed voxel")
 	var returned: Dictionary = r.drops().back()
 	_check(r.pickup(returned["instance"]) == 1 and r.total(block) == initial, "Rendered break-after-place conservation")
 	_edits.pop_back() # Placement collapsed back to its deterministic Air base.
@@ -272,7 +272,7 @@ func _migration() -> void:
 	_check(absf(_player.rotation.y - float(saved["yaw"])) < 0.001, "Migration player orientation restored")
 	_check(_world.request_save(), "Runtime explicit save writes v2")
 	raw = JSON.parse_string(FileAccess.get_file_as_string(_world.world_save.get_primary_path()))
-	_check(int(raw["save_version"]) == 2, "Migrated runtime format now v2")
+	_check(int(raw["save_version"]) == LfeWorldSave.SAVE_VERSION, "Migrated runtime format now v2")
 	_check(FileAccess.get_file_as_string(_world.world_save.get_world_directory().path_join(LfeWorldSave.PREVIOUS_FILE)) == original, "Original v1 retained by atomic lifecycle")
 	_report["saved_resources"] = r.snapshot()
 	_report["saved_player"] = _world.world_save.player_state
@@ -393,3 +393,13 @@ func _check(condition: bool, message: String) -> void:
 	_checks += 1
 	if not condition:
 		_failures.append(message)
+
+
+func _harvest_target() -> bool:
+	if not _player.try_break_target():
+		return false
+	for frame: int in 180:
+		await get_tree().physics_frame
+		if _world._harvest.is_empty():
+			return _player._voxel_tool.get_voxel(_player.get_target_cell()) == _catalog.get_voxel_id(&"leyforge:air")
+	return false

@@ -1,7 +1,7 @@
 class_name LfeWorldSave
 extends RefCounted
 
-const SAVE_VERSION: int = 2
+const SAVE_VERSION: int = 3
 const WORLDGEN_VERSION: int = 1
 const CONTENT_VERSION: int = 1
 const SAVE_FILE: String = "world.json"
@@ -15,6 +15,7 @@ var created_utc: String = ""
 var last_saved_utc: String = ""
 var player_state: Dictionary = {}
 var resource_state: Dictionary = {}
+var creation_state: Dictionary = {}
 var overrides: LfeVoxelOverrideStore = LfeVoxelOverrideStore.new()
 var load_status: String = ""
 var save_status: String = "Never saved"
@@ -39,8 +40,8 @@ func get_primary_path() -> String:
 	return _world_directory.path_join(SAVE_FILE)
 
 
-func is_dirty(current_player_state: Dictionary, current_resources: Dictionary = {}) -> bool:
-	return _edits_dirty or player_state != current_player_state or (not current_resources.is_empty() and resource_state != current_resources) or last_saved_utc.is_empty()
+func is_dirty(current_player_state: Dictionary, current_resources: Dictionary = {}, current_creation: Dictionary = {}) -> bool:
+	return _edits_dirty or player_state != current_player_state or (not current_resources.is_empty() and resource_state != current_resources) or (not current_creation.is_empty() and creation_state != current_creation) or last_saved_utc.is_empty()
 
 
 func record_voxel_edit(cell: Vector3i, voxel_id: int, base_voxel_id: int) -> Error:
@@ -83,6 +84,7 @@ func open_world(
 		last_saved_utc = ""
 		player_state = {}
 		resource_state = LfeResourceState.new(_catalog).snapshot()
+		creation_state = LfeCreationState.new(_catalog).snapshot()
 		overrides = LfeVoxelOverrideStore.new()
 		load_status = "New world; not yet saved"
 		save_status = "Never saved"
@@ -107,19 +109,20 @@ func open_world(
 	last_saved_utc = String(metadata["last_saved_utc"])
 	player_state = decoded["player"]
 	resource_state = decoded["resources"]
+	creation_state = decoded["creation"]
 	overrides = decoded["overrides"]
 	_expected_primary_hash = String(decoded["file_hash"]) if path_to_load == primary else ""
 	_edits_dirty = false
 	load_status = "Loaded world" if path_to_load == primary else "Recovered previous save; primary was missing"
-	if int(metadata["save_version"]) == 1:
-		load_status += "; migrated v1 in memory; next save writes v2"
+	if int(metadata["save_version"]) < SAVE_VERSION:
+		load_status += "; migrated v%d in memory; next save writes v%d" % [int(metadata["save_version"]), SAVE_VERSION]
 	save_status = "Saved %s" % last_saved_utc
 	_is_open = true
 	_last_error = ""
 	return OK
 
 
-func save(current_player_state: Dictionary, current_resources: Variant = null) -> Error:
+func save(current_player_state: Dictionary, current_resources: Variant = null, current_creation: Variant = null) -> Error:
 	if not _is_open or _catalog == null or _world_directory.is_empty():
 		return _fail(ERR_UNCONFIGURED, "World save is not open.")
 	if not _valid_player_state(current_player_state):
@@ -128,6 +131,11 @@ func save(current_player_state: Dictionary, current_resources: Variant = null) -
 	var resource_validator: LfeResourceState = LfeResourceState.new(_catalog)
 	if not resource_validator.restore(resources_to_save):
 		return _fail(ERR_INVALID_DATA, "Invalid Wave 3 resources; refusing save.")
+	var creation_validator: LfeCreationState = LfeCreationState.new(_catalog)
+	if not creation_validator.restore(creation_state if current_creation == null else current_creation, resource_validator.snapshot()):
+		return _fail(ERR_INVALID_DATA, "Invalid survival/creation state; refusing save.")
+	if not creation_validator.initialize_sources(seed) or not creation_validator.validate_source_layout(seed) or not _valid_object_voxels(creation_validator.snapshot(), overrides):
+		return _fail(ERR_INVALID_DATA, "Functional object does not match its authoritative voxel.")
 	var proposed_saved_utc: String = Time.get_datetime_string_from_system(true)
 	var metadata: Dictionary = {
 		"world_id": world_id,
@@ -144,6 +152,7 @@ func save(current_player_state: Dictionary, current_resources: Variant = null) -
 		"player": current_player_state,
 		"voxel_overrides": overrides.serialized_entries(),
 		"resources": resource_validator.snapshot(),
+		"creation": creation_validator.snapshot(),
 	}
 	var payload_json: String = JSON.stringify(payload, "", true, true)
 	var envelope: Dictionary = {
@@ -201,6 +210,7 @@ func save(current_player_state: Dictionary, current_resources: Variant = null) -
 	_expected_primary_hash = serialized.sha256_text()
 	player_state = current_player_state.duplicate(true)
 	resource_state = resource_validator.snapshot()
+	creation_state = creation_validator.snapshot()
 	last_saved_utc = proposed_saved_utc
 	_edits_dirty = false
 	save_status = "Saved %s" % last_saved_utc
@@ -223,7 +233,7 @@ func _decode_file(path: String) -> Dictionary:
 		_fail(ERR_INVALID_DATA, "World save has no valid save version.")
 		return {}
 	var version: int = int(envelope["save_version"])
-	if version != 1 and version != SAVE_VERSION:
+	if version not in [1, 2, SAVE_VERSION]:
 		_fail(ERR_INVALID_DATA, "Unsupported save version %d; this build supports %d." % [version, SAVE_VERSION])
 		return {}
 	if not envelope.get("payload_json") is String or not envelope.get("sha256") is String:
@@ -252,10 +262,18 @@ func _decode_file(path: String) -> Dictionary:
 		_fail(ERR_INVALID_DATA, parsed_overrides.get_last_error())
 		return {}
 	var resources: LfeResourceState = LfeResourceState.new(_catalog)
-	if version == SAVE_VERSION and not resources.restore(payload.get("resources")):
+	if version >= 2 and not resources.restore(payload.get("resources")):
 		_fail(ERR_INVALID_DATA, "Malformed Wave 3 resources or unknown canonical content.")
 		return {}
+	var creation: LfeCreationState = LfeCreationState.new(_catalog)
+	if version == SAVE_VERSION and not creation.restore(payload.get("creation"), resources.snapshot()):
+		_fail(ERR_INVALID_DATA, "Malformed survival, workstation or item-instance state.")
+		return {}
+	if version == SAVE_VERSION and (not creation.snapshot()["initialized"] or not creation.validate_source_layout(int(metadata["seed"])) or not _valid_object_voxels(creation.snapshot(), parsed_overrides)):
+		_fail(ERR_INVALID_DATA, "Functional world object/voxel mismatch.")
+		return {}
 	return {
+		"creation": creation.snapshot(),
 		"resources": resources.snapshot(),
 		"metadata": metadata,
 		"player": parsed_player,
@@ -345,3 +363,18 @@ func _fail(error: Error, message: String) -> Error:
 	_last_error = message
 	save_status = "Error: %s" % message
 	return error
+
+
+func _valid_object_voxels(creation: Dictionary, edits: LfeVoxelOverrideStore) -> bool:
+	var functional: int = 0
+	for entry: Dictionary in edits.serialized_entries():
+		if _catalog.content_definition(StringName(entry["block"])).has("function"):
+			functional += 1
+	if functional != creation["objects"].size():
+		return false
+	for entry: Dictionary in creation["objects"]:
+		var coordinates: Array = entry["cell"]
+		var cell: Vector3i = Vector3i(int(coordinates[0]),int(coordinates[1]),int(coordinates[2]))
+		if edits.canonical_id_at(cell) != entry["content"]:
+			return false
+	return true

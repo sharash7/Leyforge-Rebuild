@@ -55,13 +55,14 @@ func _ready() -> void:
 		OS.get_cmdline_user_args().has("--wave1-playtest")
 		or OS.get_cmdline_user_args().has("--wave2-playtest")
 		or OS.get_cmdline_user_args().has("--wave3-playtest")
+		or OS.get_cmdline_user_args().has("--wave4-playtest")
 	)
 	development_selector = OS.get_cmdline_user_args().has("--development-blocks") or OS.get_cmdline_user_args().has("--wave1-playtest") or OS.get_cmdline_user_args().has("--wave2-playtest")
 	_build_target_highlight()
 	_instruction_label.text = (
 		"WASD move  |  Shift sprint  |  Space jump  |  1–9 / wheel hotbar\n"
 		+ "Left mouse break  |  Right mouse place  |  F5 save  |  F10 save and quit\n"
-		+ "I inventory  |  E storage  |  Q drop one (Shift: stack)  |  Escape close/release"
+		+ "I inventory  |  E interact/gather/rest  |  C craft  |  F consume\nQ drop one (Shift: stack)  |  Escape close/release"
 	)
 	if DisplayServer.get_name() != "headless" and not _playtest_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -189,12 +190,20 @@ func _unhandled_input(event: InputEvent) -> void:
 				resource_state.select(event.keycode - KEY_1)
 				get_viewport().set_input_as_handled()
 				return
+			if event.keycode == KEY_C:
+				gameplay_authority.toggle_crafting()
+				get_viewport().set_input_as_handled()
+				return
+			if event.keycode == KEY_F and not inventory_open:
+				gameplay_authority.consume_selected()
+				get_viewport().set_input_as_handled()
+				return
 			if event.keycode == KEY_I:
 				gameplay_authority.toggle_inventory()
 				get_viewport().set_input_as_handled()
 				return
 			if event.keycode == KEY_E:
-				gameplay_authority.open_nearby_storage()
+				gameplay_authority.interact_creation()
 				get_viewport().set_input_as_handled()
 				return
 			if event.keycode == KEY_ESCAPE and inventory_open:
@@ -262,7 +271,10 @@ func _apply_movement(delta: float) -> void:
 	var movement_direction: Vector3 = (
 		transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)
 	).normalized()
-	var movement_speed: float = SPRINT_SPEED if Input.is_action_pressed("sprint") else WALK_SPEED
+	var sprint_allowed: bool = development_selector or (gameplay_authority != null and gameplay_authority.can_sprint())
+	var movement_speed: float = SPRINT_SPEED if Input.is_action_pressed("sprint") and sprint_allowed else WALK_SPEED
+	if movement_direction != Vector3.ZERO and gameplay_authority != null:
+		gameplay_authority._resting = false
 	var acceleration: float = GROUND_ACCELERATION if is_on_floor() else AIR_ACCELERATION
 
 	if movement_direction != Vector3.ZERO:
@@ -272,7 +284,11 @@ func _apply_movement(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, DECELERATION * delta)
 		velocity.z = move_toward(velocity.z, 0.0, DECELERATION * delta)
 
+	var fall_speed: float = -velocity.y
+	var was_airborne: bool = not is_on_floor()
 	move_and_slide()
+	if was_airborne and is_on_floor() and fall_speed > 12 and gameplay_authority != null:
+		gameplay_authority.damage_player(minf(100,(fall_speed-12)*3))
 
 
 func _handle_interaction_actions() -> void:
@@ -316,7 +332,7 @@ func try_break_target() -> bool:
 		return false
 
 	if not development_selector:
-		return gameplay_authority != null and gameplay_authority.break_cell(_target_cell)
+		return gameplay_authority != null and gameplay_authority.begin_harvest(_target_cell)
 	_voxel_tool.set_voxel(_target_cell, _catalog.get_voxel_id(&"leyforge:air"))
 	block_broken.emit(_target_cell, current_voxel_id)
 	print(
@@ -422,11 +438,11 @@ func _update_debug_overlay() -> void:
 		]
 
 	if not development_selector and not _playtest_mode:
-		_debug_label.text = "Leyforge — Stuff Exists\nWorld: %s  |  %s\n%s\n%s" % [
+		_debug_label.text = "Leyforge — Survival & Creation\nWorld: %s  |  %s\n%s\n%s" % [
 			_world_id, "Unsaved changes" if _save_dirty else "Saved", selected_text, _status_message]
 		return
 	_debug_label.text = (
-		"Leyforge - Wave 3\n"
+		"Leyforge - Wave 4\n"
 		+ "World: %s  |  Seed: %d  |  Save v%d\n" % [_world_id, _active_seed, _save_version]
 		+ "Save: %s  |  Overrides: %d\n" % ["Dirty" if _save_dirty else "Saved", _override_count]
 		+ "Position: (%.1f, %.1f, %.1f)\n" % [global_position.x, global_position.y, global_position.z]

@@ -52,12 +52,12 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 
 ## Current playable build
 
-Wave 3 - Stuff Exists is the current implemented slice: deterministic streamed voxel
-terrain, first-person movement, conserved physical drops and pickup, a real player
-inventory and nine-slot hotbar, inventory-backed placement, persistent storage,
-equipment-state foundation, and save v2 with nondestructive Wave 2 v1 migration.
+Wave 4 - Survival & Creation is the current implemented slice: deterministic
+streamed voxel terrain, conserved inventory/drops/storage, timed gathering,
+stateful tools and durability, atomic canonical crafting, a fuelled kiln,
+functional construction and shelter/rest, bounded survival and save v3 with
+nondestructive v1/v2 migration.
 
-See `docs/WAVE_3_STUFF_EXISTS.md` for the connected resource loop, controls,
-architecture, verification and limits. Waves 1 and 2 remain covered by their
-existing regression gates and documentation. Wave 4 crafting, tools, processing
-and survival remain the next planning boundary.
+See `docs/WAVE_4_SURVIVAL_AND_CREATION.md` for the connected loop, controls,
+architecture, verification and intentional limits. Wave 0-3 regression gates
+remain active. Wave 5 Multiplayer Proof #1 is the next planning boundary.

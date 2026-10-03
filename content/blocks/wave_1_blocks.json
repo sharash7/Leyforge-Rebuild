@@ -29,7 +29,18 @@
       "stack_limit": 64,
       "placeable": true,
       "equipment_slots": [],
-      "drop_content": "leyforge:grass"
+      "drop_content": "leyforge:grass",
+      "harvest": {
+        "class": "digging",
+        "capability": 0,
+        "seconds": 0.6,
+        "outputs": [
+          {
+            "content": "leyforge:grass",
+            "quantity": 1
+          }
+        ]
+      }
     },
     {
       "id": "leyforge:dirt",
@@ -44,7 +55,18 @@
       "stack_limit": 64,
       "placeable": true,
       "equipment_slots": [],
-      "drop_content": "leyforge:dirt"
+      "drop_content": "leyforge:dirt",
+      "harvest": {
+        "class": "digging",
+        "capability": 0,
+        "seconds": 0.6,
+        "outputs": [
+          {
+            "content": "leyforge:dirt",
+            "quantity": 1
+          }
+        ]
+      }
     },
     {
       "id": "leyforge:stone",
@@ -59,7 +81,18 @@
       "stack_limit": 64,
       "placeable": true,
       "equipment_slots": [],
-      "drop_content": "leyforge:stone"
+      "drop_content": "leyforge:stone",
+      "harvest": {
+        "class": "mining",
+        "capability": 0,
+        "seconds": 1.2,
+        "outputs": [
+          {
+            "content": "leyforge:stone",
+            "quantity": 1
+          }
+        ]
+      }
     },
     {
       "id": "leyforge:sand",
@@ -74,8 +107,255 @@
       "stack_limit": 64,
       "placeable": true,
       "equipment_slots": [],
-      "drop_content": "leyforge:sand"
+      "drop_content": "leyforge:sand",
+      "harvest": {
+        "class": "digging",
+        "capability": 0,
+        "seconds": 0.6,
+        "outputs": [
+          {
+            "content": "leyforge:sand",
+            "quantity": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "leyforge:oak_planks",
+      "voxel_id": 5,
+      "display_name": "Oak planks",
+      "color": "#AD7848FF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": false,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:oak_planks",
+      "harvest": {
+        "class": "manual",
+        "capability": 0,
+        "seconds": 0.4,
+        "outputs": [
+          {
+            "content": "leyforge:oak_planks",
+            "quantity": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "leyforge:kiln",
+      "voxel_id": 6,
+      "display_name": "Stone kiln",
+      "color": "#A75D3FFF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": false,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:kiln",
+      "harvest": {
+        "class": "manual",
+        "capability": 0,
+        "seconds": 0.4,
+        "outputs": [
+          {
+            "content": "leyforge:kiln",
+            "quantity": 1
+          }
+        ]
+      },
+      "function": "kiln"
+    },
+    {
+      "id": "leyforge:rest_mat",
+      "voxel_id": 7,
+      "display_name": "Rest mat",
+      "color": "#ABA06AFF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": false,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:rest_mat",
+      "harvest": {
+        "class": "manual",
+        "capability": 0,
+        "seconds": 0.4,
+        "outputs": [
+          {
+            "content": "leyforge:rest_mat",
+            "quantity": 1
+          }
+        ]
+      },
+      "function": "rest"
+    },
+    {
+      "id": "leyforge:storage_box",
+      "voxel_id": 8,
+      "display_name": "Storage box",
+      "color": "#8B603DFF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": false,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:storage_box",
+      "harvest": {
+        "class": "manual",
+        "capability": 0,
+        "seconds": 0.4,
+        "outputs": [
+          {
+            "content": "leyforge:storage_box",
+            "quantity": 1
+          }
+        ]
+      },
+      "function": "storage"
+    },
+    {
+      "id": "leyforge:lamp",
+      "voxel_id": 9,
+      "display_name": "Charcoal lamp",
+      "color": "#FFE08AFF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": false,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:lamp",
+      "harvest": {
+        "class": "manual",
+        "capability": 0,
+        "seconds": 0.4,
+        "outputs": [
+          {
+            "content": "leyforge:lamp",
+            "quantity": 1
+          }
+        ]
+      },
+      "function": "light"
     }
   ],
-  "items": []
+  "items": [
+    {
+      "id": "leyforge:oak_heartwood",
+      "display_name": "Oak Heartwood",
+      "color": "#865329FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": false,
+      "equipment_slots": []
+    },
+    {
+      "id": "leyforge:charcoal",
+      "display_name": "Charcoal",
+      "color": "#333333FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": false,
+      "equipment_slots": []
+    },
+    {
+      "id": "leyforge:provisions",
+      "display_name": "Trail provisions",
+      "color": "#BD7459FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": false,
+      "equipment_slots": [],
+      "consume": {
+        "hunger": 30,
+        "health": 5
+      }
+    },
+    {
+      "id": "leyforge:drinking_water",
+      "display_name": "Drinking water portion",
+      "color": "#64B9EBFF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": false,
+      "equipment_slots": [],
+      "consume": {
+        "thirst": 35
+      }
+    },
+    {
+      "id": "leyforge:stone_pickaxe",
+      "display_name": "Stone Pickaxe",
+      "color": "#B7AC94FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 1,
+      "placeable": false,
+      "equipment_slots": [
+        "hand"
+      ],
+      "tool": {
+        "class": "mining",
+        "capability": 1,
+        "efficiency": 3.0,
+        "durability": 24
+      }
+    },
+    {
+      "id": "leyforge:stone_axe",
+      "display_name": "Stone Axe",
+      "color": "#B7AC94FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 1,
+      "placeable": false,
+      "equipment_slots": [
+        "hand"
+      ],
+      "tool": {
+        "class": "woodcutting",
+        "capability": 1,
+        "efficiency": 3.0,
+        "durability": 24
+      }
+    },
+    {
+      "id": "leyforge:stone_shovel",
+      "display_name": "Stone Shovel",
+      "color": "#B7AC94FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 1,
+      "placeable": false,
+      "equipment_slots": [
+        "hand"
+      ],
+      "tool": {
+        "class": "digging",
+        "capability": 1,
+        "efficiency": 3.0,
+        "durability": 24
+      }
+    }
+  ]
 }
