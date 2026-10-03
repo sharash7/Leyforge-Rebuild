@@ -288,7 +288,7 @@ func _write_report() -> void:
 	if file == null:
 		_failures.append("Could not write rendered report.")
 		return
-	file.store_string(JSON.stringify(_report, "\t") + "\n")
+	file.store_string(JSON.stringify(_report, "\t", true, true) + "\n")
 	file.flush()
 
 

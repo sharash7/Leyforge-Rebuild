@@ -63,3 +63,12 @@ The rendered flow launches three separate processes. Run A moves the player, bre
 - The content and generator versions currently have one supported value. An incompatible version rejects load; migration work is deferred until a real version change.
 - The save uses a single world JSON file and sparse edits. It does not yet address unbounded very large worlds, concurrent writers, or multiplayer authority.
 - Exact `4.7.2-stable` qualification remains a separate follow-up when an approved executable is available. This increment uses no intentional 4.8-only API.
+
+
+## Wave 3 continuation
+
+This document records the accepted Wave 2 baseline. The current production slice
+is Wave 3, documented in `WAVE_3_STUFF_EXISTS.md`: save v2 adds canonical resource
+state and an in-memory v1 migration. The generator/content versions remain 1,
+and the existing integrity, recovery and same-seed isolation rules remain active.
+The Wave 2 regression driver explicitly uses the development block selector.

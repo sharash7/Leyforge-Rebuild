@@ -8,7 +8,13 @@
       "color": "#00000000",
       "solid": false,
       "breakable": false,
-      "development_placeable": false
+      "development_placeable": false,
+      "kind": "block",
+      "inventory_capable": false,
+      "stack_limit": 0,
+      "placeable": false,
+      "equipment_slots": [],
+      "drop_content": ""
     },
     {
       "id": "leyforge:grass",
@@ -17,7 +23,13 @@
       "color": "#5F9D45FF",
       "solid": true,
       "breakable": true,
-      "development_placeable": true
+      "development_placeable": true,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:grass"
     },
     {
       "id": "leyforge:dirt",
@@ -26,7 +38,13 @@
       "color": "#79543AFF",
       "solid": true,
       "breakable": true,
-      "development_placeable": true
+      "development_placeable": true,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:dirt"
     },
     {
       "id": "leyforge:stone",
@@ -35,7 +53,13 @@
       "color": "#777D82FF",
       "solid": true,
       "breakable": true,
-      "development_placeable": true
+      "development_placeable": true,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:stone"
     },
     {
       "id": "leyforge:sand",
@@ -44,7 +68,14 @@
       "color": "#D8C27AFF",
       "solid": true,
       "breakable": true,
-      "development_placeable": true
+      "development_placeable": true,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:sand"
     }
-  ]
+  ],
+  "items": []
 }

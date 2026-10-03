@@ -1,0 +1,243 @@
+class_name LfeResourceState
+extends RefCounted
+
+const PLAYER_SLOTS: int = 27
+const HOTBAR_SLOTS: int = 9
+const EQUIPMENT_SLOTS: Array[String] = ["hand", "body"]
+const CRATE_PATH: String = "res://content/world_objects/wave_3_crate.json"
+
+var inventory: LfeInventory
+var equipment: LfeInventory
+var _selected: int = 0
+var _catalog: LfeBlockCatalog
+var _drops: Dictionary = {}
+var _storage: Dictionary = {}
+var _busy: bool = false
+var _crate: Dictionary = {}
+
+
+func _init(catalog: LfeBlockCatalog) -> void:
+	_catalog = catalog
+	inventory = LfeInventory.new(catalog, PLAYER_SLOTS)
+	equipment = LfeInventory.new(catalog, EQUIPMENT_SLOTS.size(), EQUIPMENT_SLOTS)
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(CRATE_PATH))
+	if data is Dictionary and data.get("schema_version") == 1 and data.get("id") is String and data.get("display_name") is String and data.get("color") is String and LfeWorldSave._is_integer(data.get("slots")) and int(data["slots"]) > 0 and int(data["slots"]) <= 27:
+		_crate = data
+
+
+func selected_slot() -> int:
+	return _selected
+
+
+func select(slot: int) -> bool:
+	if slot < 0 or slot >= HOTBAR_SLOTS:
+		return false
+	_selected = slot
+	return true
+
+
+func storage_definition() -> Dictionary:
+	return _crate.duplicate(true)
+
+
+func ensure_crate(position: Vector3) -> String:
+	if _crate.is_empty() or not _valid_position([position.x, position.y, position.z]):
+		return ""
+	if not _storage.is_empty():
+		return String(_storage.keys()[0])
+	var id: String = _new_identity()
+	_storage[id] = {
+		"instance": id, "content": _crate["id"],
+		"position": [position.x, position.y, position.z],
+		"inventory": LfeInventory.new(_catalog, int(_crate["slots"])),
+	}
+	return id
+
+
+func storage_inventory(id: String) -> LfeInventory:
+	return _storage[id]["inventory"] if _storage.has(id) else null
+
+
+func drops() -> Array:
+	return _drops.values().duplicate(true)
+
+
+func drop(id: String) -> Dictionary:
+	return (_drops.get(id, {}) as Dictionary).duplicate(true)
+
+
+func snapshot() -> Dictionary:
+	var containers: Array = []
+	for id: String in _storage:
+		var entry: Dictionary = _storage[id]
+		containers.append({
+			"instance": id, "content": entry["content"],
+			"position": entry["position"].duplicate(),
+			"slots": (entry["inventory"] as LfeInventory).snapshot(),
+		})
+	containers.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["instance"] < b["instance"])
+	var items: Array = drops()
+	items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["instance"] < b["instance"])
+	return {
+		"inventory": inventory.snapshot(), "hotbar_selected": _selected,
+		"equipment": equipment.snapshot(), "drops": items, "storage": containers,
+	}
+
+
+func restore(data: Variant) -> bool:
+	if _busy or _crate.is_empty() or not data is Dictionary or data.size() != 5:
+		return false
+	var player_next: LfeInventory = LfeInventory.new(_catalog, PLAYER_SLOTS)
+	var equipment_next: LfeInventory = LfeInventory.new(_catalog, EQUIPMENT_SLOTS.size(), EQUIPMENT_SLOTS)
+	if not player_next.restore(data.get("inventory")) or not equipment_next.restore(data.get("equipment")):
+		return false
+	if not LfeWorldSave._is_integer(data.get("hotbar_selected")) or int(data["hotbar_selected"]) < 0 or int(data["hotbar_selected"]) >= HOTBAR_SLOTS:
+		return false
+	if not data.get("drops") is Array or not data.get("storage") is Array or data["drops"].size() > 10000 or data["storage"].size() > 1:
+		return false
+	var seen: Dictionary = {}
+	var drops_next: Dictionary = {}
+	var storage_next: Dictionary = {}
+	for entry: Variant in data["drops"]:
+		if not entry is Dictionary or entry.size() != 3 or not _valid_identity(entry.get("instance")) or seen.has(entry["instance"]):
+			return false
+		if not _valid_position(entry.get("position")) or not LfeItemStack.valid(entry.get("stack"), _catalog, false):
+			return false
+		seen[entry["instance"]] = true
+		var coordinates: Array = entry["position"]
+		drops_next[entry["instance"]] = _drop_entry(entry["instance"], StringName(entry["stack"]["content"]), int(entry["stack"]["quantity"]),
+			Vector3(float(coordinates[0]), float(coordinates[1]), float(coordinates[2])))
+	for entry: Variant in data["storage"]:
+		if not entry is Dictionary or entry.size() != 4 or not _valid_identity(entry.get("instance")) or seen.has(entry["instance"]):
+			return false
+		if entry.get("content") != _crate["id"] or not _valid_position(entry.get("position")):
+			return false
+		var container: LfeInventory = LfeInventory.new(_catalog, int(_crate["slots"]))
+		if not container.restore(entry.get("slots")):
+			return false
+		seen[entry["instance"]] = true
+		storage_next[entry["instance"]] = {
+			"instance": entry["instance"], "content": entry["content"],
+			"position": _normalized_position(entry["position"]), "inventory": container,
+		}
+	inventory = player_next
+	equipment = equipment_next
+	_selected = int(data["hotbar_selected"])
+	_drops = drops_next
+	_storage = storage_next
+	return true
+
+
+func pickup(id: String) -> int:
+	if _busy or not _drops.has(id):
+		return 0
+	var entry: Dictionary = _drops[id]
+	var stack: Dictionary = entry["stack"]
+	var accepted: int = LfeItemTransactions.add(inventory, StringName(stack["content"]), int(stack["quantity"]), true)
+	if accepted == 0:
+		return 0
+	var left: int = int(stack["quantity"]) - accepted
+	if left == 0:
+		_drops.erase(id)
+	else:
+		entry["stack"] = LfeItemStack.make(StringName(stack["content"]), left)
+	return accepted
+
+
+func drop_from_inventory(slot: int, quantity: int, position: Vector3) -> String:
+	if _busy or _drops.size() >= 10000 or not _valid_position([position.x, position.y, position.z]):
+		return ""
+	var stack: Dictionary = inventory.stack_at(slot)
+	if stack.is_empty() or quantity <= 0 or quantity > int(stack["quantity"]):
+		return ""
+	var id: String = _new_identity()
+	if not LfeItemTransactions.remove(inventory, slot, quantity):
+		return ""
+	_drops[id] = _drop_entry(id, StringName(stack["content"]), quantity, position)
+	return id
+
+
+# World mutations are synchronous validated operations. The callback must return
+# OK only after the voxel and its sparse override have changed successfully.
+# The guard prevents reentrant pickup/drop/conversion while the world commits.
+func break_to_drop(block: StringName, position: Vector3, world_commit: Callable) -> bool:
+	if _busy or _drops.size() >= 10000 or not world_commit.is_valid() or not _valid_position([position.x, position.y, position.z]):
+		return false
+	var definition: Dictionary = _catalog.definition_for_id(block)
+	if not bool(definition.get("breakable", false)):
+		return false
+	var output: StringName = StringName(definition.get("drop_content", ""))
+	if output != &"" and not _catalog.is_inventory_content(output):
+		return false
+	var id: String = _new_identity()
+	_busy = true
+	var result: Variant = world_commit.call()
+	_busy = false
+	if result != OK:
+		return false
+	if output != &"":
+		_drops[id] = _drop_entry(id, output, 1, position)
+	return true
+
+
+func place_from_inventory(slot: int, world_commit: Callable) -> bool:
+	if _busy or not world_commit.is_valid():
+		return false
+	var stack: Dictionary = inventory.stack_at(slot)
+	if stack.is_empty() or _catalog.placeable_voxel(StringName(stack["content"])) < 0:
+		return false
+	var prepared: LfeInventory = LfeInventory.new(_catalog, PLAYER_SLOTS)
+	prepared.restore(inventory.snapshot())
+	if not LfeItemTransactions.remove(prepared, slot, 1):
+		return false
+	_busy = true
+	var result: Variant = world_commit.call()
+	_busy = false
+	if result != OK:
+		return false
+	inventory.restore(prepared.snapshot())
+	return true
+
+
+func total(id: StringName) -> int:
+	var result: int = inventory.total(id) + equipment.total(id)
+	for entry: Dictionary in _drops.values():
+		if StringName(entry["stack"]["content"]) == id:
+			result += int(entry["stack"]["quantity"])
+	for entry: Dictionary in _storage.values():
+		result += (entry["inventory"] as LfeInventory).total(id)
+	return result
+
+
+func _new_identity() -> String:
+	var id: String = Crypto.new().generate_random_bytes(16).hex_encode()
+	while _drops.has(id) or _storage.has(id):
+		id = Crypto.new().generate_random_bytes(16).hex_encode()
+	return id
+
+
+func _drop_entry(id: String, content: StringName, quantity: int, position: Vector3) -> Dictionary:
+	return {"instance": id, "stack": LfeItemStack.make(content, quantity), "position": [position.x, position.y, position.z]}
+
+
+static func _valid_identity(value: Variant) -> bool:
+	if not value is String or value.length() != 32:
+		return false
+	for character: String in value:
+		if not "0123456789abcdef".contains(character):
+			return false
+	return true
+
+
+static func _valid_position(value: Variant) -> bool:
+	if not value is Array or value.size() != 3:
+		return false
+	for coordinate: Variant in value:
+		if not LfeWorldSave._finite_in_range(coordinate, 1000000.0):
+			return false
+	return true
+
+
+static func _normalized_position(coordinates: Array) -> Array:
+	var position: Vector3 = Vector3(float(coordinates[0]), float(coordinates[1]), float(coordinates[2]))
+	return [position.x, position.y, position.z]

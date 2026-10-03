@@ -97,4 +97,4 @@ Use `-SkipRenderedPlaytest` only on a machine without a display. A skipped rende
 - Uneven one-voxel rises may require jumping; advanced traversal is outside Wave 1.
 - The automated qualification runner is the documented fixed 4.8 development build. A separate exact 4.7.2 qualification requires an approved executable when one is available.
 
-Wave 2 persistence is documented in `WAVE_2_THE_WORLD_REMEMBERS.md`. Wave 3 and later showcase systems remain unimplemented.
+Wave 2 persistence is documented in `WAVE_2_THE_WORLD_REMEMBERS.md`. Wave 3 conserved resource gameplay is documented in `WAVE_3_STUFF_EXISTS.md`. This document describes the historical Wave 1 slice and its explicit development/test selector.

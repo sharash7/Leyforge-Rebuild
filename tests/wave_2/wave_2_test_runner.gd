@@ -144,7 +144,7 @@ func _test_bad_data(catalog: LfeBlockCatalog) -> void:
 	_check(unsupported.save(state) == OK, "Version test save failed.")
 	var unsupported_path: String = unsupported.get_primary_path()
 	var version_envelope: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(unsupported_path))
-	version_envelope["save_version"] = 2
+	version_envelope["save_version"] = LfeWorldSave.SAVE_VERSION + 1
 	_write_text(unsupported_path, JSON.stringify(version_envelope))
 	var unsupported_load: LfeWorldSave = LfeWorldSave.new()
 	_check(unsupported_load.open_world("unsupported", seed, true, catalog, _root) != OK, "Future save version loaded.")

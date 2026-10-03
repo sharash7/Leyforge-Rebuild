@@ -12,6 +12,7 @@ const REQUIRED_CANONICAL_IDS: Array[StringName] = [
 
 var _definitions_by_id: Dictionary = {}
 var _definitions_by_voxel_id: Dictionary = {}
+var _items_by_id: Dictionary = {}
 var _placeable_ids: Array[StringName] = []
 var _last_error: String = ""
 
@@ -22,6 +23,7 @@ func load_default() -> Error:
 
 func load_from_path(path: String) -> Error:
 	_definitions_by_id.clear()
+	_items_by_id.clear()
 	_definitions_by_voxel_id.clear()
 	_placeable_ids.clear()
 	_last_error = ""
@@ -46,7 +48,7 @@ func load_from_path(path: String) -> Error:
 		return _fail(ERR_INVALID_DATA, "Block catalog root must be an object.")
 
 	var root: Dictionary = root_value as Dictionary
-	if int(root.get("schema_version", 0)) != 1:
+	if not LfeWorldSave._is_integer(root.get("schema_version")) or int(root["schema_version"]) != 1:
 		return _fail(ERR_INVALID_DATA, "Unsupported block catalog schema version.")
 
 	var blocks_value: Variant = root.get("blocks", [])
@@ -61,7 +63,9 @@ func load_from_path(path: String) -> Error:
 
 		var definition: Dictionary = (definition_value as Dictionary).duplicate(true)
 		var canonical_id: StringName = StringName(String(definition.get("id", "")).strip_edges())
-		var voxel_id: int = int(definition.get("voxel_id", -1))
+		if not LfeWorldSave._is_integer(definition.get("voxel_id")):
+			return _fail(ERR_INVALID_DATA, "Block voxel ID must be an integer.")
+		var voxel_id: int = int(definition["voxel_id"])
 		if canonical_id == &"":
 			return _fail(ERR_INVALID_DATA, "Block entry %d has no canonical ID." % index)
 		if voxel_id < 0:
@@ -71,6 +75,8 @@ func load_from_path(path: String) -> Error:
 		if _definitions_by_voxel_id.has(voxel_id):
 			return _fail(ERR_INVALID_DATA, "Duplicate voxel ID: %d." % voxel_id)
 
+		if not _valid_inventory_definition(definition, true):
+			return _fail(ERR_INVALID_DATA, "Invalid inventory projection for %s." % canonical_id)
 		definition["id"] = String(canonical_id)
 		definition["voxel_id"] = voxel_id
 		_definitions_by_id[canonical_id] = definition
@@ -98,6 +104,21 @@ func load_from_path(path: String) -> Error:
 	if get_voxel_id(&"leyforge:air") != 0:
 		return _fail(ERR_INVALID_DATA, "Air must remain voxel ID 0 for Voxel Tools.")
 
+	var items: Variant = root.get("items", [])
+	if not items is Array:
+		return _fail(ERR_INVALID_DATA, "Items must be an array.")
+	for value: Variant in items:
+		if not value is Dictionary or not _valid_inventory_definition(value, false):
+			return _fail(ERR_INVALID_DATA, "Invalid standalone item definition.")
+		var item: Dictionary = value.duplicate(true)
+		var id: StringName = StringName(item["id"])
+		if has_content(id):
+			return _fail(ERR_INVALID_DATA, "Duplicate canonical content ID: %s." % id)
+		_items_by_id[id] = item
+	for definition: Dictionary in _definitions_by_id.values():
+		var drop: StringName = StringName(definition.get("drop_content", ""))
+		if drop != &"" and not is_inventory_content(drop):
+			return _fail(ERR_INVALID_DATA, "Unknown block drop content: %s." % drop)
 	return OK
 
 
@@ -163,5 +184,70 @@ func development_placeable_ids() -> Array[StringName]:
 
 
 func _fail(error: Error, message: String) -> Error:
+	_definitions_by_id.clear()
+	_definitions_by_voxel_id.clear()
+	_items_by_id.clear()
+	_placeable_ids.clear()
 	_last_error = message
 	return error
+
+
+# Inventory projections resolve the existing block definition; they never copy it
+# into a second item registry. Item-only definitions share this catalog and ID space.
+func has_content(id: StringName) -> bool:
+	return has_id(id) or _items_by_id.has(id)
+
+
+func content_definition(id: StringName) -> Dictionary:
+	if has_id(id):
+		return definition_for_id(id)
+	return (_items_by_id.get(id, {}) as Dictionary).duplicate(true)
+
+
+func is_inventory_content(id: StringName) -> bool:
+	return bool(content_definition(id).get("inventory_capable", false))
+
+
+func stack_limit(id: StringName) -> int:
+	return int(content_definition(id).get("stack_limit", 0))
+
+
+func placeable_voxel(id: StringName) -> int:
+	if not bool(content_definition(id).get("placeable", false)):
+		return -1
+	return get_voxel_id(id)
+
+
+func equipment_accepts(id: StringName, slot: String) -> bool:
+	return slot in content_definition(id).get("equipment_slots", [])
+
+
+func _valid_inventory_definition(d: Dictionary, block: bool) -> bool:
+	if not d.get("id") is String or String(d["id"]).is_empty() or not String(d["id"]).contains(":"):
+		return false
+	if not d.get("display_name") is String or String(d["display_name"]).is_empty():
+		return false
+	if d.get("kind") != ("block" if block else "item"):
+		return false
+	if not d.get("inventory_capable") is bool or not d.get("placeable") is bool:
+		return false
+	if not LfeWorldSave._is_integer(d.get("stack_limit")):
+		return false
+	var limit: int = int(d["stack_limit"])
+	if bool(d["inventory_capable"]):
+		if limit < 1 or limit > 999:
+			return false
+	elif limit != 0 or bool(d["placeable"]):
+		return false
+	if not block and (bool(d["placeable"]) or not bool(d["inventory_capable"])):
+		return false
+	if not d.get("equipment_slots") is Array:
+		return false
+	var seen: Array = []
+	for slot: Variant in d["equipment_slots"]:
+		if not slot is String or slot not in ["hand", "body"] or slot in seen:
+			return false
+		seen.append(slot)
+	if block and not d.get("drop_content") is String:
+		return false
+	return true

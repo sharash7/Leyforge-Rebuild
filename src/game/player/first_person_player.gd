@@ -21,6 +21,11 @@ const MAX_LOOK_ANGLE: float = deg_to_rad(89.0)
 @onready var _debug_label: Label = $Interface/DebugLabel
 @onready var _instruction_label: Label = $Interface/InstructionLabel
 
+var resource_state: LfeResourceState
+var gameplay_authority: Node
+var inventory_open: bool = false
+var development_selector: bool = false
+
 var _terrain: VoxelTerrain
 var _catalog: LfeBlockCatalog
 var _voxel_tool: VoxelTool
@@ -29,6 +34,7 @@ var _configured: bool = false
 var _runtime_ready: bool = false
 var _placeable_ids: Array[StringName] = []
 var _selected_placeable_index: int = 0
+var _legacy_selected_block: String = ""
 var _has_target: bool = false
 var _target_cell: Vector3i = Vector3i.ZERO
 var _placement_cell: Vector3i = Vector3i.ZERO
@@ -48,12 +54,14 @@ func _ready() -> void:
 	_playtest_mode = (
 		OS.get_cmdline_user_args().has("--wave1-playtest")
 		or OS.get_cmdline_user_args().has("--wave2-playtest")
+		or OS.get_cmdline_user_args().has("--wave3-playtest")
 	)
+	development_selector = OS.get_cmdline_user_args().has("--development-blocks") or OS.get_cmdline_user_args().has("--wave1-playtest") or OS.get_cmdline_user_args().has("--wave2-playtest")
 	_build_target_highlight()
 	_instruction_label.text = (
-		"WASD move  |  Shift sprint  |  Space jump  |  Q cycle block\n"
+		"WASD move  |  Shift sprint  |  Space jump  |  1–9 / wheel hotbar\n"
 		+ "Left mouse break  |  Right mouse place  |  F5 save  |  F10 save and quit\n"
-		+ "Escape release mouse"
+		+ "I inventory  |  E storage  |  Q drop one (Shift: stack)  |  Escape close/release"
 	)
 	if DisplayServer.get_name() != "headless" and not _playtest_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -111,12 +119,21 @@ func get_placement_cell() -> Vector3i:
 
 
 func get_selected_voxel_id() -> int:
+	if not development_selector:
+		if resource_state == null:
+			return -1
+		var stack: Dictionary = resource_state.inventory.stack_at(resource_state.selected_slot())
+		return _catalog.placeable_voxel(StringName(stack.get("content", "")))
 	if _catalog == null or _placeable_ids.is_empty():
 		return -1
 	return _catalog.get_voxel_id(_placeable_ids[_selected_placeable_index])
 
 
 func get_selected_canonical_id() -> StringName:
+	if not development_selector:
+		if resource_state == null:
+			return &""
+		return StringName(resource_state.inventory.stack_at(resource_state.selected_slot()).get("content", ""))
 	if _placeable_ids.is_empty():
 		return &""
 	return _placeable_ids[_selected_placeable_index]
@@ -127,7 +144,7 @@ func get_persistent_state() -> Dictionary:
 		"position": [global_position.x, global_position.y, global_position.z],
 		"yaw": rotation.y,
 		"pitch": _head.rotation.x,
-		"selected_block": String(get_selected_canonical_id()),
+		"selected_block": String(_placeable_ids[_selected_placeable_index]) if development_selector and not _placeable_ids.is_empty() else _legacy_selected_block,
 	}
 
 
@@ -140,7 +157,8 @@ func restore_persistent_state(state: Dictionary) -> void:
 	)
 	rotation.y = float(state["yaw"])
 	_head.rotation.x = clampf(float(state["pitch"]), -MAX_LOOK_ANGLE, MAX_LOOK_ANGLE)
-	var selected: StringName = StringName(String(state.get("selected_block", "")))
+	_legacy_selected_block = String(state.get("selected_block", ""))
+	var selected: StringName = StringName(_legacy_selected_block)
 	if _placeable_ids.has(selected):
 		_selected_placeable_index = _placeable_ids.find(selected)
 	velocity = Vector3.ZERO
@@ -165,6 +183,30 @@ func show_status(message: String, duration_msec: int = 2500) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not development_selector and gameplay_authority != null:
+		if event is InputEventKey and event.pressed and not event.echo:
+			if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+				resource_state.select(event.keycode - KEY_1)
+				get_viewport().set_input_as_handled()
+				return
+			if event.keycode == KEY_I:
+				gameplay_authority.toggle_inventory()
+				get_viewport().set_input_as_handled()
+				return
+			if event.keycode == KEY_E:
+				gameplay_authority.open_nearby_storage()
+				get_viewport().set_input_as_handled()
+				return
+			if event.keycode == KEY_ESCAPE and inventory_open:
+				gameplay_authority.close_inventory()
+				get_viewport().set_input_as_handled()
+				return
+		if inventory_open:
+			return
+		if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			resource_state.select(posmod(resource_state.selected_slot() + (-1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1), 9))
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("release_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_viewport().set_input_as_handled()
@@ -195,6 +237,10 @@ func _physics_process(delta: float) -> void:
 		_update_debug_overlay()
 		return
 
+	if inventory_open:
+		velocity = Vector3.ZERO
+		_update_debug_overlay()
+		return
 	_update_targeting()
 	_handle_interaction_actions()
 	_apply_movement(delta)
@@ -231,7 +277,10 @@ func _apply_movement(delta: float) -> void:
 
 func _handle_interaction_actions() -> void:
 	if Input.is_action_just_pressed("cycle_block"):
-		cycle_development_block()
+		if development_selector:
+			cycle_development_block()
+		elif gameplay_authority != null:
+			gameplay_authority.drop_selected(Input.is_key_pressed(KEY_SHIFT))
 	if not _playtest_mode and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		return
 	if Input.is_action_just_pressed("break_block"):
@@ -241,6 +290,8 @@ func _handle_interaction_actions() -> void:
 
 
 func cycle_development_block() -> void:
+	if not development_selector:
+		return
 	if _placeable_ids.is_empty():
 		return
 	_selected_placeable_index = (_selected_placeable_index + 1) % _placeable_ids.size()
@@ -264,6 +315,8 @@ func try_break_target() -> bool:
 		_set_status("Target is not breakable", 900)
 		return false
 
+	if not development_selector:
+		return gameplay_authority != null and gameplay_authority.break_cell(_target_cell)
 	_voxel_tool.set_voxel(_target_cell, _catalog.get_voxel_id(&"leyforge:air"))
 	block_broken.emit(_target_cell, current_voxel_id)
 	print(
@@ -297,6 +350,8 @@ func try_place_target() -> bool:
 		_set_status("Placement blocked", 900)
 		return false
 
+	if not development_selector:
+		return gameplay_authority != null and gameplay_authority.place_cell(_placement_cell)
 	var selected_voxel_id: int = get_selected_voxel_id()
 	_voxel_tool.set_voxel(_placement_cell, selected_voxel_id)
 	block_placed.emit(_placement_cell, selected_voxel_id)
@@ -366,13 +421,17 @@ func _update_debug_overlay() -> void:
 			get_selected_canonical_id(),
 		]
 
+	if not development_selector and not _playtest_mode:
+		_debug_label.text = "Leyforge — Stuff Exists\nWorld: %s  |  %s\n%s\n%s" % [
+			_world_id, "Unsaved changes" if _save_dirty else "Saved", selected_text, _status_message]
+		return
 	_debug_label.text = (
-		"Leyforge — Wave 2\n"
+		"Leyforge - Wave 3\n"
 		+ "World: %s  |  Seed: %d  |  Save v%d\n" % [_world_id, _active_seed, _save_version]
 		+ "Save: %s  |  Overrides: %d\n" % ["Dirty" if _save_dirty else "Saved", _override_count]
 		+ "Position: (%.1f, %.1f, %.1f)\n" % [global_position.x, global_position.y, global_position.z]
 		+ "Target: %s\n" % target_text
-		+ "Development block: %s\n" % selected_text
+		+ "Selected content: %s\n" % selected_text
 		+ "Persistence: %s\n" % _save_status
 		+ "Status: %s" % _status_message
 	)

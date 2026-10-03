@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "id": "leyforge:storage_crate",
+  "display_name": "Storage crate",
+  "slots": 9,
+  "color": "#AD7946FF"
+}

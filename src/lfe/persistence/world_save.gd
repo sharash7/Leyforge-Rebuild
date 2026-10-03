@@ -1,7 +1,7 @@
 class_name LfeWorldSave
 extends RefCounted
 
-const SAVE_VERSION: int = 1
+const SAVE_VERSION: int = 2
 const WORLDGEN_VERSION: int = 1
 const CONTENT_VERSION: int = 1
 const SAVE_FILE: String = "world.json"
@@ -14,6 +14,7 @@ var seed: int = 0
 var created_utc: String = ""
 var last_saved_utc: String = ""
 var player_state: Dictionary = {}
+var resource_state: Dictionary = {}
 var overrides: LfeVoxelOverrideStore = LfeVoxelOverrideStore.new()
 var load_status: String = ""
 var save_status: String = "Never saved"
@@ -38,8 +39,8 @@ func get_primary_path() -> String:
 	return _world_directory.path_join(SAVE_FILE)
 
 
-func is_dirty(current_player_state: Dictionary) -> bool:
-	return _edits_dirty or player_state != current_player_state or last_saved_utc.is_empty()
+func is_dirty(current_player_state: Dictionary, current_resources: Dictionary = {}) -> bool:
+	return _edits_dirty or player_state != current_player_state or (not current_resources.is_empty() and resource_state != current_resources) or last_saved_utc.is_empty()
 
 
 func record_voxel_edit(cell: Vector3i, voxel_id: int, base_voxel_id: int) -> Error:
@@ -81,6 +82,7 @@ func open_world(
 		created_utc = Time.get_datetime_string_from_system(true)
 		last_saved_utc = ""
 		player_state = {}
+		resource_state = LfeResourceState.new(_catalog).snapshot()
 		overrides = LfeVoxelOverrideStore.new()
 		load_status = "New world; not yet saved"
 		save_status = "Never saved"
@@ -104,21 +106,28 @@ func open_world(
 	created_utc = String(metadata["created_utc"])
 	last_saved_utc = String(metadata["last_saved_utc"])
 	player_state = decoded["player"]
+	resource_state = decoded["resources"]
 	overrides = decoded["overrides"]
 	_expected_primary_hash = String(decoded["file_hash"]) if path_to_load == primary else ""
 	_edits_dirty = false
 	load_status = "Loaded world" if path_to_load == primary else "Recovered previous save; primary was missing"
+	if int(metadata["save_version"]) == 1:
+		load_status += "; migrated v1 in memory; next save writes v2"
 	save_status = "Saved %s" % last_saved_utc
 	_is_open = true
 	_last_error = ""
 	return OK
 
 
-func save(current_player_state: Dictionary) -> Error:
+func save(current_player_state: Dictionary, current_resources: Variant = null) -> Error:
 	if not _is_open or _catalog == null or _world_directory.is_empty():
 		return _fail(ERR_UNCONFIGURED, "World save is not open.")
 	if not _valid_player_state(current_player_state):
 		return ERR_INVALID_DATA
+	var resources_to_save: Variant = resource_state if current_resources == null else current_resources
+	var resource_validator: LfeResourceState = LfeResourceState.new(_catalog)
+	if not resource_validator.restore(resources_to_save):
+		return _fail(ERR_INVALID_DATA, "Invalid Wave 3 resources; refusing save.")
 	var proposed_saved_utc: String = Time.get_datetime_string_from_system(true)
 	var metadata: Dictionary = {
 		"world_id": world_id,
@@ -134,8 +143,9 @@ func save(current_player_state: Dictionary) -> Error:
 		"metadata": metadata,
 		"player": current_player_state,
 		"voxel_overrides": overrides.serialized_entries(),
+		"resources": resource_validator.snapshot(),
 	}
-	var payload_json: String = JSON.stringify(payload)
+	var payload_json: String = JSON.stringify(payload, "", true, true)
 	var envelope: Dictionary = {
 		"save_version": SAVE_VERSION,
 		"payload_json": payload_json,
@@ -190,6 +200,7 @@ func save(current_player_state: Dictionary) -> Error:
 		return _fail(promote_error, "Could not promote validated world save; previous copy retained.")
 	_expected_primary_hash = serialized.sha256_text()
 	player_state = current_player_state.duplicate(true)
+	resource_state = resource_validator.snapshot()
 	last_saved_utc = proposed_saved_utc
 	_edits_dirty = false
 	save_status = "Saved %s" % last_saved_utc
@@ -212,7 +223,7 @@ func _decode_file(path: String) -> Dictionary:
 		_fail(ERR_INVALID_DATA, "World save has no valid save version.")
 		return {}
 	var version: int = int(envelope["save_version"])
-	if version != SAVE_VERSION:
+	if version != 1 and version != SAVE_VERSION:
 		_fail(ERR_INVALID_DATA, "Unsupported save version %d; this build supports %d." % [version, SAVE_VERSION])
 		return {}
 	if not envelope.get("payload_json") is String or not envelope.get("sha256") is String:
@@ -231,7 +242,7 @@ func _decode_file(path: String) -> Dictionary:
 		_fail(ERR_INVALID_DATA, "World metadata or player state is missing.")
 		return {}
 	var metadata: Dictionary = payload["metadata"]
-	if not _valid_metadata(metadata):
+	if not _valid_metadata(metadata, version):
 		return {}
 	var parsed_player: Dictionary = payload["player"]
 	if not _valid_player_state(parsed_player):
@@ -240,7 +251,12 @@ func _decode_file(path: String) -> Dictionary:
 	if parsed_overrides.load_entries(payload.get("voxel_overrides"), _catalog) != OK:
 		_fail(ERR_INVALID_DATA, parsed_overrides.get_last_error())
 		return {}
+	var resources: LfeResourceState = LfeResourceState.new(_catalog)
+	if version == SAVE_VERSION and not resources.restore(payload.get("resources")):
+		_fail(ERR_INVALID_DATA, "Malformed Wave 3 resources or unknown canonical content.")
+		return {}
 	return {
+		"resources": resources.snapshot(),
 		"metadata": metadata,
 		"player": parsed_player,
 		"overrides": parsed_overrides,
@@ -248,7 +264,7 @@ func _decode_file(path: String) -> Dictionary:
 	}
 
 
-func _valid_metadata(metadata: Dictionary) -> bool:
+func _valid_metadata(metadata: Dictionary, envelope_version: int) -> bool:
 	if not metadata.get("world_id") is String or not _valid_world_id(String(metadata["world_id"])):
 		_fail(ERR_INVALID_DATA, "Saved world ID is invalid.")
 		return false
@@ -262,7 +278,7 @@ func _valid_metadata(metadata: Dictionary) -> bool:
 		if not _is_integer(metadata.get(key)):
 			_fail(ERR_INVALID_DATA, "Saved %s is missing or invalid." % key)
 			return false
-	if int(metadata["save_version"]) != SAVE_VERSION:
+	if int(metadata["save_version"]) != envelope_version:
 		_fail(ERR_INVALID_DATA, "Metadata save version does not match supported version.")
 		return false
 	if int(metadata["worldgen_version"]) != WORLDGEN_VERSION:

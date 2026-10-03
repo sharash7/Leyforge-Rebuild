@@ -13,6 +13,10 @@ const DEFAULT_WORLD_ID: String = "development"
 const SPAWN_X: int = 0
 const SPAWN_Z: int = 0
 
+var resources: LfeResourceState
+var resource_presenter: LeyforgeResourcePresenter
+var inventory_panel: LeyforgeInventoryPanel
+
 var terrain: VoxelTerrain
 var player: LeyforgeFirstPersonPlayer
 var block_catalog: LfeBlockCatalog
@@ -33,12 +37,21 @@ func _ready() -> void:
 
 	block_catalog = LfeBlockCatalog.new()
 	var catalog_error: Error = block_catalog.load_default()
+	# Isolated test definitions exercise equipment without adding production canon.
+	if OS.get_cmdline_user_args().has("--wave3-playtest"):
+		for argument: String in OS.get_cmdline_user_args():
+			if argument.begins_with("--wave3-test-content="):
+				var fixture: String = argument.trim_prefix("--wave3-test-content=")
+				if not fixture.is_absolute_path():
+					_fail_startup("Test content must be an absolute disposable fixture path.")
+					return
+				catalog_error = block_catalog.load_from_path(fixture)
 	if catalog_error != OK:
 		_fail_startup(block_catalog.get_last_error())
 		return
 
 	var arguments: PackedStringArray = OS.get_cmdline_user_args()
-	_playtest_mode = arguments.has("--wave1-playtest") or arguments.has("--wave2-playtest")
+	_playtest_mode = arguments.has("--wave1-playtest") or arguments.has("--wave2-playtest") or arguments.has("--wave3-playtest")
 	var selected_id: String = DEFAULT_WORLD_ID
 	var save_root: String = "user://worlds"
 	var seed_was_explicit: bool = false
@@ -66,11 +79,19 @@ func _ready() -> void:
 	if open_error != OK:
 		_fail_startup(world_save.get_last_error())
 		return
+	resources = LfeResourceState.new(block_catalog)
+	if not resources.restore(world_save.resource_state):
+		_fail_startup("Wave 3 resources are invalid.")
+		return
 	active_seed = world_save.seed
 	_build_environment()
 	_build_terrain()
 	if not _build_player():
 		return
+	if not player.development_selector:
+		player.resource_state = resources
+		player.gameplay_authority = self
+		_build_resources()
 	player.block_broken.connect(_on_block_broken)
 	player.block_placed.connect(_on_block_placed)
 	if not _playtest_mode:
@@ -96,6 +117,11 @@ func _ready() -> void:
 			"configure", self, player, terrain, block_catalog, active_seed
 		)
 
+	elif arguments.has("--wave3-playtest"):
+		var wave3_driver: Node = load("res://tests/wave_3/wave_3_playtest_driver.gd").new()
+		add_child(wave3_driver)
+		wave3_driver.call("configure", self, player, terrain, block_catalog, active_seed)
+
 	call_deferred("_finish_startup")
 
 
@@ -106,7 +132,7 @@ func _process(_delta: float) -> void:
 	player.set_persistence_debug(
 		world_save.world_id,
 		LfeWorldSave.SAVE_VERSION,
-		world_save.is_dirty(current_state),
+		world_save.is_dirty(current_state, resources.snapshot()),
 		world_save.overrides.count(),
 		"%s | %s" % [world_save.load_status, world_save.save_status]
 	)
@@ -142,7 +168,7 @@ func request_save() -> bool:
 	if not _runtime_is_ready or _save_in_progress:
 		return false
 	_save_in_progress = true
-	var result: Error = world_save.save(player.get_persistent_state())
+	var result: Error = world_save.save(player.get_persistent_state(), resources.snapshot())
 	_save_in_progress = false
 	if result != OK:
 		player.show_status("Save failed: %s" % world_save.get_last_error(), 8000)
@@ -338,3 +364,115 @@ func _fail_startup(message: String) -> void:
 	push_error(message)
 	print("LEYFORGE_WAVE_1_STARTUP_FAIL message=%s" % message)
 	get_tree().quit(1)
+
+
+func _build_resources() -> void:
+	# Fixed representative storage stays near the deterministic origin spawn,
+	# regardless of the player's saved location. Existing storage restores its position.
+	var origin: Vector3 = _find_safe_spawn()
+	var crate_position: Vector3 = origin + Vector3(2.0, -0.6, 0.0)
+	resources.ensure_crate(crate_position)
+	resource_presenter = LeyforgeResourcePresenter.new()
+	add_child(resource_presenter)
+	resource_presenter.configure(self)
+	for entry: Dictionary in resources.snapshot()["storage"]:
+		resource_presenter.build_crate(entry)
+	inventory_panel = LeyforgeInventoryPanel.new()
+	add_child(inventory_panel)
+	inventory_panel.configure(self)
+
+
+func toggle_inventory() -> void:
+	if player.inventory_open:
+		close_inventory()
+	else:
+		inventory_panel.open()
+
+
+func close_inventory() -> void:
+	inventory_panel.close()
+
+
+func open_nearby_storage() -> bool:
+	for entry: Dictionary in resources.snapshot()["storage"]:
+		var position: Array = entry["position"]
+		var distance: float = player.global_position.distance_to(Vector3(float(position[0]), float(position[1]), float(position[2])))
+		if distance <= 4.0:
+			inventory_panel.open(true)
+			return true
+	player.show_status("Move closer to the storage crate")
+	return false
+
+
+func drop_selected(whole_stack: bool = false) -> bool:
+	var slot: int = resources.selected_slot()
+	var stack: Dictionary = resources.inventory.stack_at(slot)
+	if stack.is_empty():
+		player.show_status("Selected slot is empty")
+		return false
+	var position: Vector3 = player.global_position + Vector3.UP * 1.0 - player.global_basis.z * 2.0
+	var tool: VoxelTool = terrain.get_voxel_tool()
+	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	var cell: Vector3i = Vector3i(position.floor())
+	if not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)) or block_catalog.is_solid_voxel(tool.get_voxel(cell)):
+		player.show_status("Drop location is blocked")
+		return false
+	var id: String = resources.drop_from_inventory(slot, int(stack["quantity"]) if whole_stack else 1, position)
+	if id.is_empty():
+		player.show_status("Drop rejected")
+		return false
+	resource_presenter.delay_pickup(id)
+	resource_presenter.sync()
+	player.show_status("Dropped resource")
+	return true
+
+
+func break_cell(cell: Vector3i) -> bool:
+	var tool: VoxelTool = terrain.get_voxel_tool()
+	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	if not _cell_interaction_valid(cell, tool):
+		return false
+	var previous: int = tool.get_voxel(cell)
+	if not block_catalog.is_breakable_voxel(previous):
+		return false
+	var air: int = block_catalog.get_voxel_id(&"leyforge:air")
+	var position: Vector3 = Vector3(cell) + Vector3.ONE * 0.5
+	var success: bool = resources.break_to_drop(block_catalog.canonical_id_for_voxel_id(previous), position,
+		func() -> Error: return _commit_voxel(cell, air, tool))
+	if success:
+		if not resources.drops().is_empty():
+			resource_presenter.delay_pickup(String(resources.drops().back()["instance"]))
+		resource_presenter.sync()
+		player.show_status("Broke %s" % block_catalog.display_name_for_voxel_id(previous))
+	else:
+		player.show_status("Break rejected")
+	return success
+
+
+func place_cell(cell: Vector3i) -> bool:
+	var tool: VoxelTool = terrain.get_voxel_tool()
+	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	var voxel: int = player.get_selected_voxel_id()
+	if voxel < 0 or not _cell_interaction_valid(cell, tool) or not LfeVoxelInteractionRules.can_place(
+		tool.get_voxel(cell), block_catalog.get_voxel_id(&"leyforge:air"), cell,
+		LfeVoxelInteractionRules.player_body_aabb(player.global_position)):
+		player.show_status("Placement blocked or selected slot is empty")
+		return false
+	var success: bool = resources.place_from_inventory(resources.selected_slot(),
+		func() -> Error: return _commit_voxel(cell, voxel, tool))
+	player.show_status("Placed %s" % block_catalog.display_name_for_voxel_id(voxel) if success else "Placement rejected")
+	return success
+
+
+func _cell_interaction_valid(cell: Vector3i, tool: VoxelTool) -> bool:
+	return _runtime_is_ready and LfeVoxelInteractionRules.cell_is_within_range(
+		player.get_camera().global_position, cell, LeyforgeFirstPersonPlayer.INTERACTION_RANGE
+	) and tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell))
+
+
+func _commit_voxel(cell: Vector3i, voxel: int, tool: VoxelTool) -> Error:
+	var result: Error = world_save.record_voxel_edit(cell, voxel, _generator.sample_voxel_id(cell))
+	if result != OK:
+		return result
+	tool.set_voxel(cell, voxel)
+	return OK

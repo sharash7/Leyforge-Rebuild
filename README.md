@@ -52,10 +52,12 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 
 ## Current playable build
 
-Wave 2 — The World Remembers is the current implemented slice: deterministic streamed voxel
-terrain, first-person movement, break/place interaction, and per-world persistence for
-voxel edits and player state.
+Wave 3 - Stuff Exists is the current implemented slice: deterministic streamed voxel
+terrain, first-person movement, conserved physical drops and pickup, a real player
+inventory and nine-slot hotbar, inventory-backed placement, persistent storage,
+equipment-state foundation, and save v2 with nondestructive Wave 2 v1 migration.
 
-See `docs/WAVE_2_THE_WORLD_REMEMBERS.md` for world selection, save controls, schema,
-recovery behavior, verification, and current limits. Wave 1 details remain in
-`docs/WAVE_1_STANDING_IN_LEYFORGE.md`.
+See `docs/WAVE_3_STUFF_EXISTS.md` for the connected resource loop, controls,
+architecture, verification and limits. Waves 1 and 2 remain covered by their
+existing regression gates and documentation. Wave 4 crafting, tools, processing
+and survival remain the next planning boundary.
