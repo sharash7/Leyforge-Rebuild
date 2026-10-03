@@ -52,8 +52,10 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 
 ## Current playable build
 
-Wave 1 — Standing in Leyforge is the current implemented slice: deterministic streamed voxel
-terrain, first-person movement, voxel targeting, and runtime break/place interaction.
+Wave 2 — The World Remembers is the current implemented slice: deterministic streamed voxel
+terrain, first-person movement, break/place interaction, and per-world persistence for
+voxel edits and player state.
 
-See `docs/WAVE_1_STANDING_IN_LEYFORGE.md` for controls, seed selection, architecture,
-verification, and the explicit boundary before Wave 2 persistence.
+See `docs/WAVE_2_THE_WORLD_REMEMBERS.md` for world selection, save controls, schema,
+recovery behavior, verification, and current limits. Wave 1 details remain in
+`docs/WAVE_1_STANDING_IN_LEYFORGE.md`.

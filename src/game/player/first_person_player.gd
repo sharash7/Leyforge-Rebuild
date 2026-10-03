@@ -36,15 +36,24 @@ var _status_message: String = "Waiting for streamed terrain..."
 var _status_expires_at_msec: int = 0
 var _gravity: float = 9.8
 var _playtest_mode: bool = false
+var _world_id: String = "development"
+var _save_version: int = 1
+var _save_dirty: bool = true
+var _override_count: int = 0
+var _save_status: String = "Never saved"
 
 
 func _ready() -> void:
 	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
-	_playtest_mode = OS.get_cmdline_user_args().has("--wave1-playtest")
+	_playtest_mode = (
+		OS.get_cmdline_user_args().has("--wave1-playtest")
+		or OS.get_cmdline_user_args().has("--wave2-playtest")
+	)
 	_build_target_highlight()
 	_instruction_label.text = (
 		"WASD move  |  Shift sprint  |  Space jump  |  Q cycle block\n"
-		+ "Left mouse break  |  Right mouse place  |  Escape release mouse"
+		+ "Left mouse break  |  Right mouse place  |  F5 save  |  F10 save and quit\n"
+		+ "Escape release mouse"
 	)
 	if DisplayServer.get_name() != "headless" and not _playtest_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -111,6 +120,48 @@ func get_selected_canonical_id() -> StringName:
 	if _placeable_ids.is_empty():
 		return &""
 	return _placeable_ids[_selected_placeable_index]
+
+
+func get_persistent_state() -> Dictionary:
+	return {
+		"position": [global_position.x, global_position.y, global_position.z],
+		"yaw": rotation.y,
+		"pitch": _head.rotation.x,
+		"selected_block": String(get_selected_canonical_id()),
+	}
+
+
+func restore_persistent_state(state: Dictionary) -> void:
+	var saved_position: Array = state["position"]
+	global_position = Vector3(
+		float(saved_position[0]),
+		float(saved_position[1]),
+		float(saved_position[2])
+	)
+	rotation.y = float(state["yaw"])
+	_head.rotation.x = clampf(float(state["pitch"]), -MAX_LOOK_ANGLE, MAX_LOOK_ANGLE)
+	var selected: StringName = StringName(String(state.get("selected_block", "")))
+	if _placeable_ids.has(selected):
+		_selected_placeable_index = _placeable_ids.find(selected)
+	velocity = Vector3.ZERO
+
+
+func set_persistence_debug(
+	world_id: String,
+	save_version: int,
+	dirty: bool,
+	override_count: int,
+	save_status: String
+) -> void:
+	_world_id = world_id
+	_save_version = save_version
+	_save_dirty = dirty
+	_override_count = override_count
+	_save_status = save_status
+
+
+func show_status(message: String, duration_msec: int = 2500) -> void:
+	_set_status(message, duration_msec)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -316,11 +367,13 @@ func _update_debug_overlay() -> void:
 		]
 
 	_debug_label.text = (
-		"Leyforge — Wave 1\n"
-		+ "Seed: %d\n" % _active_seed
+		"Leyforge — Wave 2\n"
+		+ "World: %s  |  Seed: %d  |  Save v%d\n" % [_world_id, _active_seed, _save_version]
+		+ "Save: %s  |  Overrides: %d\n" % ["Dirty" if _save_dirty else "Saved", _override_count]
 		+ "Position: (%.1f, %.1f, %.1f)\n" % [global_position.x, global_position.y, global_position.z]
 		+ "Target: %s\n" % target_text
 		+ "Development block: %s\n" % selected_text
+		+ "Persistence: %s\n" % _save_status
 		+ "Status: %s" % _status_message
 	)
 

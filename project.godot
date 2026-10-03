@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Leyforge"
 config/description="Fantasy voxel civilisation sandbox"
-config/version="0.1.0-wave1"
+config/version="0.2.0-wave2"
 run/main_scene="res://scenes/main/wave_1_playground.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 

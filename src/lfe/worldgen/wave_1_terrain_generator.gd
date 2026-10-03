@@ -11,6 +11,7 @@ var _dirt_id: int = 2
 var _stone_id: int = 3
 var _sand_id: int = 4
 var _configured: bool = false
+var _override_store: LfeVoxelOverrideStore
 
 
 func configure(seed: int, catalog: LfeBlockCatalog) -> void:
@@ -23,16 +24,17 @@ func configure(seed: int, catalog: LfeBlockCatalog) -> void:
 	_configured = true
 
 
+func set_override_store(store: LfeVoxelOverrideStore) -> void:
+	_override_store = store
+
+
 func get_seed() -> int:
 	return _seed
 
 
 func sample_voxel_id(world_position: Vector3i) -> int:
 	var layer: LfeWave1TerrainRules.MaterialLayer = TerrainRules.material_at(
-		_seed,
-		world_position.x,
-		world_position.y,
-		world_position.z
+		_seed, world_position.x, world_position.y, world_position.z
 	)
 	return _voxel_id_for_layer(layer)
 
@@ -54,9 +56,11 @@ func _generate_block(
 	var block_top: int = origin_in_voxels.y + size.y - 1
 	if origin_in_voxels.y > TerrainRules.MAX_HEIGHT:
 		out_buffer.fill(_air_id, CHANNEL)
+		_apply_overrides(out_buffer, origin_in_voxels)
 		return
 	if block_top <= TerrainRules.MIN_HEIGHT - TerrainRules.DIRT_DEPTH - 1:
 		out_buffer.fill(_stone_id, CHANNEL)
+		_apply_overrides(out_buffer, origin_in_voxels)
 		return
 
 	out_buffer.fill(_air_id, CHANNEL)
@@ -66,19 +70,14 @@ func _generate_block(
 			var world_x: int = origin_in_voxels.x + local_x
 			var height: int = TerrainRules.height_at(_seed, world_x, world_z)
 			var surface: LfeWave1TerrainRules.MaterialLayer = TerrainRules.surface_material_at(
-				_seed,
-				world_x,
-				world_z,
-				height
+				_seed, world_x, world_z, height
 			)
 			for local_y: int in range(size.y):
 				var world_y: int = origin_in_voxels.y + local_y
 				if world_y > height:
 					continue
 				var layer: LfeWave1TerrainRules.MaterialLayer = TerrainRules.material_for_column(
-					surface,
-					height,
-					world_y
+					surface, height, world_y
 				)
 				out_buffer.set_voxel(
 					_voxel_id_for_layer(layer),
@@ -87,6 +86,22 @@ func _generate_block(
 					local_z,
 					CHANNEL
 				)
+	_apply_overrides(out_buffer, origin_in_voxels)
+
+
+func _apply_overrides(out_buffer: VoxelBuffer, origin: Vector3i) -> void:
+	if _override_store == null:
+		return
+	var snapshot: Dictionary = _override_store.snapshot_for_block(origin, out_buffer.get_size())
+	for cell: Vector3i in snapshot:
+		var local_cell: Vector3i = cell - origin
+		out_buffer.set_voxel(
+			int(snapshot[cell]),
+			local_cell.x,
+			local_cell.y,
+			local_cell.z,
+			CHANNEL
+		)
 
 
 func _voxel_id_for_layer(layer: LfeWave1TerrainRules.MaterialLayer) -> int:
