@@ -60,12 +60,11 @@ func harvest_source(id: String, resources: LfeResourceState) -> bool:
 			continue
 		var spec: Dictionary = source_definition(entry["source"])
 		var effect: Dictionary = LfeHarvestRules.evaluate(spec, LfeHarvestRules.tool(resources), _catalog)
-		if effect.is_empty() or float(survival.snapshot()["stamina"]) < 4 or not survival.alive():
+		if effect.is_empty() or not survival.alive():
 			return false
 		if LfeItemTransactions.add(resources.inventory, StringName(spec["content"]), int(entry["remaining"])) != int(entry["remaining"]):
 			return false
 		entry["remaining"] = 0
-		survival.exert(4)
 		if effect["wear"]:
 			LfeHarvestRules.wear(resources, effect["instance"])
 		return true

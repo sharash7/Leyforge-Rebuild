@@ -35,6 +35,9 @@ var _runtime_ready: bool = false
 var _placeable_ids: Array[StringName] = []
 var _selected_placeable_index: int = 0
 var _legacy_selected_block: String = ""
+var _source_target: String = ""
+var _crate_target: String = ""
+var _context_text: String = ""
 var _has_target: bool = false
 var _target_cell: Vector3i = Vector3i.ZERO
 var _placement_cell: Vector3i = Vector3i.ZERO
@@ -61,8 +64,8 @@ func _ready() -> void:
 	_build_target_highlight()
 	_instruction_label.text = (
 		"WASD move  |  Shift sprint  |  Space jump  |  1–9 / wheel hotbar\n"
-		+ "Left mouse break  |  Right mouse place  |  F5 save  |  F10 save and quit\n"
-		+ "I inventory  |  E interact/gather/rest  |  C craft  |  F consume\nQ drop one (Shift: stack)  |  Escape close/release"
+		+ "LMB gather/mine  |  RMB interact/place  |  F5 save  |  F10 save and quit\n"
+		+ "I inventory  |  E alternate interact  |  C craft  |  F consume\nQ drop one (Shift: stack)  |  Escape close/release"
 	)
 	if DisplayServer.get_name() != "headless" and not _playtest_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -319,6 +322,8 @@ func cycle_development_block() -> void:
 
 func try_break_target() -> bool:
 	_update_targeting()
+	if not development_selector and not _source_target.is_empty():
+		return gameplay_authority.begin_source_harvest(_source_target)
 	if not _has_target:
 		_set_status("Nothing in range", 900)
 		return false
@@ -347,6 +352,8 @@ func try_break_target() -> bool:
 
 func try_place_target() -> bool:
 	_update_targeting()
+	if not development_selector and gameplay_authority!=null and gameplay_authority.targeted_interaction():
+		return true
 	if not _has_target:
 		_set_status("Nothing in range", 900)
 		return false
@@ -379,37 +386,59 @@ func try_place_target() -> bool:
 	return true
 
 
+func target_source() -> String:
+	return _source_target
+
+func target_crate() -> String:
+	return _crate_target
+
+func context_text() -> String:
+	return _context_text
+
 func _update_targeting() -> void:
-	if _voxel_tool == null:
-		_clear_target()
+	_clear_target()
+	if _voxel_tool==null:
 		return
-
-	var result: VoxelRaycastResult = _voxel_tool.raycast(
-		_camera.global_position,
-		-_camera.global_basis.z,
-		INTERACTION_RANGE
-	)
-	if result == null:
-		_clear_target()
+	var origin: Vector3 = _camera.global_position
+	var direction: Vector3 = -_camera.global_basis.z
+	if not development_selector and gameplay_authority!=null:
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin,origin+direction*INTERACTION_RANGE,8)
+		var physical: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+		if not physical.is_empty():
+			var distance: float = origin.distance_to(physical["position"])
+			var blocker: VoxelRaycastResult = _voxel_tool.raycast(origin,direction,maxf(0,distance-0.02))
+			var body: Node3D = physical["collider"]
+			if blocker==null and gameplay_authority.region_relevant(body.global_position):
+				_source_target=body.get_meta("source","")
+				_crate_target=body.get_meta("crate","")
+				_target_highlight.global_position=body.global_position+body.get_meta("highlight_center",Vector3.ZERO)
+				_target_highlight.scale=body.get_meta("highlight_size",Vector3.ONE*0.8)
+				_target_highlight.visible=true
+				if not _source_target.is_empty():
+					var entry: Dictionary = gameplay_authority.creation.source(_source_target)
+					var spec: Dictionary = gameplay_authority.creation.source_definition(entry["source"])
+					_context_text="%s — LMB gather (%d remaining)" % [spec["display_name"],int(entry["remaining"])]
+				else:
+					_context_text="Storage crate — RMB open"
+				return
+	var result: VoxelRaycastResult = _voxel_tool.raycast(origin,direction,INTERACTION_RANGE)
+	if result==null or not LfeVoxelInteractionRules.cell_is_within_range(origin,result.position,INTERACTION_RANGE):
 		return
-
-	var hit_cell: Vector3i = result.position
-	if not LfeVoxelInteractionRules.cell_is_within_range(
-		_camera.global_position,
-		hit_cell,
-		INTERACTION_RANGE
-	):
-		_clear_target()
-		return
-
-	_has_target = true
-	_target_cell = hit_cell
-	_placement_cell = result.previous_position
-	_target_highlight.global_position = Vector3(_target_cell) + Vector3.ONE * 0.5
-	_target_highlight.visible = true
-
+	_has_target=true
+	_target_cell=result.position
+	_placement_cell=result.previous_position
+	_target_highlight.global_position=Vector3(_target_cell)+Vector3.ONE*0.5
+	_target_highlight.scale=Vector3.ONE
+	_target_highlight.visible=true
+	var definition: Dictionary = _catalog.definition_for_voxel_id(_voxel_tool.get_voxel(_target_cell))
+	_context_text=definition.get("display_name","")+" — LMB gather"
+	if definition.get("function","") in ["kiln","storage","rest"]:
+		_context_text=definition["display_name"]+" — RMB interact"
 
 func _clear_target() -> void:
+	_source_target=""
+	_crate_target=""
+	_context_text=""
 	_has_target = false
 	_target_highlight.visible = false
 

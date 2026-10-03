@@ -84,7 +84,7 @@
       "drop_content": "leyforge:stone",
       "harvest": {
         "class": "mining",
-        "capability": 0,
+        "capability": 1,
         "seconds": 1.2,
         "outputs": [
           {
@@ -286,8 +286,7 @@
       "placeable": false,
       "equipment_slots": [],
       "consume": {
-        "hunger": 30,
-        "health": 5
+        "hunger": 30
       }
     },
     {
@@ -316,7 +315,7 @@
       ],
       "tool": {
         "class": "mining",
-        "capability": 1,
+        "capability": 2,
         "efficiency": 3.0,
         "durability": 24
       }
@@ -334,7 +333,7 @@
       ],
       "tool": {
         "class": "woodcutting",
-        "capability": 1,
+        "capability": 2,
         "efficiency": 3.0,
         "durability": 24
       }
@@ -352,10 +351,74 @@
       ],
       "tool": {
         "class": "digging",
-        "capability": 1,
+        "capability": 2,
         "efficiency": 3.0,
         "durability": 24
       }
+    },
+    {
+      "id": "leyforge:wooden_pickaxe",
+      "display_name": "Wooden Pickaxe",
+      "color": "#A47743FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 1,
+      "placeable": false,
+      "equipment_slots": [
+        "hand"
+      ],
+      "tool": {
+        "class": "mining",
+        "capability": 1,
+        "efficiency": 1.5,
+        "durability": 12
+      }
+    },
+    {
+      "id": "leyforge:wooden_axe",
+      "display_name": "Wooden Axe",
+      "color": "#A47743FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 1,
+      "placeable": false,
+      "equipment_slots": [
+        "hand"
+      ],
+      "tool": {
+        "class": "woodcutting",
+        "capability": 1,
+        "efficiency": 1.5,
+        "durability": 12
+      }
+    },
+    {
+      "id": "leyforge:wooden_shovel",
+      "display_name": "Wooden Shovel",
+      "color": "#A47743FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 1,
+      "placeable": false,
+      "equipment_slots": [
+        "hand"
+      ],
+      "tool": {
+        "class": "digging",
+        "capability": 1,
+        "efficiency": 1.5,
+        "durability": 12
+      }
+    },
+    {
+      "id": "leyforge:oak_stick",
+      "display_name": "Oak Stick",
+      "color": "#AD7848FF",
+      "kind": "item",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": false,
+      "equipment_slots": []
     }
   ]
 }

@@ -278,3 +278,61 @@ static func unique_instances(slots: Array, seen: Dictionary = {}) -> bool:
 				return false
 			seen[stack["instance"]] = true
 	return true
+
+
+# Local, bounded authority update. Visual animation never calls this method.
+# Stateful instances are never combined; ordinary merges respect stack maxima.
+func advance_drop_clusters(seconds: float, relevant: Callable, clear_path: Callable) -> bool:
+	if _busy or not LfeWorldSave._finite_in_range(seconds,1) or seconds<=0 or not relevant.is_valid() or not clear_path.is_valid():
+		return false
+	var ids: Array = _drops.keys()
+	ids.sort()
+	var buckets: Dictionary = {}
+	var changed: bool = false
+	var pairs: int = 0
+	for id: String in ids:
+		if not _drops.has(id):
+			continue
+		var entry: Dictionary = _drops[id]
+		if entry["stack"].has("instance"):
+			continue
+		var p: Array = entry["position"]
+		var position: Vector3 = Vector3(float(p[0]),float(p[1]),float(p[2]))
+		if not relevant.call(position):
+			continue
+		var bucket: Vector3i = Vector3i((position/2.0).floor())
+		var found: bool = false
+		for x: int in range(-1,2):
+			for y: int in range(-1,2):
+				for z: int in range(-1,2):
+					for other: String in buckets.get(bucket+Vector3i(x,y,z),[]):
+						if found or pairs>=256 or not _drops.has(other):
+							continue
+						pairs+=1
+						var anchor: Dictionary = _drops[other]
+						if anchor["stack"]["content"]!=entry["stack"]["content"]:
+							continue
+						var q: Array = anchor["position"]
+						var target: Vector3 = Vector3(float(q[0]),float(q[1]),float(q[2]))
+						var distance: float = position.distance_to(target)
+						if distance>2 or not clear_path.call(position,target):
+							continue
+						if distance<=0.3:
+							var room: int = _catalog.stack_limit(StringName(entry["stack"]["content"]))-int(anchor["stack"]["quantity"])
+							var count: int = mini(room,int(entry["stack"]["quantity"]))
+							if count>0:
+								anchor["stack"]["quantity"]+=count
+								entry["stack"]["quantity"]-=count
+								if entry["stack"]["quantity"]==0:
+									_drops.erase(id)
+								changed=true
+						else:
+							var next: Vector3 = position.move_toward(target,0.18*seconds)
+							entry["position"]=[next.x,next.y,next.z]
+							changed=true
+						found=true
+		if _drops.has(id):
+			if not buckets.has(bucket):
+				buckets[bucket]=[]
+			buckets[bucket].append(id)
+	return changed

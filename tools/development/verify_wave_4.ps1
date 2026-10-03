@@ -58,7 +58,7 @@ try {
     Write-Output "GODOT_VERSION=$version"
     Invoke-Godot 'import' @('--headless','--editor','--path',$repositoryRoot,'--quit') ''
     $unit = "$tempRoot\unit"
-    Invoke-Godot 'focused' @('--headless','--path',$repositoryRoot,'--script','res://tests/wave_4/wave_4_test_runner.gd','--',"--wave4-test-root=$unit","--wave4-test-out=$evidenceRoot") 'WAVE_4_TEST_PASS'
+    Invoke-Godot 'focused' @('--headless','--path',$repositoryRoot,'--script','res://tests/wave_4/wave_4_test_runner.gd','--','--wave4-focused','--wave4-test-survival',"--wave4-test-root=$unit","--wave4-test-out=$evidenceRoot") 'WAVE_4_TEST_PASS'
     $focused = Get-Content -LiteralPath (Join-Path $evidenceRoot 'focused.json') -Raw | ConvertFrom-Json
     if (-not $focused.passed) { throw 'Focused report failed.' }
     $gate.focused_checks = $focused.checks
@@ -72,13 +72,17 @@ try {
             Invoke-Godot "rendered_$phase" @('--path',$repositoryRoot,'--','--wave4-playtest',"--wave4-run=$phase","--world-id=$id","--world-root=$selectedRoot",'--seed=184552221',"--wave4-playtest-out=$evidenceRoot") "WAVE_4_RENDERED_${phase}_PASS"
             $report = Get-Content -LiteralPath (Join-Path $evidenceRoot "run_$phase.json") -Raw | ConvertFrom-Json
             if (-not $report.passed) { throw "Rendered report $phase failed." }
+            if ($report.survival_profile -ne 'Standard' -or $report.survival_acceleration) { throw "Rendered manual candidate must use Standard production timing." }
             $gate.rendered_checks += $report.checks
         }
-        foreach ($frame in @('01_gathering.png','02_crafting.png','03_workstation.png','04_shelter.png','05_survival.png','06_saved.png','07_restart.png','08_completed.png','09_isolation.png','10_migration_v1.png','11_migration_v2.png')) {
+        foreach ($frame in @('01_gathering.png','02_crafting.png','03_workstation.png','04_shelter.png','05_survival.png','06_saved.png','07_restart.png','08_completed.png','09_isolation.png','10_migration_v1.png','11_migration_v2.png','12_drop_before.png','12_drop_motion.png','13_furnace_completed.png','14_resource_scale.png')) {
             $path = Join-Path $evidenceRoot $frame
             if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) { throw "Missing rendered frame $frame" }
         }
         $gate.rendered = $true
+        $gate.manual_acceptance = 'PENDING_OWNER'
+        $gate.survival_profile = 'Standard'
+        $gate.survival_acceleration = $false
     } else {
         Write-Output 'WAVE_4_RENDERED_SKIPPED; FULL EXIT GATE NOT CERTIFIED'
     }

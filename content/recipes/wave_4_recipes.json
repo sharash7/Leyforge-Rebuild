@@ -2,6 +2,90 @@
   "schema_version": 1,
   "recipes": [
     {
+      "id": "leyforge:split_oak_sticks",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 1
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:oak_stick",
+          "quantity": 4
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:craft_wooden_pickaxe",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 3
+        },
+        {
+          "content": "leyforge:oak_stick",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:wooden_pickaxe",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:craft_wooden_axe",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 3
+        },
+        {
+          "content": "leyforge:oak_stick",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:wooden_axe",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
+      "id": "leyforge:craft_wooden_shovel",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 3
+        },
+        {
+          "content": "leyforge:oak_stick",
+          "quantity": 2
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:wooden_shovel",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": []
+    },
+    {
       "id": "leyforge:saw_planks",
       "context": "hand",
       "inputs": [

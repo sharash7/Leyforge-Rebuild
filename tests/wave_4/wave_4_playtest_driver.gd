@@ -37,7 +37,7 @@ func _run() -> void:
 		"M1","M2":await _migration()
 		"N1","N2":await _migration_restart()
 		_:_check(false,"Unknown acceptance phase")
-	_report.merge({"phase":_phase,"checks":_checks,"passed":_failures.is_empty(),"failures":_failures,"world_id":_world.world_save.world_id,"seed":_world.active_seed,"runner":Engine.get_version_info()["string"],"setup_only":["Camera/viewer and player positioning at test interaction cells","Controlled environmental health damage command","Fixed-duration calls to the production simulation seam"],"state_injection":false})
+	_report.merge({"phase":_phase,"checks":_checks,"passed":_failures.is_empty(),"failures":_failures,"world_id":_world.world_save.world_id,"seed":_world.active_seed,"runner":Engine.get_version_info()["string"],"setup_only":["Camera/viewer and player positioning at test interaction cells","Controlled environmental health damage command","Fixed-duration calls to the production simulation seam"],"state_injection":false,"survival_profile":_world.creation.survival.profile_name,"survival_acceleration":false})
 	_write_report()
 	for failure: String in _failures:push_error("Wave 4 rendered %s: %s" % [_phase,failure])
 	print("WAVE_4_RENDERED_%s_%s checks=%d" % [_phase,"PASS" if _failures.is_empty() else "FAIL",_checks])
@@ -59,10 +59,14 @@ func _new_loop() -> void:
 	await _capture("02_crafting.png")
 	_world.close_inventory()
 	_craft("saw_planks")
+	_craft("split_oak_sticks")
+	_craft("craft_wooden_pickaxe")
+	_equip("wooden_pickaxe")
 	# Open a narrow real terrain shaft; all material enters conserved drops.
 	var height: int=LfeWave1TerrainRules.height_at(_world.active_seed,3,2)
 	for y: int in range(height,height-6,-1):await _mine(Vector3i(3,y,2))
-	_check(r.inventory.total(&"leyforge:stone")>=2,"Bare-hand early stone substrate")
+	_check(r.inventory.total(&"leyforge:stone")>=2,"Fresh wooden pickaxe obtains ordinary Stone without granted Stone")
+	_craft("saw_planks")
 	_craft("craft_stone_pickaxe")
 	_equip("stone_pickaxe")
 	var pick: Dictionary=r.equipment.stack_at(0)
@@ -72,8 +76,13 @@ func _new_loop() -> void:
 	_craft("craft_stone_axe")
 	_equip("stone_axe")
 	await _gather(1);await _gather(2);await _gather(3)
+	await _resource_view(4)
 	await _capture("01_gathering.png")
-	for n: int in 12:_craft("saw_planks")
+	await _resource_view(15)
+	await _capture("14_resource_scale.png")
+	for n: int in 14:_craft("saw_planks")
+	_craft("split_oak_sticks")
+	_craft("craft_wooden_axe");_craft("craft_wooden_shovel")
 	_craft("craft_stone_shovel")
 	_equip("stone_shovel")
 	await _mine(Vector3i(4,LfeWave1TerrainRules.height_at(_world.active_seed,4,2),2))
@@ -99,19 +108,26 @@ func _new_loop() -> void:
 	_rest=_world.creation.object_at(_home+Vector3i.UP)
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
 	_start_process()
-	_world.creation_panel.open(_kiln)
+	await _rmb_object(_home+Vector3i(2,1,0),_kiln)
+	_world.advance_creation(2.0)
+	await _frames(3)
 	await _capture("03_workstation.png")
 	_world.close_inventory()
 	_world.advance_creation(8.0)
 	_completed()
+	_world.creation_panel.open(_kiln)
+	await _capture("13_furnace_completed.png")
+	_world.close_inventory()
 	_check(_world.transfer_object(_kiln,"output",0,2,true)==2,"Withdraw completed charcoal through authority")
 	_craft("craft_lamp")
 	await _place("lamp",_home+Vector3i(2,1,-1))
 	await _recover_function(_home+Vector3i(2,1,-1))
 	await _place("lamp",_home+Vector3i(2,1,-1))
 	var storage_id: String=_world.creation.object_at(_home+Vector3i(2,1,1))
+	await _rmb_object(_home+Vector3i(2,1,1),storage_id)
 	_select("oak_planks")
 	_check(_world.transfer_object(storage_id,"storage",r.selected_slot(),1,false)==1,"Actual constructed storage transfer")
+	_world.close_inventory()
 	var previous: Dictionary=r.snapshot()
 	await _aim(_home+Vector3i(2,1,1))
 	_check(not _world.begin_harvest(_home+Vector3i(2,1,1)) and r.snapshot()==previous,"Filled storage cannot be broken into lost contents")
@@ -123,16 +139,16 @@ func _new_loop() -> void:
 	_check(_world.damage_player(20),"Controlled environmental damage through authority")
 	_world.advance_creation(5.0)
 	_select("provisions")
-	_check(_world.consume_selected(),"Production food/healing consumption")
+	_check(_world.consume_selected(),"Production nourishment consumption without instant health bonus")
 	_adjust("leyforge:provisions",-1)
 	_select("drinking_water")
-	_check(_world.consume_selected(),"Production drink consumption")
-	_adjust("leyforge:drinking_water",-1)
+	_check(not _world.consume_selected(),"Standard thirst is disabled; water serving retained")
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
+	var health_before_rest: float=float(_world.creation.survival.snapshot()["health"])
 	var fatigue: float=float(_world.creation.survival.snapshot()["fatigue"])
 	_check(_world.begin_rest(_rest),"Constructed covered rest point starts recovery")
-	_world.advance_creation(1.0)
-	_check(float(_world.creation.survival.snapshot()["fatigue"])<fatigue and float(_world.creation.survival.snapshot()["health"])>85,"Rest recovers fatigue and health in real shelter")
+	_world.advance_creation(30.0)
+	_check(float(_world.creation.survival.snapshot()["fatigue"])<fatigue and float(_world.creation.survival.snapshot()["health"])>health_before_rest,"Rest recovers fatigue and health in real shelter")
 	var retained: Dictionary = r.snapshot()
 	_check(_world.damage_player(100) and not _world.creation.survival.alive(),"Environmental zero-health consequence")
 	_world.advance_creation(0)
@@ -143,6 +159,8 @@ func _new_loop() -> void:
 	_start_process();_world.advance_creation(3.0)
 	_check(float(_world.creation.station(_kiln).snapshot()["progress"])==3 and not _world.creation.can_remove(_home+Vector3i(2,1,0)),"Meaningful active process retained; active station protected")
 	_equip("stone_pickaxe")
+	await _drop_demo()
+	await _rmb_place()
 	_verify_accounting()
 	await _stream()
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
@@ -165,7 +183,7 @@ func _resume() -> void:
 	_check(int(_world.resources.equipment.stack_at(0)["durability"])==durability-1,"Restored tool works with exact retained durability")
 	_craft("saw_planks")
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
-	await _place("oak_planks",_home+Vector3i(0,0,-2))
+	await _place("oak_planks",_home+Vector3i(0,0,-3))
 	_verify_accounting()
 	await _stream()
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
@@ -214,10 +232,15 @@ func _gather(index: int) -> void:
 	var entry: Dictionary=_world.creation.sources()[index]
 	var p: Array=entry["position"]
 	_player.global_position=Vector3(float(p[0]),float(p[1])+0.65,float(p[2])-1.0)
-	await _aim(Vector3i(Vector3(float(p[0]),float(p[1]),float(p[2])).floor()))
+	var center: Vector3=Vector3(float(p[0]),floorf(float(p[1]))+0.3,float(p[2]))
+	await _aim_point(center)
+	_player._update_targeting()
+	_check(_player.target_source()==entry["instance"],"Crosshair/highlight resolves actual physical source")
 	var spec: Dictionary=_world.creation.source_definition(entry["source"])
-	_check(_world.begin_source_harvest(entry["instance"]),"Begin production resource gathering: "+entry["source"])
+	var before: Dictionary=_world.creation.survival.snapshot()
+	_check(_player.try_break_target(),"LMB production path starts source gather: "+entry["source"])
 	_check(_world.advance_harvest(2.0),"Complete authorized timed source gathering")
+	_check(_world.creation.survival.snapshot()["stamina"]==before["stamina"],"Routine source gathering costs no Standard stamina")
 	_adjust(spec["content"],int(entry["remaining"]))
 
 func _mine(cell: Vector3i) -> void:
@@ -237,7 +260,11 @@ func _mine(cell: Vector3i) -> void:
 
 func _craft(name: String) -> void:
 	var recipe: Dictionary=_world.creation.recipes.definition("leyforge:"+name)
-	_check(_world.craft_recipe("leyforge:"+name),"Production craft "+name)
+	_world.toggle_crafting()
+	var before: Array=_world.resources.inventory.snapshot()
+	_world.creation_panel._recipes["leyforge:"+name].pressed.emit()
+	_check(_world.resources.inventory.snapshot()!=before,"Canonical hand-crafting UI: "+name)
+	_world.close_inventory()
 	for entry: Dictionary in recipe["inputs"]:_adjust(entry["content"],-int(entry["quantity"]))
 	for entry: Dictionary in recipe["outputs"]:_adjust(entry["content"],int(entry["quantity"]))
 
@@ -268,11 +295,35 @@ func _place(name: String,cell: Vector3i) -> void:
 	_built.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:"+name})
 
 func _start_process() -> void:
-	_select("oak_heartwood")
-	for n: int in 2:_check(_world.transfer_object(_kiln,"input",_world.resources.selected_slot(),1,false)==1,"Deposit actual process input")
-	_check(_world.transfer_object(_kiln,"fuel",_world.resources.selected_slot(),1,false)==1,"Deposit actual fuel")
-	_check(_world.start_process(_kiln,"leyforge:charcoal_burn"),"Start canonical fuelled process")
-	_adjust("leyforge:oak_heartwood",-1) # Fuel transformed to committed process work.
+	_world.creation_panel.open(_kiln)
+	var station: LfeWorkstation=_world.creation.station(_kiln)
+	for channel: String in ["input","fuel"]:
+		var count: int=2 if channel=="input" else 1
+		var source: int=_slot("leyforge:oak_heartwood")
+		var empty: int=-1
+		for slot: int in _world.resources.inventory.capacity():
+			if _world.resources.inventory.stack_at(slot).is_empty():empty=slot;break
+		_check(LfeItemTransactions.transfer(_world.resources.inventory,source,_world.resources.inventory,count,empty)==count,"Prepare exact units with conserved inventory transfer")
+		if channel=="fuel":
+			_ui_slot(_world.resources.inventory,empty,false,true) # Actual quick-transfer handler.
+		else:
+			_ui_slot(_world.resources.inventory,empty)
+			_ui_slot(station.input,0)
+		_check((station.input if channel=="input" else station.fuel).total(&"leyforge:oak_heartwood")==count,"Actual furnace slot interaction: "+channel)
+	_world.creation_panel._body.find_child("StartProcess",true,false).pressed.emit()
+	_check(station.snapshot()["active"]=="leyforge:charcoal_burn","Fire kiln UI starts authoritative reserved process")
+	_world.close_inventory()
+	_adjust("leyforge:oak_heartwood",-1)
+
+func _ui_slot(inventory: LfeInventory, slot: int, split: bool=false, shift: bool=false) -> void:
+	for entry: Dictionary in _world.creation_panel._buttons:
+		if entry["inventory"]==inventory and entry["slot"]==slot:
+			var event: InputEventMouseButton=InputEventMouseButton.new()
+			event.button_index=MOUSE_BUTTON_RIGHT if split else MOUSE_BUTTON_LEFT
+			event.pressed=true;event.shift_pressed=shift
+			entry["button"].gui_input.emit(event)
+			return
+	_check(false,"Requested real UI slot exists")
 
 func _completed() -> void:
 	_check(_world.creation.station(_kiln).snapshot()["active"]=="","Process completed")
@@ -298,6 +349,8 @@ func _verify_accounting() -> void:
 func _stream() -> void:
 	var before: Dictionary=_world.creation.snapshot()
 	var resources: Dictionary=_world.resources.snapshot()
+	var original_player: Vector3=_player.global_position
+	_player.global_position=Vector3(340,60,340)
 	var camera: Camera3D=_player.get_camera();camera.top_level=true;camera.global_position=Vector3(340,60,340)
 	var unloaded: bool=false
 	for frame: int in 360:
@@ -305,15 +358,25 @@ func _stream() -> void:
 		if not _tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(_home)):
 			unloaded=true;break
 	_check(unloaded,"Construction area really streams out")
+	await _frames(8)
+	_world.creation_presenter.sync();_world.resource_presenter.sync()
+	await _frames(2)
+	_check(_world.creation_presenter.get_child_count()==0 and _world.resource_presenter.get_child_count()==0,"No physical child Nodes remain after dematerialisation")
+	_check(_world.creation_presenter._nodes.is_empty() and _world.resource_presenter._nodes.is_empty() and _world.resource_presenter._crates.is_empty(),"All source/drop/functional/crate Nodes dematerialise with unloaded terrain")
+	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Unloading presentation retains authoritative records exactly")
+
+	_player.global_position=original_player
 	for entry: Dictionary in _built:
 		var p: Array=entry["position"];var cell: Vector3i=Vector3i(int(p[0]),int(p[1]),int(p[2]))
 		await _aim(cell)
-		_check(_tool.get_voxel(cell)==_catalog.get_voxel_id(StringName(entry["block"])),"Streamed constructed voxel exact")
+		_check(_tool.get_voxel(cell)==_catalog.get_voxel_id(StringName(entry["block"])),"Streamed constructed voxel exact at "+str(cell))
 	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Stream-out/back preserves station, survival, storage, tools and drops")
 	var expected_nodes: int=_world.creation.objects().size()
 	for entry: Dictionary in _world.creation.sources():
 		if int(entry["remaining"])>0:expected_nodes+=1
-	_check(_world.creation_presenter._nodes.size()==expected_nodes,"Exactly one functional/source node per live identity")
+	_world.creation_presenter.sync();_world.resource_presenter.sync()
+	_check(_world.creation_presenter._nodes.size()==expected_nodes,"Exactly one relevant functional/source node per live identity")
+	_check(_world.resource_presenter._nodes.size()==_world.resources.drops().size(),"Drops rematerialise exactly once from retained logical records")
 
 func _verify_restored(report: Dictionary) -> void:
 	var resources: LfeResourceState=LfeResourceState.new(_catalog)
@@ -391,3 +454,75 @@ func _recover_function(cell: Vector3i) -> void:
 	for index: int in range(_built.size()-1,-1,-1):
 		if _built[index]["position"]==[cell.x,cell.y,cell.z]:_built.remove_at(index)
 	_check(not _world.creation_presenter._nodes.has(original),"Recovered object has no duplicate presentation")
+
+
+func _aim_point(point: Vector3) -> void:
+	var camera: Camera3D=_player.get_camera();camera.top_level=true
+	camera.global_position=point+Vector3(0,3.0,0)
+	camera.look_at(point,Vector3.FORWARD)
+	var cell: Vector3i=Vector3i(point.floor())
+	for frame: int in 360:
+		await get_tree().physics_frame
+		if _tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)):break
+	_world.creation_presenter.sync();_world.resource_presenter.sync()
+	await _frames(4)
+
+func _rmb_object(cell: Vector3i,id: String) -> void:
+	await _aim(cell)
+	var before: Dictionary=_world.resources.snapshot()
+	var overrides: int=_world.world_save.overrides.count()
+	_check(_player.try_place_target() and _world.creation_panel._object==id and _player.inventory_open,"RMB highlighted functional object opens slot UI")
+	_check(_world.resources.snapshot()==before and _world.world_save.overrides.count()==overrides,"RMB interaction wins over selected block placement")
+	_world.close_inventory()
+	# Reopen for the next screenshot/action using the same player-facing path.
+	_check(_player.try_place_target(),"Repeated RMB remains usable")
+
+func _rmb_place() -> void:
+	_world.close_inventory()
+	_select("oak_planks")
+	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
+	await _aim(_home+Vector3i(0,0,-2))
+	_player._update_targeting()
+	var cell: Vector3i=_player.get_placement_cell()
+	var before: int=_world.resources.inventory.total(&"leyforge:oak_planks")
+	_check(_player.try_place_target() and _world.resources.inventory.total(&"leyforge:oak_planks")==before-1,"RMB still places when no highlighted interactable has priority")
+	_built.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:oak_planks"})
+
+func _drop_demo() -> void:
+	_world.close_inventory()
+	_select("oak_planks")
+	_player.global_position=Vector3(_home)+Vector3(4,2,3)
+	_check(_world.drop_selected(),"Production drop command creates first conserved drop")
+	_player.global_position.x+=0.8
+	_check(_world.drop_selected(),"Production drop command creates nearby compatible drop")
+	_world.resource_presenter.sync()
+	var records: Dictionary=_world.resources.snapshot()
+	var id: String=_world.resources.drops()[0]["instance"]
+	var visual: MeshInstance3D=_world.resource_presenter._nodes[id].get_node("Visual")
+	var camera: Camera3D=_player.get_camera();camera.top_level=true
+	camera.global_position=_world.resource_presenter._nodes[id].global_position+Vector3(1.8,1.6,-1.8)
+	camera.look_at(_world.resource_presenter._nodes[id].global_position+Vector3.UP*0.12,Vector3.UP)
+	_player._update_targeting()
+	await _capture("12_drop_before.png")
+	var transform: Transform3D=visual.transform
+	await _frames(35)
+	_check(visual.transform!=transform and _world.resources.snapshot()==records,"Visible bob/rotation leave logical position and dirty state unchanged")
+	var positions: Array=_world.resources.drops().map(func(v:Dictionary)->Array:return v["position"])
+	_world.resources.advance_drop_clusters(1,_world.region_relevant,_world.drop_path_clear)
+	_check(_world.resources.drops().map(func(v:Dictionary)->Array:return v["position"])!=positions,"Nearby drops drift slowly through clear local space")
+	for tick: int in 60:_world.resources.advance_drop_clusters(0.5,_world.region_relevant,_world.drop_path_clear)
+	_world.resource_presenter.sync()
+	_check(_world.resources.drops().size()==1 and _world.resources.drops()[0]["stack"]["quantity"]==2,"Compatible drop convergence merges without losing quantity")
+	await _capture("12_drop_motion.png")
+	_verify_accounting()
+
+
+func _resource_view(index: int) -> void:
+	var p: Array=_world.creation.sources()[index]["position"]
+	var point: Vector3=Vector3(float(p[0]),floorf(float(p[1]))+0.3,float(p[2]))
+	await _aim_point(point)
+	var camera: Camera3D=_player.get_camera()
+	camera.global_position=point+Vector3(2.5,2,-2.5)
+	camera.look_at(point,Vector3.UP)
+	_player._update_targeting()
+	await _frames(3)

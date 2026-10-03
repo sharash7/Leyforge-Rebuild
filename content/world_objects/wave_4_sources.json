@@ -14,12 +14,12 @@
     },
     {
       "id": "dense_stone",
-      "display_name": "Dense stone outcrop (mining 1)",
+      "display_name": "Dense stone outcrop",
       "content": "leyforge:stone",
       "quantity": 6,
       "count": 4,
       "class": "mining",
-      "capability": 1,
+      "capability": 2,
       "seconds": 1.5,
       "color": "#777D82"
     },

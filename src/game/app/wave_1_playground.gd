@@ -390,8 +390,6 @@ func _build_resources() -> void:
 	resource_presenter = LeyforgeResourcePresenter.new()
 	add_child(resource_presenter)
 	resource_presenter.configure(self)
-	for entry: Dictionary in resources.snapshot()["storage"]:
-		resource_presenter.build_crate(entry)
 	inventory_panel = LeyforgeInventoryPanel.new()
 	add_child(inventory_panel)
 	inventory_panel.configure(self)
@@ -470,7 +468,6 @@ func break_cell(cell: Vector3i) -> bool:
 	if success:
 		creation.remove_object(cell)
 		creation_presenter.sync()
-		creation.survival.exert(4)
 		if _harvest.get("wear",false):
 			LfeHarvestRules.wear(resources, _harvest["instance"])
 		_harvest.clear()
@@ -554,13 +551,14 @@ func can_sprint() -> bool:
 func begin_harvest(cell: Vector3i) -> bool:
 	var tool: VoxelTool = terrain.get_voxel_tool()
 	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
-	if not _cell_interaction_valid(cell,tool) or not creation.can_remove(cell) or not creation.survival.alive() or float(creation.survival.snapshot()["stamina"]) < 4:
-		player.show_status("Harvest blocked; empty station/storage or recover stamina")
+	if not _cell_interaction_valid(cell,tool) or not creation.can_remove(cell) or not creation.survival.alive():
+		player.show_status("Harvest blocked; empty station/storage or recover health")
 		return false
 	var block: int = tool.get_voxel(cell)
 	var rule: Dictionary = block_catalog.definition_for_voxel_id(block).get("harvest",{})
 	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(resources),block_catalog)
 	if effect.is_empty():
+		player.show_status("Needs matching %s capability %d" % [rule.get("class","tool"),int(rule.get("capability",0))])
 		return false
 	_harvest = effect
 	_harvest.merge({"cell":cell,"block":block,"work":0.0})
@@ -570,7 +568,7 @@ func begin_harvest(cell: Vector3i) -> bool:
 
 func begin_source_harvest(id: String) -> bool:
 	var entry: Dictionary = creation.source(id)
-	if entry.is_empty() or int(entry["remaining"]) <= 0 or not _near_position(entry["position"],4) or not creation.survival.alive() or float(creation.survival.snapshot()["stamina"]) < 4:
+	if entry.is_empty() or int(entry["remaining"]) <= 0 or not source_target_valid(id) or not creation.survival.alive():
 		return false
 	var effect: Dictionary = LfeHarvestRules.evaluate(creation.source_definition(entry["source"]),LfeHarvestRules.tool(resources),block_catalog)
 	if effect.is_empty():
@@ -586,12 +584,12 @@ func advance_harvest(seconds: float) -> bool:
 	if _harvest.is_empty() or not LfeWorldSave._finite_in_range(seconds,60) or seconds < 0:
 		return false
 	var equipped: Dictionary = LfeHarvestRules.tool(resources)
-	if _harvest["instance"] != equipped.get("instance","") or float(creation.survival.snapshot()["stamina"]) < 4 or not creation.survival.alive():
+	if _harvest["instance"] != equipped.get("instance","") or not creation.survival.alive():
 		_harvest.clear()
 		return false
 	if _harvest.has("source"):
 		var source: Dictionary = creation.source(_harvest["source"])
-		if source.is_empty() or not _near_position(source["position"],4):
+		if source.is_empty() or not source_target_valid(_harvest["source"]):
 			_harvest.clear()
 			return false
 	else:
@@ -629,29 +627,8 @@ func toggle_crafting() -> void:
 	creation_panel.open()
 
 func interact_creation() -> bool:
-	var selected: Dictionary = {}
-	var closest: float = 4.0
-	var targeted: String = creation.object_at(player.get_target_cell()) if player.has_voxel_target() else ""
-	for entry: Dictionary in creation.objects():
-		var function: String = block_catalog.content_definition(StringName(entry["content"])).get("function","")
-		if function not in ["kiln","storage","rest"]:
-			continue
-		var p: Array = entry["cell"]
-		var distance: float = player.global_position.distance_to(Vector3(float(p[0])+0.5,float(p[1])+0.5,float(p[2])+0.5))
-		if distance <= closest:
-			selected = {"instance":entry["instance"],"function":function}
-			closest = distance
-		if targeted == entry["instance"] and distance <= 4:
-			return _interact_object(entry["instance"],function)
-	for entry: Dictionary in creation.sources():
-		var p: Array = entry["position"]
-		var distance: float = player.global_position.distance_to(Vector3(float(p[0]),float(p[1]),float(p[2])))
-		if int(entry["remaining"]) > 0 and distance <= minf(closest,3):
-			selected = {"instance":entry["instance"],"function":"source"}
-			closest = distance
-	if not selected.is_empty():
-		return _interact_object(selected["instance"],selected["function"])
-	return open_nearby_storage()
+	player._update_targeting()
+	return targeted_interaction()
 
 func _interact_object(id: String, function: String) -> bool:
 	if function == "source":
@@ -674,7 +651,7 @@ func begin_rest(id: String) -> bool:
 	return false
 
 func detect_shelter() -> bool:
-	# Seven short rays through authoritative voxel state, cached twice a second.
+	# Five short rays through authoritative voxel state, cached twice a second.
 	var center: Vector3i = Vector3i((player.global_position + Vector3.UP).floor())
 	var covered: bool = false
 	for distance: int in range(1,5):
@@ -723,3 +700,66 @@ func transfer_object(id: String, channel: String, slot: int, quantity: int, with
 
 func damage_player(amount: float) -> bool:
 	return _runtime_is_ready and creation.survival.damage(amount)
+
+
+# Voxel data relevance is the shared materialisation authority for local entities.
+func region_relevant(position: Vector3) -> bool:
+	if terrain == null:
+		return false
+	return terrain.get_voxel_tool().is_area_editable(LfeVoxelInteractionRules.cell_aabb(Vector3i(position.floor())))
+
+func source_target_valid(id: String) -> bool:
+	player._update_targeting()
+	if creation_presenter == null or not creation_presenter._nodes.has(id):
+		return false
+	var entry: Dictionary = creation.source(id)
+	if entry.is_empty() or int(entry["remaining"])<=0:
+		return false
+	var p: Array = entry["position"]
+	var position: Vector3 = Vector3(float(p[0]),float(p[1]),float(p[2]))
+	return region_relevant(position) and _near_position(p,6) and player.target_source()==id
+
+func targeted_interaction() -> bool:
+	var id: String = creation.object_at(player.get_target_cell()) if player.has_voxel_target() else ""
+	for entry: Dictionary in creation.objects():
+		if entry["instance"]!=id:
+			continue
+		var function: String = block_catalog.content_definition(StringName(entry["content"])).get("function","")
+		if function in ["kiln","storage","rest"]:
+			if not object_near(id):
+				player.show_status("Move closer to interact")
+				return true
+			_interact_object(id,function)
+			return true # A failed rest still owns RMB; never fall through to placement.
+	if not player.target_crate().is_empty():
+		return open_nearby_storage()
+	return false
+
+func workstation_slot_transfer(id: String, source: LfeInventory, source_slot: int, destination: LfeInventory, destination_slot: int, quantity: int) -> int:
+	if not object_near(id):
+		return 0
+	var station: LfeWorkstation = creation.station(id)
+	var storage: LfeInventory = creation.storage(id)
+	var allowed: Array = [resources.inventory]
+	if station!=null:
+		allowed.append_array([station.input,station.fuel,station.output])
+	if storage!=null:
+		allowed.append(storage)
+	if source not in allowed or destination not in allowed or (station!=null and destination==station.output):
+		return 0
+	return LfeItemTransactions.transfer(source,source_slot,destination,quantity,destination_slot,true)
+
+func drop_path_clear(a: Vector3,b: Vector3) -> bool:
+	var tool: VoxelTool = terrain.get_voxel_tool()
+	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	if not region_relevant(a) or not region_relevant(b):
+		return false
+	var distance: float = a.distance_to(b)
+	if distance<=0.001:
+		return true
+	# Ignore the endpoints: harvested block drops can still occupy their resting cell.
+	for index: int in range(1,9):
+		var point: Vector3 = a.lerp(b,index/9.0)
+		if block_catalog.is_solid_voxel(tool.get_voxel(Vector3i(point.floor()))):
+			return false
+	return true

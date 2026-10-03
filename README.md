@@ -60,4 +60,5 @@ nondestructive v1/v2 migration.
 
 See `docs/WAVE_4_SURVIVAL_AND_CREATION.md` for the connected loop, controls,
 architecture, verification and intentional limits. Wave 0-3 regression gates
-remain active. Wave 5 Multiplayer Proof #1 is the next planning boundary.
+remain active. The `0.4.1-wave4` manual-acceptance repair awaits owner playtesting;
+see `docs/WAVE_4_MANUAL_ACCEPTANCE_REPAIR.md`. Wave 5 has not begun.

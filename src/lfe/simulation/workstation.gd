@@ -77,3 +77,29 @@ func status() -> String:
 
 func empty() -> bool:
 	return _active.is_empty() and (input.snapshot() + fuel.snapshot() + output.snapshot()).all(func(v: Variant) -> bool: return v == null)
+
+
+func start_reason(id: String) -> String:
+	var recipe: Dictionary = _recipes.definition(id)
+	if not _active.is_empty():
+		return "Output blocked — clear output slots" if _progress==float(_recipes.definition(_active)["seconds"]) else "Running — inputs and fuel reserved"
+	if recipe.is_empty() or recipe["context"]!="kiln":
+		return "Unknown process"
+	var a: LfeInventory = LfeInventory.new(_catalog,3)
+	var b: LfeInventory = LfeInventory.new(_catalog,1)
+	var c: LfeInventory = LfeInventory.new(_catalog,3)
+	a.restore(input.snapshot());b.restore(fuel.snapshot());c.restore(output.snapshot())
+	if not LfeRecipeTransactions.consume(a,recipe["inputs"]):
+		return "Input missing: " + _requirements(recipe["inputs"])
+	if not LfeRecipeTransactions.consume(b,recipe["fuel"]):
+		return "Fuel missing: " + _requirements(recipe["fuel"])
+	if not LfeRecipeTransactions.outputs(c,recipe["outputs"]):
+		return "Output full — clear output slots"
+	return "Ready — %.1f simulation seconds" % float(recipe["seconds"])
+
+
+func _requirements(entries: Array) -> String:
+	var parts: PackedStringArray = []
+	for entry: Dictionary in entries:
+		parts.append("%d %s" % [int(entry["quantity"]),_catalog.content_definition(StringName(entry["content"]))["display_name"]])
+	return ", ".join(parts)
