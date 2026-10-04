@@ -79,7 +79,7 @@ Run the complete isolated gate:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\verify_wave_5_part_1.ps1
 ~~~
 
-It snapshots source bytes into an external disposable project, isolates profile/world storage, uses the approved fixed Godot console runner, and writes append-only evidence below .verification/wave5/w5_1/run-<UTC>/. A certified receipt requires focused tests, a genuine separate-process restart, ten rendered processes, all Wave 0–4 gates, and unchanged source hashes. Skip options explicitly produce an uncertified receipt. Normal rendered candidates use Standard production survival timing.
+It snapshots source bytes into an external disposable project, isolates profile/world storage, uses the approved fixed Godot console runner, and writes append-only evidence below .verification/wave5/w5_1/run-<UTC>/. A certified receipt requires focused tests, a genuine separate-process restart, twelve rendered processes, all Wave 0–4 gates, and unchanged source hashes. Skip options explicitly produce an uncertified receipt. Normal rendered candidates use Standard production survival timing.
 
 Rendered coverage retains the full Wave 4 connected loop, physical drops, held gathering cancellation, both crafting grid sizes, storage and tool durability, construction/rest, kiln process persistence/completion, world isolation and v1/v2 migration. It adds a copied rich v3 migration and v4 restart. Screenshots, individual phase JSON/logs, regression receipts and source_manifest.json are retained with gate.json; failed earlier runs are preserved.
 
@@ -134,6 +134,69 @@ launch cancellation. The actual owner's historical settings file was only
 read for size/hash preservation verification; runtime fixtures were isolated.
 
 The prior qualification and failed repair-attempt evidence remain retained.
+Owner manual acceptance remains pending; W5.2 has not begun.
+
+## Physical source and UI physics repair
+
+Version 0.5.2-wave5-w5.1 remains a W5.1 manual acceptance candidate. W5.2 has not begun.
+
+Collision bit masks are named in LfeVoxelInteractionRules:
+
+| Responsibility | Bit mask | Godot layer number |
+| --- | ---: | --- |
+| Voxel terrain/world physical collision | 1 | 1 |
+| Finite source physical bodies and source targeting | 8 | 4 |
+| Player physical collision mask | 9 = 1 OR 8 | 1 and 4 |
+| Source-targeting ray mask | 8 | 4 only |
+
+CreationPresenter retains StaticBody3D source bodies with layer mask 8 and collision mask 0. The player now includes those bodies in its physical mask rather than merging them into terrain. Dense Stone retains one 1x1x1 mesh, collision box and matching highlight; food/water cache dimensions are unchanged. Depletion removes the presented body, and a fresh process must not reconstruct a body for a zero-remaining source. Voxel raycasts still check terrain occlusion separately; source rays do not query unrelated physics objects. These small constants document existing responsibilities without adding a physics-layer framework.
+
+Previously the inventory branch zeroed all velocity and returned before gravity and move_and_slide. UI now suppresses control input while the character completes its normal physics step. Inventory, personal crafting, Workbench, kiln and storage use the same input ownership flag. WASD, sprint, jump initiation, mouse look, held gathering/mining/chopping, placement, drop/hotbar controls and E interaction cannot drive the character through UI. I/C/Escape and actual panel controls continue to manage the UI.
+
+Horizontal momentum decelerates at the existing rate. Existing vertical velocity and gravity remain active, move_and_slide resolves contacts and floor support, and an airborne character falls and lands with Inventory still visible. Landing retains the existing damage threshold of speed > 12 and formula min(100, (fall_speed - 12) * 3); opening UI cannot cancel a damaging fall. Opening any shell immediately cancels held harvest work. Closing while LMB remains held can begin a new valid attempt from zero, without inheriting old partial work.
+
+Local UI is presentation/input state, not authoritative world state. The scene's simulation step continues world elapsed time, workstation/kiln processes and the active character's Standard survival timing. The drop presenter retains its normal clustering/settling and proximity behavior. No normal UI path sets SceneTree.paused or changes Engine.time_scale. This boundary prevents one local player's UI from conceptually freezing shared state or future players; it introduces no remote player or transport.
+
+The complete gate adds rendered phases P/Q in a separate isolated world. It exercises the actual player capsule against all three original source bodies, temporarily lifting each body above uneven terrain to identify the source collider unambiguously, restores them, and tests walking around their bounds. The connected production loop gathers/crafts all tools and workstations; additional sources are depleted through held LMB and checked by physical ray queries before and after a separate-process save/restart. The airborne test uses real streamed voxel support and normal character physics, with Inventory continuously visible. A controlled initial fall speed checks the unchanged damage formula.
+
+The kiln test records progress and world elapsed time before and after one second of production simulation, asserting panel visibility during every measured slice. It also records Standard hunger progression and unpaused engine/tree state. Real inventory, crafting, Workbench, kiln and storage panels each exercise blocked look and physical interactions. Prior assertions, owner import-first launch tests and all Wave 0–4 gates remain mandatory.
+
+Owner manual checks: walk into and around Dense Stone, provisions and water caches; hold LMB to gather; jump and open I before landing; confirm controls are blocked while UI remains usable; start a kiln and leave its UI open; save, close and restart the same world. Manual acceptance remains pending.
+
+## Physical/UI repair qualification
+
+The 0.5.2-wave5-w5.1 complete gate passed on final runtime/test source bytes at
+.verification/wave5/w5_1/run-20261004T142515285/. Its receipt records
+passed=true, certified=true, owner_launch=true, regressions=true and
+snapshot_matches_source=true.
+
+| Gate | Focused checks | Rendered checks |
+| --- | ---: | ---: |
+| Wave 0 | Import + startup qualification; 2 required readiness markers | — |
+| Wave 1 | 50 | 23 |
+| Wave 2 | 84 | 127 |
+| Wave 3 | 432 | 159 |
+| Wave 4 | 979 | 1,726 |
+| W5.1 | 548 + 16 fresh-process restart = 564 | 3,357 across 12 processes |
+| Owner launch | 88 checks | 4 normal graphical starts, including 2 restarts |
+
+Repair phase P passed 1,321 checks and separate-process Q passed 146,
+including exact v4 state restoration and absence of depleted source bodies.
+The unchanged original rendered phases remain required; additional held-LMB
+checks verify a zero-work attempt after closing UI while LMB stays held.
+
+Measured UI-open behavior: the player fell from Y 26.05 to supported Y 23.02;
+a separate 15.96 m/s landing applied 11.88 damage under the existing formula.
+Kiln progress advanced 2 to 3 seconds, world elapsed advanced 3 to 4 seconds,
+and Standard hunger changed 99.9966667 to 99.9955556 while the UI remained
+visible. SceneTree.paused was false and Engine.time_scale was 1. All 31
+required screenshots and the source manifest are retained. Earlier failed
+diagnostic receipts remain unchanged.
+
+All original unrelated editor changes and 54 live identity/profile/save files
+were verified byte-for-byte unchanged. Save/content/worldgen versions remain
+4/1/2, with legacy generator version 1 retained where stored. Evidence,
+userdata, saves, cache and vendor files are excluded from the repair package.
 Owner manual acceptance remains pending; W5.2 has not begun.
 
 ## Owner manual launch and limits

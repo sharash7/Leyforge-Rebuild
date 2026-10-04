@@ -251,8 +251,8 @@ func _build_terrain() -> void:
 	terrain.material_override = LfeBlockyLibraryFactory.create_material()
 	terrain.max_view_distance = 96
 	terrain.generate_collisions = true
-	terrain.collision_layer = 1
-	terrain.collision_mask = 1
+	terrain.collision_layer = LfeVoxelInteractionRules.WORLD_PHYSICAL_LAYER
+	terrain.collision_mask = LfeVoxelInteractionRules.WORLD_PHYSICAL_LAYER
 	terrain.set_generator_use_gpu(false)
 	add_child(terrain)
 

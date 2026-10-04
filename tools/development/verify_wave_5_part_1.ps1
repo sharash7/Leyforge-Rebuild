@@ -131,8 +131,8 @@ try {
     if (-not $SkipRenderedPlaytest) {
         $worldRoot = "$tempRoot\worlds"
 
-        foreach ($phase in @('A','B','C','D','M1','N1','M2','N2','M3','N3')) {
-            $id = if ($phase -eq 'D') { 'wave4_isolation' } elseif ($phase -in @('M1','N1')) { 'rendered_v1' } elseif ($phase -in @('M2','N2')) { 'rendered_v2' } elseif ($phase -in @('M3','N3')) { 'rendered_v3' } else { 'wave5_acceptance' }
+        foreach ($phase in @('P','Q','A','B','C','D','M1','N1','M2','N2','M3','N3')) {
+            $id = if ($phase -in @('P','Q')) { 'wave5_physics' } elseif ($phase -eq 'D') { 'wave4_isolation' } elseif ($phase -in @('M1','N1')) { 'rendered_v1' } elseif ($phase -in @('M2','N2')) { 'rendered_v2' } elseif ($phase -in @('M3','N3')) { 'rendered_v3' } else { 'wave5_acceptance' }
             $selectedRoot = if ($phase -in @('M1','N1','M2','N2','M3','N3')) { $unit } else { $worldRoot }
             Invoke-Godot "rendered_$phase" @('--path',$testProject,'--','--wave4-playtest','--w51-playtest',"--wave4-run=$phase","--world-id=$id","--world-root=$selectedRoot",'--seed=184552221',"--wave4-playtest-out=$evidenceRoot") "WAVE_4_RENDERED_${phase}_PASS"
             $report = Get-Content -LiteralPath (Join-Path $evidenceRoot "run_$phase.json") -Raw | ConvertFrom-Json
@@ -140,7 +140,7 @@ try {
             if ($report.survival_profile -ne 'Standard' -or $report.survival_acceleration) { throw "Rendered manual candidate must use Standard production timing." }
             $gate.rendered_checks += $report.checks
         }
-        foreach ($frame in @('01_gathering.png','02_crafting.png','03_workstation.png','04_shelter.png','05_survival.png','06_saved.png','07_restart.png','08_completed.png','09_isolation.png','10_migration_v1.png','11_migration_v2.png','12_drop_before.png','12_drop_motion.png','13_furnace_completed.png','14_resource_scale.png','15_personal_grid.png','16_workbench_grid.png','17_tree_variation.png','18_generated_woodland.png','19_partial_tree_grounded_drop.png','20_placed_heartwood.png','21_distant_woodland.png','22_drop_resettled.png','23_dense_stone_unit_cube.png','24_hold_voxel_cancelled.png','25_hold_source_cancelled.png','26_migration_v3.png')) {
+        foreach ($frame in @('01_gathering.png','02_crafting.png','03_workstation.png','04_shelter.png','05_survival.png','06_saved.png','07_restart.png','08_completed.png','09_isolation.png','10_migration_v1.png','11_migration_v2.png','12_drop_before.png','12_drop_motion.png','13_furnace_completed.png','14_resource_scale.png','15_personal_grid.png','16_workbench_grid.png','17_tree_variation.png','18_generated_woodland.png','19_partial_tree_grounded_drop.png','20_placed_heartwood.png','21_distant_woodland.png','22_drop_resettled.png','23_dense_stone_unit_cube.png','24_hold_voxel_cancelled.png','25_hold_source_cancelled.png','26_migration_v3.png','27_airborne_inventory_landed.png','28_inventory_fall_damage.png','29_physics_saved.png','30_physics_restart.png')) {
             $path = Join-Path $evidenceRoot $frame
             if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) { throw "Missing rendered frame $frame" }
         }

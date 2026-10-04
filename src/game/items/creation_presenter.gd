@@ -48,7 +48,7 @@ func sync() -> void:
 func _source(entry: Dictionary) -> Node3D:
 	var body: StaticBody3D = StaticBody3D.new()
 	body.name="Source_"+entry["instance"]
-	body.collision_layer=8
+	body.collision_layer=LfeVoxelInteractionRules.FINITE_SOURCE_LAYER
 	body.collision_mask=0
 	body.set_meta("source",entry["instance"])
 	var p: Array = entry["position"]

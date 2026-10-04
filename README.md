@@ -52,11 +52,13 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 
 ## Current playable build
 
-The current build is 0.5.1-wave5-w5.1: W5.1 Authority & State Separation
+The current build is 0.5.2-wave5-w5.1: W5.1 Authority & State Separation
 preserves the normal Wave 4 survival/creation loop while adding a stable local
 profile, independent world-local character records, shared world owners and
 actor-aware commands. Identity lives at user://identity/local_profile.json;
 the owner launcher imports global classes before starting the graphical game.
+Finite sources now physically block the player; opening gameplay UI suppresses
+control input while gravity, collision, fall damage and world simulation continue.
 Historical generic profile data remains intact. Save v4 retains nondestructive
 v1/v2/v3 migration and
 the existing safe promotion and previous-copy recovery path.

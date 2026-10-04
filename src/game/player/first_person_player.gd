@@ -54,6 +54,7 @@ var _save_status: String = "Never saved"
 
 
 func _ready() -> void:
+	collision_mask = LfeVoxelInteractionRules.PLAYER_PHYSICAL_MASK
 	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
 	_playtest_mode = (
 		OS.get_cmdline_user_args().has("--wave1-playtest")
@@ -200,7 +201,7 @@ func sync_primary_action_input() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not development_selector and gameplay_authority != null:
 		if event is InputEventKey and event.pressed and not event.echo:
-			if event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			if not inventory_open and event.keycode >= KEY_1 and event.keycode <= KEY_9:
 				gameplay_authority.command(character_record.player_id,"select",{"slot":event.keycode-KEY_1})
 				get_viewport().set_input_as_handled()
 				return
@@ -216,7 +217,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				gameplay_authority.toggle_inventory()
 				get_viewport().set_input_as_handled()
 				return
-			if event.keycode == KEY_E:
+			if event.keycode == KEY_E and not inventory_open:
 				gameplay_authority.interact_creation()
 				get_viewport().set_input_as_handled()
 				return
@@ -230,6 +231,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			gameplay_authority.command(character_record.player_id,"select",{"slot":posmod(resource_state.selected_slot()+(-1 if event.button_index==MOUSE_BUTTON_WHEEL_UP else 1),9)})
 			get_viewport().set_input_as_handled()
 			return
+	if inventory_open:
+		return
 	if event.is_action_pressed("release_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		if gameplay_authority!=null:gameplay_authority.set_primary_action(false)
@@ -261,13 +264,12 @@ func _physics_process(delta: float) -> void:
 		_update_debug_overlay()
 		return
 
+	# Local UI owns control input; character physics still runs every step.
 	if inventory_open:
 		if gameplay_authority!=null:gameplay_authority.set_primary_action(false)
-		velocity = Vector3.ZERO
-		_update_debug_overlay()
-		return
-	_update_targeting()
-	_handle_interaction_actions()
+	else:
+		_update_targeting()
+		_handle_interaction_actions()
 	_apply_movement(delta)
 	_update_debug_overlay()
 
@@ -275,10 +277,10 @@ func _physics_process(delta: float) -> void:
 func _apply_movement(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
-	elif Input.is_action_just_pressed("jump"):
+	elif not inventory_open and Input.is_action_just_pressed("jump"):
 		velocity.y = JUMP_VELOCITY
 
-	var input_vector: Vector2 = Input.get_vector(
+	var input_vector: Vector2 = Vector2.ZERO if inventory_open else Input.get_vector(
 		"move_left",
 		"move_right",
 		"move_forward",
@@ -288,7 +290,7 @@ func _apply_movement(delta: float) -> void:
 		transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)
 	).normalized()
 	var sprint_allowed: bool = development_selector or (gameplay_authority != null and gameplay_authority.can_sprint())
-	var movement_speed: float = SPRINT_SPEED if Input.is_action_pressed("sprint") and sprint_allowed else WALK_SPEED
+	var movement_speed: float = SPRINT_SPEED if not inventory_open and Input.is_action_pressed("sprint") and sprint_allowed else WALK_SPEED
 	if movement_direction != Vector3.ZERO and gameplay_authority != null:
 		gameplay_authority._resting = false
 	var acceleration: float = GROUND_ACCELERATION if is_on_floor() else AIR_ACCELERATION
@@ -308,6 +310,8 @@ func _apply_movement(delta: float) -> void:
 
 
 func _handle_interaction_actions() -> void:
+	if inventory_open:
+		return
 	if Input.is_action_just_pressed("cycle_block"):
 		if development_selector:
 			cycle_development_block()
@@ -338,6 +342,8 @@ func cycle_development_block() -> void:
 
 
 func try_break_target() -> bool:
+	if inventory_open:
+		return false
 	_update_targeting()
 	if not development_selector and not _source_target.is_empty():
 		return gameplay_authority.begin_source_harvest(_source_target)
@@ -368,6 +374,8 @@ func try_break_target() -> bool:
 
 
 func try_place_target() -> bool:
+	if inventory_open:
+		return false
 	_update_targeting()
 	if not development_selector and gameplay_authority!=null and gameplay_authority.targeted_interaction():
 		return true
@@ -419,7 +427,7 @@ func _update_targeting() -> void:
 	var origin: Vector3 = _camera.global_position
 	var direction: Vector3 = -_camera.global_basis.z
 	if not development_selector and gameplay_authority!=null:
-		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin,origin+direction*INTERACTION_RANGE,8)
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin,origin+direction*INTERACTION_RANGE,LfeVoxelInteractionRules.SOURCE_TARGET_MASK)
 		var physical: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 		if not physical.is_empty():
 			var distance: float = origin.distance_to(physical["position"])
