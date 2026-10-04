@@ -1,7 +1,7 @@
 class_name LfeHarvestRules
 extends RefCounted
 
-static func tool(resources: LfeResourceState) -> Dictionary:
+static func tool(resources: LfePlayerResourceState) -> Dictionary:
 	var stack: Dictionary = resources.equipment.stack_at(0)
 	if stack.is_empty():
 		stack = resources.inventory.stack_at(resources.selected_slot())
@@ -19,7 +19,7 @@ static func evaluate(rule: Dictionary, stack: Dictionary, catalog: LfeBlockCatal
 	return {"seconds": float(rule["seconds"]) / (float(spec["efficiency"]) if matching else 1.0),
 		"wear": matching, "instance": stack.get("instance", "")}
 
-static func wear(resources: LfeResourceState, identity: String) -> bool:
+static func wear(resources: LfePlayerResourceState, identity: String) -> bool:
 	for inventory: LfeInventory in [resources.inventory, resources.equipment]:
 		var next: Array = inventory.snapshot()
 		for slot: int in next.size():

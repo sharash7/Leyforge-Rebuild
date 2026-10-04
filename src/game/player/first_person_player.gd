@@ -21,7 +21,8 @@ const MAX_LOOK_ANGLE: float = deg_to_rad(89.0)
 @onready var _debug_label: Label = $Interface/DebugLabel
 @onready var _instruction_label: Label = $Interface/InstructionLabel
 
-var resource_state: LfeResourceState
+var character_record: LfePlayerCharacter
+var resource_state: LfePlayerResourceState
 var gameplay_authority: Node
 var inventory_open: bool = false
 var development_selector: bool = false
@@ -200,7 +201,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not development_selector and gameplay_authority != null:
 		if event is InputEventKey and event.pressed and not event.echo:
 			if event.keycode >= KEY_1 and event.keycode <= KEY_9:
-				resource_state.select(event.keycode - KEY_1)
+				gameplay_authority.command(character_record.player_id,"select",{"slot":event.keycode-KEY_1})
 				get_viewport().set_input_as_handled()
 				return
 			if event.keycode == KEY_C:
@@ -226,7 +227,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if inventory_open:
 			return
 		if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
-			resource_state.select(posmod(resource_state.selected_slot() + (-1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1), 9))
+			gameplay_authority.command(character_record.player_id,"select",{"slot":posmod(resource_state.selected_slot()+(-1 if event.button_index==MOUSE_BUTTON_WHEEL_UP else 1),9)})
 			get_viewport().set_input_as_handled()
 			return
 	if event.is_action_pressed("release_mouse"):

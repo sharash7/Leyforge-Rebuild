@@ -16,7 +16,7 @@ func configure(world: LeyforgeWave1Playground) -> void:
 
 func _process(_delta: float) -> void:
 	if _world==null:return
-	var v: Dictionary = _world.creation.survival.snapshot()
-	var water: String = "  |  Water %.0f" % v["thirst"] if _world.creation.survival.thirst_enabled() else ""
+	var v: Dictionary = _world.active_character.survival.snapshot()
+	var water: String = "  |  Water %.0f" % v["thirst"] if _world.active_character.survival.thirst_enabled() else ""
 	_hud.text="Health %.0f  |  Stamina %.0f\nFood %.0f%s\nFatigue %.1f\n%s" % [v["health"],v["stamina"],v["hunger"],water,v["fatigue"],"Sheltered" if _world._sheltered else "Outdoors"]
 	_context.text=_world.player.context_text();_context.visible=not _world.player.inventory_open

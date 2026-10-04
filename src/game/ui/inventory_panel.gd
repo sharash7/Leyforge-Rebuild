@@ -32,7 +32,7 @@ func configure(world: LeyforgeWave1Playground) -> void:
 		button.custom_minimum_size=Vector2(76,54)
 		button.clip_text=true
 		button.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-		button.pressed.connect(func() -> void: _world.resources.select(slot))
+		button.pressed.connect(func() -> void: _world.command(_world.local_player_id,"select",{"slot":slot}))
 		_hotbar.add_child(button)
 	_panel=PanelContainer.new();_panel.position=Vector2(180,50)
 	_panel.custom_minimum_size=Vector2(920,570)
@@ -48,7 +48,7 @@ func configure(world: LeyforgeWave1Playground) -> void:
 
 func open(storage: bool = false) -> bool:
 	var id: String = ""
-	if storage and not _world.resources.snapshot()["storage"].is_empty():id=_world.resources.snapshot()["storage"][0]["instance"]
+	if storage and not _world.world_resources.snapshot()["storage"].is_empty():id=_world.world_resources.snapshot()["storage"][0]["instance"]
 	return open_context(id)
 
 func open_context(id: String = "", focus_crafting: bool = false) -> bool:
@@ -59,7 +59,7 @@ func open_context(id: String = "", focus_crafting: bool = false) -> bool:
 	var station: LfeWorkstation = _world.creation.station(id)
 	var stored: LfeInventory = _world.creation.storage(id)
 	if stored==null and not id.is_empty():
-		stored=_world.resources.storage_inventory(id)
+		stored=_world.world_resources.storage_inventory(id)
 		if stored!=null:_storage_id=id
 	var workbench: bool = false
 	for entry: Dictionary in _world.creation.objects():
@@ -85,7 +85,11 @@ func open_context(id: String = "", focus_crafting: bool = false) -> bool:
 		top.add_child(_storage_group);_label(_storage_group,"STORED",16)
 		_grid(_storage_group,stored,3 if not _storage_id.is_empty() else 9,0,stored.capacity())
 	else:
-		crafting=LfeCraftingGrid.new(_world.block_catalog,_world.creation.recipes,3 if workbench else 2)
+		_world._sync_active_transform()
+		crafting=_world.authority.open_grid(_world.local_player_id,id if workbench else "")
+		if crafting==null:
+			_world.player.show_status("Crafting context is unavailable")
+			return false
 		var craft_column: VBoxContainer = _column(top,"")
 		_craft_title=_label(craft_column,"CRAFTING  ·  %d×%d" % [crafting.size,crafting.size],16)
 		if focus_crafting:_craft_title.modulate=Color(1,0.78,0.35)
@@ -99,9 +103,9 @@ func open_context(id: String = "", focus_crafting: bool = false) -> bool:
 		var guide: VBoxContainer = _column(top,"CRAFTING HINT")
 		var help: Label = _label(guide,"Log → planks; plank → sticks.\nFour planks fill 2×2 for a Workbench.\nAt a Workbench: head material above\ntwo vertical Oak Sticks.\nPickaxe: three heads; axe: three in an L;\nshovel: one head. Blank cells matter.",12)
 		help.custom_minimum_size=Vector2(300,0)
-	_grid(_column(top,"EQUIPMENT"),_world.resources.equipment,1,0,_world.resources.equipment.capacity())
-	_label(_body,"PLAYER INVENTORY",16);_grid(_body,_world.resources.inventory,9,9,18)
-	_label(_body,"HOTBAR  ·  1–9",16);_grid(_body,_world.resources.inventory,9,0,9)
+	_grid(_column(top,"EQUIPMENT"),_world.personal_resources.equipment,1,0,_world.personal_resources.equipment.capacity())
+	_label(_body,"PLAYER INVENTORY",16);_grid(_body,_world.personal_resources.inventory,9,9,18)
+	_label(_body,"HOTBAR  ·  1–9",16);_grid(_body,_world.personal_resources.inventory,9,0,9)
 	_label(_body,"Click source, then destination. Right-click splits half; Shift-click quick transfers. Take crafting output to craft once.",12)
 	var close_button: Button = Button.new();close_button.text="Close [Escape] — returns staged crafting items"
 	close_button.pressed.connect(_world.close_inventory);_body.add_child(close_button)
@@ -112,7 +116,7 @@ func open_context(id: String = "", focus_crafting: bool = false) -> bool:
 	return true
 
 func close() -> bool:
-	if crafting!=null and not crafting.release(_world.resources.inventory):
+	if crafting!=null and not _world.command(_world.local_player_id,"close_grid").success:
 		_world.player.show_status("Backpack full — return crafting items to free slots before closing or saving",5000)
 		return false
 	crafting=null;_picked_inventory=null;_picked_slot=-1
@@ -124,7 +128,7 @@ func close() -> bool:
 func context_valid() -> bool:
 	if _object.is_empty():return true
 	if not _storage_id.is_empty():
-		for entry: Dictionary in _world.resources.snapshot()["storage"]:
+		for entry: Dictionary in _world.world_resources.snapshot()["storage"]:
 			if entry["instance"]==_storage_id:
 				var p: Array = entry["position"]
 				return _world.region_relevant(Vector3(float(p[0]),float(p[1]),float(p[2]))) and _world._near_position(p,4)
@@ -167,22 +171,22 @@ func _grid(parent: Node, inventory: LfeInventory, columns: int, first: int, coun
 		grid.add_child(button);_buttons.append({"button":button,"inventory":inventory,"slot":slot})
 
 func _allowed(inventory: LfeInventory, destination: bool = false) -> bool:
-	if inventory in [_world.resources.inventory,_world.resources.equipment]:return true
+	if inventory in [_world.personal_resources.inventory,_world.personal_resources.equipment]:return true
 	if crafting!=null and inventory==crafting.inventory:return true
 	if not context_valid():return false
 	var station: LfeWorkstation = _world.creation.station(_object)
 	if station!=null:return inventory in [station.input,station.fuel] or (not destination and inventory==station.output)
-	var stored: LfeInventory = _world.creation.storage(_object) if _storage_id.is_empty() else _world.resources.storage_inventory(_storage_id)
+	var stored: LfeInventory = _world.creation.storage(_object) if _storage_id.is_empty() else _world.world_resources.storage_inventory(_storage_id)
 	return stored!=null and inventory==stored
 
 func _click_slot(inventory: LfeInventory, slot: int, split: bool, shift: bool) -> void:
 	if not _allowed(inventory):return
 	var stack: Dictionary = inventory.stack_at(slot)
 	if shift and not stack.is_empty():
-		var destination: LfeInventory = _world.resources.inventory
+		var destination: LfeInventory = _world.personal_resources.inventory
 		if inventory==destination:
 			if crafting!=null:destination=crafting.inventory
-			elif not _storage_id.is_empty():destination=_world.resources.storage_inventory(_storage_id)
+			elif not _storage_id.is_empty():destination=_world.world_resources.storage_inventory(_storage_id)
 			else:
 				var station: LfeWorkstation = _world.creation.station(_object)
 				destination=_world.creation.storage(_object)
@@ -190,7 +194,7 @@ func _click_slot(inventory: LfeInventory, slot: int, split: bool, shift: bool) -
 					var ready: bool = true
 					for entry: Dictionary in _world.creation.recipes.definition("leyforge:charcoal_burn")["inputs"]:ready=ready and station.input.total(StringName(entry["content"]))>=int(entry["quantity"])
 					destination=station.fuel if ready else station.input
-		if destination!=null and _allowed(destination,true):LfeItemTransactions.transfer(inventory,slot,destination,int(stack["quantity"]),-1,true)
+		if destination!=null and _allowed(destination,true):_transfer(inventory,slot,destination,int(stack["quantity"]),-1)
 		_picked_inventory=null
 	elif _picked_inventory==null:
 		if not stack.is_empty():_picked_inventory=inventory;_picked_slot=slot
@@ -198,9 +202,9 @@ func _click_slot(inventory: LfeInventory, slot: int, split: bool, shift: bool) -
 		var source: Dictionary = _picked_inventory.stack_at(_picked_slot)
 		if not source.is_empty() and _allowed(_picked_inventory) and _allowed(inventory,true):
 			var count: int = maxi(1,int(source["quantity"])/2) if split else int(source["quantity"])
-			var moved: int = LfeItemTransactions.transfer(_picked_inventory,_picked_slot,inventory,count,slot,true)
+			var moved: int = _transfer(_picked_inventory,_picked_slot,inventory,count,slot)
 			if moved==0 and not split and not stack.is_empty() and stack["content"]!=source["content"]:
-				if LfeItemTransactions.swap(_picked_inventory,_picked_slot,inventory,slot):moved=count
+				if _world.command(_world.local_player_id,"swap",{"source":_world.authority.endpoint_name(_world.local_player_id,_picked_inventory),"destination":_world.authority.endpoint_name(_world.local_player_id,inventory),"source_slot":_picked_slot,"destination_slot":slot}).success:moved=count
 			_world.player.show_status("Moved %d" % moved if moved>0 else "Transfer rejected — slot/context/full output")
 		_picked_inventory=null;_picked_slot=-1
 	_refresh()
@@ -209,8 +213,8 @@ func _process(_delta: float) -> void:
 	if _world==null:return
 	for slot: int in 9:
 		var button: Button = _hotbar.get_child(slot)
-		button.text="%d\n%s" % [slot+1,_stack_text(_world.resources.inventory,slot)]
-		button.modulate=Color(1,0.85,0.3) if slot==_world.resources.selected_slot() else Color.WHITE
+		button.text="%d\n%s" % [slot+1,_stack_text(_world.personal_resources.inventory,slot)]
+		button.modulate=Color(1,0.85,0.3) if slot==_world.personal_resources.selected_slot() else Color.WHITE
 	if _panel.visible:
 		if not context_valid():
 			if not close():_hint.text="Context unavailable — staging retained. Return items to backpack to close."
@@ -240,11 +244,15 @@ func _entries(entries: Array) -> String:
 func _stack_text(inventory: LfeInventory, slot: int) -> String:
 	var stack: Dictionary = inventory.stack_at(slot)
 	if stack.is_empty():
-		if inventory == _world.resources.equipment:
-			return LfeResourceState.EQUIPMENT_SLOTS[slot].capitalize() + "
+		if inventory == _world.personal_resources.equipment:
+			return LfePlayerResourceState.EQUIPMENT_SLOTS[slot].capitalize() + "
 Empty"
 		return "—"
 	var name: String = _world.block_catalog.content_definition(StringName(stack["content"]))["display_name"]
 	if stack.has("durability"):
 		return "%s\n%d / %d" % [name,int(stack["durability"]),int(_world.block_catalog.content_definition(StringName(stack["content"]))["tool"]["durability"])]
 	return "%s\n×%d" % [name,int(stack["quantity"])]
+
+func _transfer(source: LfeInventory,slot: int,destination: LfeInventory,count: int,target_slot: int) -> int:
+	var result: LfeCommandResult=_world.command(_world.local_player_id,"transfer",{"source":_world.authority.endpoint_name(_world.local_player_id,source),"destination":_world.authority.endpoint_name(_world.local_player_id,destination),"source_slot":slot,"destination_slot":target_slot,"quantity":count,"expected":source.stack_at(slot)})
+	return int(result.data.get("quantity",0))

@@ -58,11 +58,11 @@ func _content() -> void:
 	_check(test_catalog.load_from_path(_root.path_join("test_content.json")) == OK, "Isolated standalone item loads")
 	_check(test_catalog.has_content(&"test:hand_token") and not test_catalog.has_id(&"test:hand_token"), "Item-only identity has no voxel")
 	_check(test_catalog.placeable_voxel(&"test:hand_token") == -1, "Non-placeable item rejects placement")
-	var state: LfeResourceState = LfeResourceState.new(test_catalog)
+	var state: LfeTestResourceView = LfeTestResourceView.new(test_catalog)
 	_check(LfeItemTransactions.add(state.inventory, &"test:hand_token", 1) == 1, "Fixture item added")
 	_check(LfeItemTransactions.transfer(state.inventory, 0, state.equipment, 1, 0) == 1, "Compatible equipment transfer")
 	_check(LfeItemTransactions.transfer(state.equipment, 0, state.equipment, 1, 1) == 0, "Incompatible equipment rejected")
-	var restored: LfeResourceState = LfeResourceState.new(test_catalog)
+	var restored: LfeTestResourceView = LfeTestResourceView.new(test_catalog)
 	_check(restored.restore(state.snapshot()) and restored.equipment.total(&"test:hand_token") == 1, "Equipment roundtrip")
 	var empty_world: Callable = func() -> Error: return OK
 	LfeItemTransactions.transfer(state.equipment, 0, state.inventory, 1)
@@ -114,7 +114,7 @@ func _transactions() -> void:
 
 
 func _resources() -> void:
-	var r: LfeResourceState = LfeResourceState.new(_catalog)
+	var r: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	_check(r.inventory.capacity() == 27 and r.selected_slot() == 0, "Backpack/hotbar defaults")
 	_check(r.select(8) and not r.select(9) and r.selected_slot() == 8, "Hotbar selection bounded")
 	_check(not r.place_from_inventory(8, func() -> Error: return OK), "Empty hotbar cannot place")
@@ -158,7 +158,7 @@ func _resources() -> void:
 				LfeItemTransactions.transfer(r.inventory, random.randi_range(0, 26), r.inventory, 1, random.randi_range(0, 26), true)
 		_check(r.total(&"leyforge:stone") == 25, "Conservation randomized step %d" % index)
 	# Capacity/partial/repeated pickup: 1728 total player capacity, exact overflow.
-	var full: LfeResourceState = LfeResourceState.new(_catalog)
+	var full: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	LfeItemTransactions.add(full.inventory, &"leyforge:stone", 1728)
 	id = full.drop_from_inventory(0, 10, Vector3.ZERO)
 	LfeItemTransactions.add(full.inventory, &"leyforge:stone", 6)
@@ -170,7 +170,7 @@ func _resources() -> void:
 	var first: String = full.drop_from_inventory(0, 1, Vector3.ZERO)
 	var second: String = full.drop_from_inventory(0, 1, Vector3.ZERO)
 	_check(first != second and full.drops().size() == 2, "Identical drops have stable distinct identity")
-	var loaded: LfeResourceState = LfeResourceState.new(_catalog)
+	var loaded: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	_check(loaded.restore(full.snapshot()) and loaded.snapshot() == full.snapshot(), "Drop and remainder persistence")
 	_check(loaded.total(&"leyforge:stone") == full.total(&"leyforge:stone"), "Persistence conserves")
 	var mutations: Array = []
@@ -203,28 +203,29 @@ func _persistence() -> void:
 	var seed: int = 184552221
 	var position: Array = [0.5, float(Rules.height_at(seed, 0, 0)) + 1.05, 0.5]
 	var player: Dictionary = {"position": position, "yaw": 0.7, "pitch": -0.2, "selected_block": "leyforge:stone"}
-	var r: LfeResourceState = LfeResourceState.new(_catalog)
+	var r: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	LfeItemTransactions.add(r.inventory, &"leyforge:dirt", 14)
 	var crate: String = r.ensure_crate(Vector3(2.5, float(position[1]) - 0.6, 0.5))
 	LfeItemTransactions.transfer(r.inventory, 0, r.storage_inventory(crate), 4)
 	r.drop_from_inventory(0, 3, Vector3(16, 35, -16))
 	r.select(5)
-	var world: LfeWorldSave = LfeWorldSave.new()
+	var world: LfeTestWorldSave = LfeTestWorldSave.new()
 	_check(world.open_world("resources", seed, true, _catalog, _root) == OK, "v2 world creates")
 	_check(world.record_voxel_edit(Vector3i(-16, 0, 0), 0, 3) == OK, "Negative boundary override")
 	_check(world.save(player, r.snapshot()) == OK, "v2 all resources save")
-	var loaded: LfeWorldSave = LfeWorldSave.new()
+	var loaded: LfeTestWorldSave = LfeTestWorldSave.new()
 	_check(loaded.open_world("resources", seed, true, _catalog, _root) == OK, "v2 reload")
 	_check(loaded.resource_state == r.snapshot() and loaded.player_state == player, "All persisted state exact")
 	_check(not loaded.is_dirty(player, r.snapshot()), "Loaded state clean")
 	r.select(6)
 	_check(loaded.is_dirty(player, r.snapshot()), "Hotbar-only changes dirty")
-	var isolated: LfeWorldSave = LfeWorldSave.new()
+	var isolated: LfeTestWorldSave = LfeTestWorldSave.new()
 	_check(isolated.open_world("isolation", seed, true, _catalog, _root) == OK, "Same-seed distinct world")
-	_check(isolated.seed == loaded.seed and isolated.overrides.count() == 0 and isolated.resource_state == LfeResourceState.new(_catalog).snapshot(), "Complete same-seed isolation")
+	_check(isolated.seed == loaded.seed and isolated.overrides.count() == 0 and isolated.resource_state == LfeTestResourceView.new(_catalog).snapshot(), "Complete same-seed isolation")
 	var envelope: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(world.get_primary_path()))
-	var original_payload: Dictionary = JSON.parse_string(envelope["payload_json"])
-	_check(original_payload["metadata"]["save_version"] == LfeWorldSave.SAVE_VERSION and original_payload["metadata"]["worldgen_version"] == world.worldgen_version and original_payload["metadata"]["content_version"] == 1, "Only save schema increments")
+	var saved_v4: Dictionary=JSON.parse_string(envelope["payload_json"])
+	var original_payload: Dictionary=LfeTestWorldSave.legacy_payload(saved_v4,2)
+	_check(saved_v4["metadata"]["save_version"] == LfeWorldSave.SAVE_VERSION and original_payload["metadata"]["worldgen_version"] == world.worldgen_version and original_payload["metadata"]["content_version"] == 1, "Only save schema increments")
 	var v1: Dictionary = original_payload.duplicate(true)
 	v1["metadata"]["world_id"] = "migration"
 	v1["metadata"]["save_version"] = 1
@@ -233,14 +234,14 @@ func _persistence() -> void:
 	var v1_text: String = _envelope(v1, 1)
 	var migration_path: String = _root.path_join("migration/world.json")
 	_write(migration_path, v1_text)
-	var migration: LfeWorldSave = LfeWorldSave.new()
+	var migration: LfeTestWorldSave = LfeTestWorldSave.new()
 	_check(migration.open_world("migration", seed, false, _catalog, _root) == OK, "Real v1 loads")
 	_check(migration.player_state == player and migration.overrides.count() == 1 and migration.created_utc == v1["metadata"]["created_utc"], "Migration preserves original player/voxel/metadata")
-	_check(migration.resource_state == LfeResourceState.new(_catalog).snapshot(), "Migration initializes safe Wave 3 defaults")
+	_check(migration.resource_state == LfeTestResourceView.new(_catalog).snapshot(), "Migration initializes safe Wave 3 defaults")
 	_check(FileAccess.get_file_as_string(migration_path) == v1_text, "Opening v1 does not rewrite authority")
 	_check(migration.save(player) == OK, "Explicit migrated save writes v2")
 	_check(FileAccess.get_file_as_string(_root.path_join("migration/world.json.previous")) == v1_text, "Original v1 retained in previous copy")
-	var migrated: LfeWorldSave = LfeWorldSave.new()
+	var migrated: LfeTestWorldSave = LfeTestWorldSave.new()
 	_check(migrated.open_world("migration", seed, false, _catalog, _root) == OK and migrated.player_state == player, "Migrated v2 reload exact")
 	# Leave a second disposable v1 for the rendered runtime migration/restart test.
 	v1["metadata"]["world_id"] = "rendered_migration"
@@ -261,7 +262,7 @@ func _persistence() -> void:
 		var text: String = _envelope(data, 2)
 		var path: String = _root.path_join(id + "/world.json")
 		_write(path, text)
-		var rejected: LfeWorldSave = LfeWorldSave.new()
+		var rejected: LfeTestWorldSave = LfeTestWorldSave.new()
 		_check(rejected.open_world(id, seed, false, _catalog, _root) != OK, "Corrupt resources reject %d" % index)
 		_check(rejected.save(player) != OK and FileAccess.get_file_as_string(path) == text, "Failed load prohibits overwrite %d" % index)
 	var save_before: String = FileAccess.get_file_as_string(world.get_primary_path())
@@ -274,9 +275,9 @@ func _persistence() -> void:
 	_check(loaded.open_world("resources", seed, false, _catalog, _root) == OK, "Reopen externally changed valid file")
 	_check(loaded.save(player, r.snapshot()) == OK, "Rotate complete v2 previous")
 	_check(DirAccess.remove_absolute(loaded.get_primary_path()) == OK, "Simulate interrupted promotion")
-	var recovery: LfeWorldSave = LfeWorldSave.new()
+	var recovery: LfeTestWorldSave = LfeTestWorldSave.new()
 	_check(recovery.open_world("resources", seed, false, _catalog, _root) == OK and recovery.load_status.contains("Recovered"), "v2 previous recovery")
-	var expected_recovery: LfeResourceState = LfeResourceState.new(_catalog)
+	var expected_recovery: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	expected_recovery.restore(original_payload["resources"])
 	_check(recovery.resource_state == expected_recovery.snapshot(), "Recovery retains exact resources")
 	_write(recovery.get_world_directory().path_join(LfeWorldSave.PENDING_FILE), "broken pending")
@@ -284,7 +285,7 @@ func _persistence() -> void:
 	var corrupt_v1: Dictionary = v1.duplicate(true)
 	corrupt_v1["metadata"]["world_id"] = "bad_v1"; corrupt_v1["player"]["position"] = [1, 2]
 	_write(_root.path_join("bad_v1/world.json"), _envelope(corrupt_v1, 1))
-	_check(LfeWorldSave.new().open_world("bad_v1", seed, false, _catalog, _root) != OK, "Malformed v1 remains rejected")
+	_check(LfeTestWorldSave.new().open_world("bad_v1", seed, false, _catalog, _root) != OK, "Malformed v1 remains rejected")
 
 
 func _envelope(payload: Dictionary, version: int) -> String:

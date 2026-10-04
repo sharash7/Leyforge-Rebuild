@@ -39,14 +39,14 @@ func _run() -> void:
 		"M1","M2":await _migration()
 		"N1","N2":await _migration_restart()
 		_:_check(false,"Unknown acceptance phase")
-	_report.merge({"phase":_phase,"checks":_checks,"passed":_failures.is_empty(),"failures":_failures,"world_id":_world.world_save.world_id,"seed":_world.active_seed,"runner":Engine.get_version_info()["string"],"setup_only":["Camera/viewer and player positioning at test interaction cells","Controlled environmental health damage command","Fixed-duration calls to the production simulation seam"],"state_injection":false,"survival_profile":_world.creation.survival.profile_name,"survival_acceleration":false,"tree_work_seconds":_tree_times,"worldgen_version":_world.world_save.worldgen_version})
+	_report.merge({"phase":_phase,"checks":_checks,"passed":_failures.is_empty(),"failures":_failures,"world_id":_world.world_save.world_id,"seed":_world.active_seed,"runner":Engine.get_version_info()["string"],"setup_only":["Camera/viewer and player positioning at test interaction cells","Controlled environmental health damage command","Fixed-duration calls to the production simulation seam"],"state_injection":false,"survival_profile":_world.active_character.survival.profile_name,"survival_acceleration":false,"tree_work_seconds":_tree_times,"worldgen_version":_world.world_save.worldgen_version})
 	_write_report()
 	for failure: String in _failures:push_error("Wave 4 rendered %s: %s" % [_phase,failure])
 	print("WAVE_4_RENDERED_%s_%s checks=%d" % [_phase,"PASS" if _failures.is_empty() else "FAIL",_checks])
 	get_tree().quit(0 if _failures.is_empty() else 1)
 
 func _new_loop() -> void:
-	var r: LfeResourceState=_world.resources
+	var r: LfeTestResourceView=LfeTestResourceView.view(_world.personal_resources,_world.world_resources)
 	_check(r.inventory.snapshot().all(func(v: Variant)->bool:return v==null),"Normal world begins with empty inventory")
 	var origin: Vector3=_player.global_position
 	_player.set_runtime_ready(true)
@@ -55,7 +55,7 @@ func _new_loop() -> void:
 	_world.advance_creation(1.0)
 	Input.action_release("move_forward");Input.action_release("sprint")
 	await _frames(4);_player.set_runtime_ready(false)
-	_check(_player.global_position.distance_to(origin)>0.5 and float(_world.creation.survival.snapshot()["stamina"])<100,"Production movement and stamina exertion")
+	_check(_player.global_position.distance_to(origin)>0.5 and float(_world.active_character.survival.snapshot()["stamina"])<100,"Production movement and stamina exertion")
 	await _tree_demonstration()
 	await _chop_logs(6)
 	_key(KEY_I)
@@ -164,15 +164,15 @@ func _new_loop() -> void:
 	_select("drinking_water")
 	_check(not _world.consume_selected(),"Standard thirst is disabled; water serving retained")
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
-	var health_before_rest: float=float(_world.creation.survival.snapshot()["health"])
-	var fatigue: float=float(_world.creation.survival.snapshot()["fatigue"])
+	var health_before_rest: float=float(_world.active_character.survival.snapshot()["health"])
+	var fatigue: float=float(_world.active_character.survival.snapshot()["fatigue"])
 	_check(_world.begin_rest(_rest),"Constructed covered rest point starts recovery")
 	_world.advance_creation(30.0)
-	_check(float(_world.creation.survival.snapshot()["fatigue"])<fatigue and float(_world.creation.survival.snapshot()["health"])>health_before_rest,"Rest recovers fatigue and health in real shelter")
+	_check(float(_world.active_character.survival.snapshot()["fatigue"])<fatigue and float(_world.active_character.survival.snapshot()["health"])>health_before_rest,"Rest recovers fatigue and health in real shelter")
 	var retained: Dictionary = r.snapshot()
-	_check(_world.damage_player(100) and not _world.creation.survival.alive(),"Environmental zero-health consequence")
+	_check(_world.damage_player(100) and not _world.active_character.survival.alive(),"Environmental zero-health consequence")
 	_world.advance_creation(0)
-	_check(_world.creation.survival.alive() and r.snapshot()==retained,"Safe spawn recovery preserves every resource and tool instance")
+	_check(_world.active_character.survival.alive() and r.snapshot()==retained,"Safe spawn recovery preserves every resource and tool instance")
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
 	await _capture("05_survival.png")
 	_world._resting=false
@@ -198,9 +198,9 @@ func _resume() -> void:
 	_completed()
 	_check(_world.creation.station(_kiln).status()=="Idle","Restart resumes stored progress; completes once")
 	_check(_world.transfer_object(_kiln,"output",0,2,true)==2,"Restored process outputs transferable")
-	var durability: int=int(_world.resources.equipment.stack_at(0)["durability"])
+	var durability: int=int(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).equipment.stack_at(0)["durability"])
 	await _gather(14)
-	_check(int(_world.resources.equipment.stack_at(0)["durability"])==durability-1,"Restored tool works with exact retained durability")
+	_check(int(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).equipment.stack_at(0)["durability"])==durability-1,"Restored tool works with exact retained durability")
 	await _craft("saw_planks")
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
 	await _place("oak_planks",_home+Vector3i(0,0,-4))
@@ -219,11 +219,11 @@ func _second_restart() -> void:
 
 func _isolation() -> void:
 	var a: Dictionary=_read("A")
-	var r: LfeResourceState=_world.resources
+	var r: LfeTestResourceView=LfeTestResourceView.view(_world.personal_resources,_world.world_resources)
 	_check(_world.active_seed==int(a["seed"]) and _world.world_save.world_id!=a["world_id"],"Same seed independent world ID")
 	_check(r.inventory.snapshot().all(func(v: Variant)->bool:return v==null) and r.equipment.snapshot()==[null,null] and r.drops().is_empty(),"Inventory/tools/durability/drops isolated")
-	_check(_world.creation.objects().is_empty() and _world.world_save.overrides.count()==0 and _world.world_save.player_state.is_empty(),"Construction/stations/storage/processing isolated")
-	_check(_world.creation.sources().all(func(v: Dictionary)->bool:return int(v["remaining"])>0) and _world.creation.survival.snapshot()["health"]==100,"Sources and survival isolated")
+	_check(_world.creation.objects().is_empty() and _world.world_save.overrides.count()==0 and LfeTestWorldSave.player_transform(_world.world_save).is_empty(),"Construction/stations/storage/processing isolated")
+	_check(_world.creation.sources().all(func(v: Dictionary)->bool:return int(v["remaining"])>0) and _world.active_character.survival.snapshot()["health"]==100,"Sources and survival isolated")
 	await _capture("09_isolation.png")
 
 func _migration() -> void:
@@ -234,10 +234,10 @@ func _migration() -> void:
 	var envelope: Dictionary=JSON.parse_string(original)
 	_check(int(envelope["save_version"])==version,"Historical authority untouched on open")
 	var old: Dictionary=JSON.parse_string(envelope["payload_json"])
-	_check(_world.world_save.player_state==old["player"],"Historical player preserved")
+	_check(LfeTestWorldSave.player_transform(_world.world_save)==old["player"],"Historical player preserved")
 	if version==2:
-		_check(_world.resources.inventory.total(&"leyforge:stone")==7 and _world.resources.selected_slot()==5,"Historical v2 inventory/hotbar survives")
-	_check(_world.creation.objects().is_empty() and _world.creation.survival.snapshot()["health"]==100,"Safe survival/workstation defaults")
+		_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.total(&"leyforge:stone")==7 and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).selected_slot()==5,"Historical v2 inventory/hotbar survives")
+	_check(_world.creation.objects().is_empty() and _world.active_character.survival.snapshot()["health"]==100,"Safe survival/workstation defaults")
 	_check(_world.request_save(),"Explicit migration save writes v3")
 	_check(FileAccess.get_file_as_string(_world.world_save.get_world_directory().path_join("world.json.previous"))==original,"Original historical authority retained")
 	_snapshot_report()
@@ -261,7 +261,7 @@ func _gather(index: int) -> void:
 	_player._update_targeting()
 	_check(_player.target_source()==entry["instance"],"Crosshair/highlight resolves actual physical source")
 	var spec: Dictionary=_world.creation.source_definition(entry["source"])
-	var before: Dictionary=_world.creation.survival.snapshot()
+	var before: Dictionary=_world.active_character.survival.snapshot()
 	_held(true)
 	_check(_player.try_break_target(),"LMB production path starts source gather: "+entry["source"])
 	if entry["source"]=="fallen_oak":
@@ -273,7 +273,7 @@ func _gather(index: int) -> void:
 	if entry["source"]=="fallen_oak":
 		await _frames(2)
 		_check(not _world.creation_presenter._nodes.has(entry["instance"]),"Depleted tree removes trunk and canopy together; no ghost leaves")
-	_check(_world.creation.survival.snapshot()["stamina"]==before["stamina"],"Routine source gathering costs no Standard stamina")
+	_check(_world.active_character.survival.snapshot()["stamina"]==before["stamina"],"Routine source gathering costs no Standard stamina")
 	_adjust(spec["content"],int(entry["remaining"]))
 
 func _mine(cell: Vector3i) -> void:
@@ -286,12 +286,12 @@ func _mine(cell: Vector3i) -> void:
 	_check(_player.try_break_target(),"Player target starts timed voxel harvest")
 	_check(_world.advance_harvest(2.0),"Voxel harvest commits after work")
 	_held(false)
-	var drops: Array=_world.resources.drops()
+	var drops: Array=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops()
 	_check(not drops.is_empty(),"Harvest physically represents its output")
 	for entry: Dictionary in drops:
 		var stack: Dictionary=entry["stack"]
 		_adjust(stack["content"],int(stack["quantity"]))
-		_check(_world.resources.pickup(entry["instance"])==int(stack["quantity"]),"Production pickup exact")
+		_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).pickup(entry["instance"])==int(stack["quantity"]),"Production pickup exact")
 	_edits.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:air"})
 	_check(id!=&"leyforge:air","Gathered actual terrain resource")
 
@@ -315,9 +315,9 @@ func _craft(name: String) -> void:
 	_check(match.get("recipe")==recipe["id"],"Real staged cells match canonical pattern: "+name)
 	if name=="craft_wooden_pickaxe":await _capture("16_workbench_grid.png")
 	if name=="build_workbench":await _capture("15_personal_grid.png")
-	var before: Dictionary = _world.resources.snapshot()
+	var before: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()
 	panel._output.pressed.emit()
-	_check(_world.resources.snapshot()!=before and panel.crafting.inventory.snapshot().all(func(v:Variant)->bool:return v==null),"Taking output consumes exact staged ingredients: "+name)
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()!=before and panel.crafting.inventory.snapshot().all(func(v:Variant)->bool:return v==null),"Taking output consumes exact staged ingredients: "+name)
 	_check(_world.close_inventory(),"Close safely returns any remaining staging")
 	for entry: Dictionary in recipe["inputs"]:_adjust(entry["content"],-int(entry["quantity"]))
 	for entry: Dictionary in recipe["outputs"]:_adjust(entry["content"],int(entry["quantity"]))
@@ -338,16 +338,16 @@ func _stage_recipe(recipe: Dictionary) -> void:
 		var source: int = _slot(placement["content"])
 		if source<0:_check(false,"Gathered ingredients exist: "+placement["content"]);continue
 		var exact: int = source
-		if int(_world.resources.inventory.stack_at(source)["quantity"])!=int(placement["quantity"]):
-			for slot: int in _world.resources.inventory.capacity():
-				if _world.resources.inventory.stack_at(slot).is_empty():exact=slot;break
-			_check(LfeItemTransactions.transfer(_world.resources.inventory,source,_world.resources.inventory,int(placement["quantity"]),exact)==int(placement["quantity"]),"Conserved exact ingredient stack preparation")
-		_ui_slot(_world.resources.inventory,exact);_ui_slot(panel.crafting.inventory,int(placement["slot"]))
+		if int(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.stack_at(source)["quantity"])!=int(placement["quantity"]):
+			for slot: int in LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.capacity():
+				if LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.stack_at(slot).is_empty():exact=slot;break
+			_check(LfeItemTransactions.transfer(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,source,LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,int(placement["quantity"]),exact)==int(placement["quantity"]),"Conserved exact ingredient stack preparation")
+		_ui_slot(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,exact);_ui_slot(panel.crafting.inventory,int(placement["slot"]))
 		_check(panel.crafting.inventory.stack_at(int(placement["slot"])).get("content")==placement["content"],"Actual ingredient slot click stages content")
 	panel._refresh()
 
 func _equip(name: String) -> void:
-	var r: LfeResourceState=_world.resources
+	var r: LfeTestResourceView=LfeTestResourceView.view(_world.personal_resources,_world.world_resources)
 	if not r.equipment.stack_at(0).is_empty():
 		_check(LfeItemTransactions.transfer(r.equipment,0,r.inventory,1)==1,"Unequip exact prior instance")
 	var slot: int=_slot("leyforge:"+name)
@@ -358,7 +358,7 @@ func _equip(name: String) -> void:
 	_world.close_inventory()
 
 func _select(name: String) -> void:
-	var r: LfeResourceState=_world.resources
+	var r: LfeTestResourceView=LfeTestResourceView.view(_world.personal_resources,_world.world_resources)
 	var slot: int=_slot("leyforge:"+name)
 	if slot>=9:
 		_check(LfeItemTransactions.swap(r.inventory,slot,r.inventory,8),"Move selected resource into actual hotbar")
@@ -367,9 +367,9 @@ func _select(name: String) -> void:
 
 func _place(name: String,cell: Vector3i) -> void:
 	_select(name);await _aim(cell)
-	var before: int=_world.resources.inventory.total(StringName("leyforge:"+name))
+	var before: int=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.total(StringName("leyforge:"+name))
 	_check(_world.place_cell(cell),"Inventory-backed building "+name)
-	_check(_world.resources.inventory.total(StringName("leyforge:"+name))==before-1,"Exact construction cost")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.total(StringName("leyforge:"+name))==before-1,"Exact construction cost")
 	_built.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:"+name})
 
 func _start_process() -> void:
@@ -379,13 +379,13 @@ func _start_process() -> void:
 		var count: int=2 if channel=="input" else 1
 		var source: int=_slot("leyforge:oak_heartwood")
 		var empty: int=-1
-		for slot: int in _world.resources.inventory.capacity():
-			if _world.resources.inventory.stack_at(slot).is_empty():empty=slot;break
-		_check(LfeItemTransactions.transfer(_world.resources.inventory,source,_world.resources.inventory,count,empty)==count,"Prepare exact units with conserved inventory transfer")
+		for slot: int in LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.capacity():
+			if LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.stack_at(slot).is_empty():empty=slot;break
+		_check(LfeItemTransactions.transfer(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,source,LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,count,empty)==count,"Prepare exact units with conserved inventory transfer")
 		if channel=="fuel":
-			_ui_slot(_world.resources.inventory,empty,false,true) # Actual quick-transfer handler.
+			_ui_slot(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,empty,false,true) # Actual quick-transfer handler.
 		else:
-			_ui_slot(_world.resources.inventory,empty)
+			_ui_slot(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,empty)
 			_ui_slot(station.input,0)
 		_check((station.input if channel=="input" else station.fuel).total(&"leyforge:oak_heartwood")==count,"Actual furnace slot interaction: "+channel)
 	_world.inventory_panel._body.find_child("StartProcess",true,false).pressed.emit()
@@ -409,7 +409,7 @@ func _completed() -> void:
 
 func _verify_accounting() -> void:
 	for content: String in _ledger:
-		var total: int=_world.resources.total(StringName(content))
+		var total: int=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).total(StringName(content))
 		for entry: Dictionary in _world.creation.objects():
 			var station: LfeWorkstation=_world.creation.station(entry["instance"])
 			var storage: LfeInventory=_world.creation.storage(entry["instance"])
@@ -425,8 +425,8 @@ func _verify_accounting() -> void:
 		_check(total==int(_ledger[content]),"Exact transformation accounting "+content+" actual="+str(total)+" expected="+str(_ledger[content]))
 
 func _stream() -> void:
-	var before: Dictionary=_world.creation.snapshot()
-	var resources: Dictionary=_world.resources.snapshot()
+	var before: Dictionary=LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot()
+	var resources: Dictionary=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()
 	var original_player: Vector3=_player.global_position
 	_player.global_position=Vector3(340,60,340)
 	var camera: Camera3D=_player.get_camera();camera.top_level=true;camera.global_position=Vector3(340,60,340)
@@ -441,7 +441,7 @@ func _stream() -> void:
 	await _frames(2)
 	_check(_world.creation_presenter.get_child_count()==0 and _world.resource_presenter.get_child_count()==0,"No physical child Nodes remain after dematerialisation")
 	_check(_world.creation_presenter._nodes.is_empty() and _world.resource_presenter._nodes.is_empty() and _world.resource_presenter._crates.is_empty(),"All source/drop/functional/crate Nodes dematerialise with unloaded terrain")
-	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Unloading presentation retains authoritative records exactly")
+	_check(LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot()==before and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==resources,"Unloading presentation retains authoritative records exactly")
 
 	var distant: Array[Dictionary] = LfeStarterTreeRules.candidates(_world.active_seed,Vector2i(320,320),Vector2i(360,360))
 	_check(not distant.is_empty(),"Coordinate generation supplies trees beyond the origin source region")
@@ -455,32 +455,32 @@ func _stream() -> void:
 		await _aim(cell)
 		_check(_tool.get_voxel(cell)==_catalog.get_voxel_id(StringName(entry["block"])),"Streamed constructed voxel exact at "+str(cell))
 	_verify_tree_cells(true)
-	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Stream-out/back preserves station, survival, storage, tools and drops")
+	_check(LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot()==before and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==resources,"Stream-out/back preserves station, survival, storage, tools and drops")
 	var expected_nodes: int=_world.creation.objects().size()
 	for entry: Dictionary in _world.creation.sources():
 		if int(entry["remaining"])>0:expected_nodes+=1
 	_world.creation_presenter.sync();_world.resource_presenter.sync()
 	_check(_world.creation_presenter._nodes.size()==expected_nodes,"Exactly one relevant functional/source node per live identity")
-	_check(_world.resource_presenter._nodes.size()==_world.resources.drops().size(),"Drops rematerialise exactly once from retained logical records")
+	_check(_world.resource_presenter._nodes.size()==LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops().size(),"Drops rematerialise exactly once from retained logical records")
 
 func _verify_restored(report: Dictionary) -> void:
 	_tree_kept=report.get("tree_kept",[]).duplicate(true)
 	_edits=report.get("edits",[]).duplicate(true)
 	_verify_tree_cells(false)
 	_check(_world.world_save.worldgen_version==report.get("worldgen_version",1),"Fresh process retains stored generator version")
-	var resources: LfeResourceState=LfeResourceState.new(_catalog)
+	var resources: LfeTestResourceView=LfeTestResourceView.new(_catalog)
 	_check(resources.restore(report["resources"]),"Saved resource report valid")
-	var creation: LfeCreationState=LfeCreationState.new(_catalog)
+	var creation: LfeTestCreationView=LfeTestCreationView.new(_catalog)
 	_check(creation.restore(report["creation"],resources.snapshot()),"Saved Wave 4 report valid")
-	_check(_world.resources.snapshot()==resources.snapshot(),"Fresh process exact inventory/tools/durability/storage/drops")
-	_check(_world.creation.snapshot()==creation.snapshot(),"Fresh process exact survival/orientation/process progress/source depletion")
-	_check(_world.world_save.player_state==report["player"],"Fresh process player transform exact")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==resources.snapshot(),"Fresh process exact inventory/tools/durability/storage/drops")
+	_check(LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot()==creation.snapshot(),"Fresh process exact survival/orientation/process progress/source depletion")
+	_check(LfeTestWorldSave.player_transform(_world.world_save)==report["player"],"Fresh process player transform exact")
 	for entry: Dictionary in report.get("built",[]):
 		var p: Array=entry["position"];var cell: Vector3i=Vector3i(int(p[0]),int(p[1]),int(p[2]))
 		_check(_world._voxel_id_at(cell)==_catalog.get_voxel_id(StringName(entry["block"])),"Fresh process construction exact")
 
 func _snapshot_report() -> void:
-	_report.merge({"resources":_world.resources.snapshot(),"creation":_world.creation.snapshot(),"player":_world.world_save.player_state,"ledger":_ledger,"built":_built,"edits":_edits,"kiln":_kiln,"rest":_rest,"home":[_home.x,_home.y,_home.z],"tree_kept":_tree_kept,"tree_mined":_tree_mined})
+	_report.merge({"resources":LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot(),"creation":LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot(),"player":LfeTestWorldSave.player_transform(_world.world_save),"ledger":_ledger,"built":_built,"edits":_edits,"kiln":_kiln,"rest":_rest,"home":[_home.x,_home.y,_home.z],"tree_kept":_tree_kept,"tree_mined":_tree_mined})
 
 func _restore_report(report: Dictionary) -> void:
 	_tree_kept=report.get("tree_kept",[]).duplicate(true);_tree_mined=report.get("tree_mined",[]).duplicate(true)
@@ -492,8 +492,8 @@ func _adjust(content: String,quantity: int) -> void:
 	_ledger[content]=int(_ledger.get(content,0))+quantity
 
 func _slot(content: String) -> int:
-	for slot: int in _world.resources.inventory.capacity():
-		if _world.resources.inventory.stack_at(slot).get("content")==content:return slot
+	for slot: int in LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.capacity():
+		if LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.stack_at(slot).get("content")==content:return slot
 	return -1
 
 func _aim(cell: Vector3i) -> void:
@@ -542,8 +542,8 @@ func _recover_function(cell: Vector3i) -> void:
 	_check(_world.begin_harvest(cell) and _world.advance_harvest(2),"Empty functional block follows production recovery rule")
 	_held(false)
 	_check(_world.creation.object_at(cell).is_empty(),"Breaking removes durable functional identity")
-	for entry: Dictionary in _world.resources.drops():
-		_check(_world.resources.pickup(entry["instance"])==1 and entry["stack"]["content"]=="leyforge:lamp","Recovery drop returns exactly its crafted object")
+	for entry: Dictionary in LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops():
+		_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).pickup(entry["instance"])==1 and entry["stack"]["content"]=="leyforge:lamp","Recovery drop returns exactly its crafted object")
 	for index: int in range(_built.size()-1,-1,-1):
 		if _built[index]["position"]==[cell.x,cell.y,cell.z]:_built.remove_at(index)
 	_check(not _world.creation_presenter._nodes.has(original),"Recovered object has no duplicate presentation")
@@ -562,10 +562,10 @@ func _aim_point(point: Vector3) -> void:
 
 func _rmb_object(cell: Vector3i,id: String) -> void:
 	await _aim(cell)
-	var before: Dictionary=_world.resources.snapshot()
+	var before: Dictionary=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()
 	var overrides: int=_world.world_save.overrides.count()
 	_check(_player.try_place_target() and _world.inventory_panel._object==id and _player.inventory_open,"RMB highlighted functional object opens slot UI")
-	_check(_world.resources.snapshot()==before and _world.world_save.overrides.count()==overrides,"RMB interaction wins over selected block placement")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==before and _world.world_save.overrides.count()==overrides,"RMB interaction wins over selected block placement")
 	_world.close_inventory()
 	# Reopen for the next screenshot/action using the same player-facing path.
 	_check(_player.try_place_target(),"Repeated RMB remains usable")
@@ -577,8 +577,8 @@ func _rmb_place() -> void:
 	await _aim(_home+Vector3i(0,0,-2))
 	_player._update_targeting()
 	var cell: Vector3i=_player.get_placement_cell()
-	var before: int=_world.resources.inventory.total(&"leyforge:oak_planks")
-	_check(_player.try_place_target() and _world.resources.inventory.total(&"leyforge:oak_planks")==before-1,"RMB still places when no highlighted interactable has priority")
+	var before: int=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.total(&"leyforge:oak_planks")
+	_check(_player.try_place_target() and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.total(&"leyforge:oak_planks")==before-1,"RMB still places when no highlighted interactable has priority")
 	_built.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:oak_planks"})
 
 func _drop_demo() -> void:
@@ -589,8 +589,8 @@ func _drop_demo() -> void:
 	_player.global_position.x+=0.8
 	_check(_world.drop_selected(),"Production drop command creates nearby compatible drop")
 	_world.resource_presenter.sync()
-	var records: Dictionary=_world.resources.snapshot()
-	var id: String=_world.resources.drops()[0]["instance"]
+	var records: Dictionary=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()
+	var id: String=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops()[0]["instance"]
 	var visual: MeshInstance3D=_world.resource_presenter._nodes[id].get_node("Visual")
 	var camera: Camera3D=_player.get_camera();camera.top_level=true
 	camera.global_position=_world.resource_presenter._nodes[id].global_position+Vector3(1.8,1.6,-1.8)
@@ -600,22 +600,22 @@ func _drop_demo() -> void:
 	await _capture("12_drop_before.png")
 	var transform: Transform3D=visual.transform
 	await _frames(35)
-	_check(visual.transform!=transform and _world.resources.snapshot()==records,"Visible bob/rotation leave logical position and dirty state unchanged")
-	var positions: Array=_world.resources.drops().map(func(v:Dictionary)->Array:return v["position"])
-	_world.resources.advance_drop_clusters(1,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
-	_check(_world.resources.drops().map(func(v:Dictionary)->Array:return v["position"])!=positions,"Nearby drops drift slowly through clear local space")
-	for tick: int in 60:_world.resources.advance_drop_clusters(0.5,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
+	_check(visual.transform!=transform and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==records,"Visible bob/rotation leave logical position and dirty state unchanged")
+	var positions: Array=LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops().map(func(v:Dictionary)->Array:return v["position"])
+	LfeTestResourceView.view(_world.personal_resources,_world.world_resources).advance_drop_clusters(1,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops().map(func(v:Dictionary)->Array:return v["position"])!=positions,"Nearby drops drift slowly through clear local space")
+	for tick: int in 60:LfeTestResourceView.view(_world.personal_resources,_world.world_resources).advance_drop_clusters(0.5,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
 	_world.resource_presenter.sync()
-	_check(_world.resources.drops().size()==1 and _world.resources.drops()[0]["stack"]["quantity"]==2,"Compatible drop convergence merges without losing quantity")
-	var shown: Array = _world.resources.drops()[0]["position"]
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops().size()==1 and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops()[0]["stack"]["quantity"]==2,"Compatible drop convergence merges without losing quantity")
+	var shown: Array = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops()[0]["position"]
 	await _drop_view(Vector3(float(shown[0]),float(shown[1]),float(shown[2])))
 	await _capture("12_drop_motion.png")
 	# Remove the real loaded support through LMB, retaining the conserved planks.
-	var merged: Dictionary = _world.resources.drops()[0]
+	var merged: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops()[0]
 	var resting: Array = merged["position"]
 	var old_position: Vector3 = Vector3(float(resting[0]),float(resting[1]),float(resting[2]))
 	var support: Vector3i = Vector3i(old_position.floor())+Vector3i.DOWN
-	var prior: Array = _world.resources.drops().map(func(v:Dictionary)->String:return v["instance"])
+	var prior: Array = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops().map(func(v:Dictionary)->String:return v["instance"])
 	await _aim(support)
 	camera.global_position=Vector3(support)+Vector3(0.5,1.4,0.5)
 	camera.look_at(Vector3(support)+Vector3.ONE*0.5,Vector3.FORWARD)
@@ -623,18 +623,18 @@ func _drop_demo() -> void:
 	_held(true)
 	_check(_player.try_break_target() and _world.advance_harvest(2) and _tool.get_voxel(support)==0,"LMB removes the actual terrain supporting a drop")
 	_held(false)
-	for entry: Dictionary in _world.resources.drops():
+	for entry: Dictionary in LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops():
 		if prior.has(entry["instance"]):continue
 		var stack: Dictionary = entry["stack"]
 		_adjust(stack["content"],int(stack["quantity"]))
-		_check(_world.resources.pickup(entry["instance"])==int(stack["quantity"]),"Support harvest produces and conserves only its own output")
+		_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).pickup(entry["instance"])==int(stack["quantity"]),"Support harvest produces and conserves only its own output")
 	_edits.append({"position":[support.x,support.y,support.z],"block":"leyforge:air"})
-	_world.resources.advance_drop_clusters(0.1,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
-	var lowered: Dictionary = _world.resources.drop(merged["instance"])
+	LfeTestResourceView.view(_world.personal_resources,_world.world_resources).advance_drop_clusters(0.1,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
+	var lowered: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drop(merged["instance"])
 	var lp: Array = lowered.get("position",resting)
 	var position: Vector3 = Vector3(float(lp[0]),float(lp[1]),float(lp[2]))
 	_check(position.y<old_position.y and position==_world.drop_rest_position(position),"Removing support resettles the same drop downward onto actual terrain")
-	_check(lowered.get("stack",{})==merged["stack"] and _world.resources.drops().size()==1,"Ground correction retains exact drop identity and two-unit quantity")
+	_check(lowered.get("stack",{})==merged["stack"] and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops().size()==1,"Ground correction retains exact drop identity and two-unit quantity")
 	_world.resource_presenter.sync();await _drop_view(position)
 	await _capture("22_drop_resettled.png")
 	_verify_accounting()
@@ -675,13 +675,13 @@ func _bootstrap_bench() -> void:
 func _personal_grid_checks() -> void:
 	_key(KEY_I)
 	var panel: LeyforgeInventoryPanel = _world.inventory_panel
-	var before: Dictionary = _world.resources.snapshot()
+	var before: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()
 	# The exact tool's materials exist, but the personal context cannot provide it.
 	var source: int = _slot("leyforge:oak_planks")
-	_ui_slot(_world.resources.inventory,source);_ui_slot(panel.crafting.inventory,0)
-	_ui_slot(_world.resources.inventory,_slot("leyforge:oak_stick"));_ui_slot(panel.crafting.inventory,1)
+	_ui_slot(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,source);_ui_slot(panel.crafting.inventory,0)
+	_ui_slot(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory,_slot("leyforge:oak_stick"));_ui_slot(panel.crafting.inventory,1)
 	_check(panel.crafting.preview().is_empty() and panel._output.disabled,"Invalid personal arrangement cannot preview a 3x3 tool")
-	_check(_world.close_inventory() and _world.resources.snapshot()==before,"Closing populated 2x2 restores exact resources/identities")
+	_check(_world.close_inventory() and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==before,"Closing populated 2x2 restores exact resources/identities")
 	await _resource_view(4)
 	await _capture("17_tree_variation.png")
 
@@ -724,11 +724,11 @@ func _tree_demonstration() -> void:
 	# Individually remove the top leaf; every other canopy voxel stays intact.
 	var leaf: Vector3i = base+Vector3i(0,int(tree["height"])+1,0)
 	await _aim(leaf);_player.global_position=Vector3(base)+Vector3(2.5,0.05,0.5)
-	var resources: Dictionary = _world.resources.snapshot()
+	var resources: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()
 	_held(true)
 	_check(_player.try_break_target() and _world.advance_harvest(2),"Top Oak Leaves voxel is individually targetable and breakable")
 	_held(false)
-	_check(_tool.get_voxel(leaf)==0 and _world.resources.snapshot()==resources,"Breaking a leaf yields no timber or item output")
+	_check(_tool.get_voxel(leaf)==0 and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==resources,"Breaking a leaf yields no timber or item output")
 	_edits.append({"position":[leaf.x,leaf.y,leaf.z],"block":"leyforge:air"})
 	for index: int in range(_tree_kept.size()-1,-1,-1):
 		if _tree_kept[index]["position"]==[leaf.x,leaf.y,leaf.z]:_tree_kept.remove_at(index)
@@ -740,7 +740,7 @@ func _tree_demonstration() -> void:
 	var placed: Vector3i = support+Vector3i.UP
 	_player.global_position=Vector3(support)+Vector3(2.5,1.05,0.5)
 	_select("oak_heartwood");await _aim(support);_player._update_targeting()
-	_check(_player.get_placement_cell()==placed and _player.try_place_target() and _world.resources.inventory.total(&"leyforge:oak_heartwood")==0,"RMB places exactly one gathered canonical Heartwood block")
+	_check(_player.get_placement_cell()==placed and _player.try_place_target() and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.total(&"leyforge:oak_heartwood")==0,"RMB places exactly one gathered canonical Heartwood block")
 	_check(_tool.get_voxel(placed)==11 and _tool.get_voxel(placed+Vector3i.UP)==_world._generator.sample_voxel_id(placed+Vector3i.UP),"Placed Heartwood is one voxel and spawns no tree")
 	await _aim(placed)
 	var camera: Camera3D = _player.get_camera();camera.global_position=Vector3(placed)+Vector3(3,2,-3)
@@ -749,7 +749,7 @@ func _tree_demonstration() -> void:
 	await _chop_block(placed)
 	# Recovered wood was already in the material ledger before its temporary place.
 	_adjust("leyforge:oak_heartwood",-1)
-	_check(_world.resources.inventory.total(&"leyforge:oak_heartwood")==1,"Re-mined placed Heartwood returns exactly once")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.total(&"leyforge:oak_heartwood")==1,"Re-mined placed Heartwood returns exactly once")
 	_select("oak_heartwood");await _aim(support)
 	_check(_player.try_place_target(),"Place recovered Heartwood for sparse save/restart proof")
 	_built.append({"position":[placed.x,placed.y,placed.z],"block":"leyforge:oak_heartwood"})
@@ -777,7 +777,7 @@ func _chop_block(cell: Vector3i, demonstrate: bool = false, keep_held: bool = fa
 	_player._update_targeting()
 	var neighbour: int = _tool.get_voxel(cell+Vector3i.UP)
 	var overrides: int = _world.world_save.overrides.count()
-	var equipment: Dictionary = _world.resources.equipment.stack_at(0)
+	var equipment: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).equipment.stack_at(0)
 	_held(true)
 	_check(_player.target_source().is_empty() and _player.try_break_target(),"LMB targets a real Heartwood voxel through the normal terrain path")
 	var seconds: float = float(_world._harvest.get("seconds",0));var wear: bool = _world._harvest.get("wear",false)
@@ -787,8 +787,8 @@ func _chop_block(cell: Vector3i, demonstrate: bool = false, keep_held: bool = fa
 	if not keep_held:_held(false)
 	else:_check(Input.is_action_pressed("break_block"),"Continuous chopping retains held input across successive voxel attempts")
 	_check(_tool.get_voxel(cell+Vector3i.UP)==neighbour,"Chopping preserves the neighbouring trunk/canopy voxel")
-	if wear:_check(_world.resources.equipment.stack_at(0)["durability"]==equipment["durability"]-1,"Each correct axe block action costs exactly one durability")
-	var drops: Array = _world.resources.drops()
+	if wear:_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).equipment.stack_at(0)["durability"]==equipment["durability"]-1,"Each correct axe block action costs exactly one durability")
+	var drops: Array = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops()
 	_check(drops.size()==1 and drops[0]["stack"]=={"content":"leyforge:oak_heartwood","quantity":1},"Each trunk voxel creates exactly one canonical Heartwood drop")
 	if drops.is_empty():return
 	var id: String = drops[0]["instance"];var p: Array = drops[0]["position"]
@@ -797,14 +797,14 @@ func _chop_block(cell: Vector3i, demonstrate: bool = false, keep_held: bool = fa
 	if demonstrate:
 		var tree: Dictionary = _local_trees()[0]
 		await _voxel_tree_view(tree);await _capture("19_partial_tree_grounded_drop.png")
-		var saved: Dictionary = _world.resources.snapshot();var visual: MeshInstance3D = _world.resource_presenter._nodes[id].get_node("Visual");var transform: Transform3D = visual.transform
+		var saved: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot();var visual: MeshInstance3D = _world.resource_presenter._nodes[id].get_node("Visual");var transform: Transform3D = visual.transform
 		await _frames(25)
-		_check(visual.transform!=transform and _world.resources.snapshot()==saved and absf(visual.position.y)<=0.02,"Grounded drop gently bobs/rotates without changing its logical resting position")
+		_check(visual.transform!=transform and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==saved and absf(visual.position.y)<=0.02,"Grounded drop gently bobs/rotates without changing its logical resting position")
 		# Actual proximity pickup honours the existing real-time cooldown.
 		_player.global_position=position+Vector3(0,0.1,0);_player.velocity=Vector3.ZERO;_player.set_runtime_ready(true)
 		await _frames(85);_player.set_runtime_ready(false)
-		_check(_world.resources.drop(id).is_empty() and _world.resources.inventory.total(&"leyforge:oak_heartwood")==1,"Player proximity picks up the exact Heartwood after cooldown")
-	else:_check(_world.resources.pickup(id)==1,"Production pickup returns the single mined Heartwood")
+		_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drop(id).is_empty() and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).inventory.total(&"leyforge:oak_heartwood")==1,"Player proximity picks up the exact Heartwood after cooldown")
+	else:_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).pickup(id)==1,"Production pickup returns the single mined Heartwood")
 	_adjust("leyforge:oak_heartwood",1)
 	_edits.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:air"})
 
@@ -834,8 +834,8 @@ func _drop_view(position: Vector3) -> void:
 
 func _dense_stone_demonstration(index: int) -> void:
 	var entry: Dictionary = _world.creation.sources()[index-12 if _world.world_save.worldgen_version==2 else index]
-	var before: Dictionary = _world.creation.snapshot()
-	var resources: Dictionary = _world.resources.snapshot()
+	var before: Dictionary = LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot()
+	var resources: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()
 	await _resource_view(index)
 	var body: Node3D = _world.creation_presenter._nodes[entry["instance"]]
 	var centre: Vector3 = body.global_position+Vector3(0,0.5,0)
@@ -846,7 +846,7 @@ func _dense_stone_demonstration(index: int) -> void:
 	_check(meshes.size()==1 and (meshes[0] as MeshInstance3D).mesh is BoxMesh and (meshes[0] as MeshInstance3D).mesh.size==Vector3.ONE,"Rendered Dense Stone contains exactly one unit BoxMesh")
 	_check(collisions.size()==1 and (collisions[0] as CollisionShape3D).shape is BoxShape3D and (collisions[0] as CollisionShape3D).shape.size==Vector3.ONE,"Rendered Dense Stone has one unit collision box")
 	_check(_player._target_highlight.visible and _player._target_highlight.global_position==centre and _player._target_highlight.scale==Vector3.ONE,"Actual highlighted bounds match the visible unit cube")
-	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Presentation inspection preserves source depletion, identities and conservation")
+	_check(LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot()==before and LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==resources,"Presentation inspection preserves source depletion, identities and conservation")
 	_report["dense_stone_presentation"]={"source":entry["source"],"instance":entry["instance"],"mesh_count":meshes.size(),"collision_count":collisions.size(),"size":[1,1,1],"remaining":entry["remaining"]}
 	await _capture("23_dense_stone_unit_cube.png")
 
@@ -870,7 +870,7 @@ func _hold_source_demo(index: int) -> void:
 	await _hold_cancel_demo("source","25_hold_source_cancelled.png")
 
 func _hold_cancel_demo(family: String, frame: String) -> void:
-	var resources: Dictionary = _world.resources.snapshot();var creation: Dictionary = _world.creation.snapshot();var edits: int = _world.world_save.overrides.count()
+	var resources: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot();var creation: Dictionary = LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot();var edits: int = _world.world_save.overrides.count()
 	Input.action_press("break_block");_player._handle_interaction_actions()
 	_check(_world.has_active_harvest(),"Real continuous-input adapter starts held "+family+" work")
 	_check(not _world.advance_harvest(float(_world._harvest.get("seconds",1))*0.25),"Short held "+family+" press does not complete")
@@ -879,7 +879,7 @@ func _hold_cancel_demo(family: String, frame: String) -> void:
 	var released: InputEventMouseButton = InputEventMouseButton.new();released.button_index=MOUSE_BUTTON_LEFT;released.pressed=false
 	_player._input(released)
 	_check(not _world.has_active_harvest() and not _world.advance_harvest(60),"LMB release immediately cancels "+family+" work")
-	_check(_world.resources.snapshot()==resources and _world.creation.snapshot()==creation and _world.world_save.overrides.count()==edits,"Released "+family+" attempt retains exact block/source/output/durability state")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==resources and LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot()==creation and _world.world_save.overrides.count()==edits,"Released "+family+" attempt retains exact block/source/output/durability state")
 	# Opening the actual inventory shell while held cancels the action too.
 	Input.action_press("break_block");_player._handle_interaction_actions()
 	_check(_world.has_active_harvest(),"A new held "+family+" attempt begins from zero")
@@ -887,6 +887,6 @@ func _hold_cancel_demo(family: String, frame: String) -> void:
 	_key(KEY_I)
 	_check(_player.inventory_open and not _world.has_active_harvest() and not _world.advance_harvest(60),"Inventory immediately cancels held "+family+" work")
 	_key(KEY_I);_held(false)
-	_check(_world.resources.snapshot()==resources and _world.creation.snapshot()==creation,"Menu cancellation creates no background "+family+" output or wear")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()==resources and LfeTestCreationView.view(_world.creation,_world.active_character.survival).snapshot()==creation,"Menu cancellation creates no background "+family+" output or wear")
 	_player.show_status("Hold LMB — release cancels gathering")
 	await _capture(frame)

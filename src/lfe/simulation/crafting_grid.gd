@@ -26,7 +26,7 @@ func take(destination: LfeInventory, expected_recipe: String = "") -> bool:
 	for entry: Dictionary in match["consumption"]:
 		if not LfeItemTransactions.remove(next_grid,int(entry["slot"]),int(entry["quantity"])):return false
 	if not LfeRecipeTransactions.outputs(next_destination,match["outputs"]):return false
-	if not LfeResourceState.unique_instances(next_grid.snapshot()+next_destination.snapshot()):return false
+	if not LfeWorldResourceState.unique_instances(next_grid.snapshot()+next_destination.snapshot()):return false
 	inventory.restore(next_grid.snapshot());destination.restore(next_destination.snapshot())
 	return true
 
@@ -39,6 +39,6 @@ func release(destination: LfeInventory) -> bool:
 	for slot: int in next_grid.capacity():
 		var stack: Dictionary = next_grid.stack_at(slot)
 		if not stack.is_empty() and LfeItemTransactions.transfer(next_grid,slot,next_destination,int(stack["quantity"]))!=int(stack["quantity"]):return false
-	if not LfeResourceState.unique_instances(next_grid.snapshot()+next_destination.snapshot()):return false
+	if not LfeWorldResourceState.unique_instances(next_grid.snapshot()+next_destination.snapshot()):return false
 	inventory.restore(next_grid.snapshot());destination.restore(next_destination.snapshot())
 	return true

@@ -21,7 +21,13 @@ var _primary_action_active: bool = false
 var _sheltered: bool = false
 var _shelter_timer: float = 0.0
 var _resting: bool = false
-var resources: LfeResourceState
+var authority: LfeGameplayAuthority
+var active_character: LfePlayerCharacter
+var local_player_id: String = ""
+var personal_resources: LfePlayerResourceState:
+	get:return active_character.resources if active_character!=null else null
+var world_resources: LfeWorldResourceState:
+	get:return authority.world_resources if authority!=null else null
 var resource_presenter: LeyforgeResourcePresenter
 var inventory_panel: LeyforgeInventoryPanel
 
@@ -87,21 +93,21 @@ func _ready() -> void:
 	if open_error != OK:
 		_fail_startup(world_save.get_last_error())
 		return
-	resources = LfeResourceState.new(block_catalog)
-	if not resources.restore(world_save.resource_state):
-		_fail_startup("Wave 3 resources are invalid.")
+	local_player_id=world_save.local_player_id
+	authority=LfeGameplayAuthority.new()
+	if not authority.configure(world_save,block_catalog):
+		_fail_startup("Invalid character/world state")
 		return
-	creation = LfeCreationState.new(block_catalog)
-	if not creation.content_error.is_empty() or not creation.recipes.error.is_empty() or not creation.restore(world_save.creation_state, resources.snapshot()):
-		_fail_startup("Invalid canonical recipes or survival/creation state")
-		return
+	creation=authority.creation
+	authority.relevant=region_relevant
+	active_character=authority.character(local_player_id)
 	active_seed = world_save.seed
 	_build_environment()
 	_build_terrain()
 	if not _build_player():
 		return
 	if not player.development_selector:
-		player.resource_state = resources
+		player.resource_state = personal_resources
 		player.gameplay_authority = self
 		_build_resources()
 	player.block_broken.connect(_on_block_broken)
@@ -135,7 +141,7 @@ func _ready() -> void:
 		wave3_driver.call("configure", self, player, terrain, block_catalog, active_seed)
 
 	if arguments.has("--wave4-playtest"):
-		var wave4_driver: Node = load("res://tests/wave_4/wave_4_playtest_driver.gd").new()
+		var wave4_driver: Node = load("res://tests/wave_5_part_1/w5_1_playtest_driver.gd" if arguments.has("--w51-playtest") else "res://tests/wave_4/wave_4_playtest_driver.gd").new()
 		add_child(wave4_driver)
 		wave4_driver.call("configure", self, player, terrain, block_catalog, active_seed)
 	call_deferred("_finish_startup")
@@ -144,11 +150,11 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if world_save == null or player == null:
 		return
-	var current_state: Dictionary = player.get_persistent_state()
+	_sync_active_transform()
 	player.set_persistence_debug(
 		world_save.world_id,
 		LfeWorldSave.SAVE_VERSION,
-		world_save.is_dirty(current_state, resources.snapshot(), creation.snapshot()),
+		world_save.is_dirty(authority.players_snapshot(),world_resources.snapshot(),creation.snapshot()),
 		world_save.overrides.count(),
 		"%s | %s" % [world_save.load_status, world_save.save_status]
 	)
@@ -186,7 +192,8 @@ func request_save() -> bool:
 	if inventory_panel!=null and not close_inventory():
 		return false
 	_save_in_progress = true
-	var result: Error = world_save.save(player.get_persistent_state(), resources.snapshot(), creation.snapshot())
+	_sync_active_transform()
+	var result: Error = world_save.save(authority.players_snapshot(),world_resources.snapshot(),creation.snapshot())
 	_save_in_progress = false
 	if result != OK:
 		player.show_status("Save failed: %s" % world_save.get_last_error(), 8000)
@@ -251,7 +258,7 @@ func _build_terrain() -> void:
 
 
 func _build_player() -> bool:
-	var restored_state: Dictionary = world_save.player_state.duplicate(true)
+	var restored_state: Dictionary = active_character.transform.duplicate(true) if active_character!=null else {}
 	var restore_saved_position: bool = false
 	if not restored_state.is_empty():
 		var saved_position: Array = restored_state["position"]
@@ -272,8 +279,15 @@ func _build_player() -> bool:
 			restored_state["position"] = [spawn_position.x, spawn_position.y, spawn_position.z]
 			world_save.load_status += "; unsafe saved player position, used safe spawn"
 			print("WAVE_2_PLAYER_FALLBACK reason=unsafe_saved_position")
+	if active_character==null:
+		active_character=authority.add_character(local_player_id,spawn_position)
+		if active_character==null:
+			_fail_startup("Could not create world-local character")
+			return false
+	print("WAVE_5_ACTIVE_CHARACTER player_id=%s owner=%s" % [local_player_id,world_save.owner_player_id])
 	player = PLAYER_SCENE.instantiate() as LeyforgeFirstPersonPlayer
 	add_child(player)
+	player.character_record=active_character
 	player.configure(terrain, block_catalog, active_seed, spawn_position)
 	if not restored_state.is_empty():
 		player.restore_persistent_state(restored_state)
@@ -389,7 +403,7 @@ func _build_resources() -> void:
 	# regardless of the player's saved location. Existing storage restores its position.
 	var origin: Vector3 = _find_safe_spawn()
 	var crate_position: Vector3 = origin + Vector3(2.0, -0.6, 0.0)
-	resources.ensure_crate(crate_position)
+	world_resources.ensure_crate(crate_position)
 	resource_presenter = LeyforgeResourcePresenter.new()
 	add_child(resource_presenter)
 	resource_presenter.configure(self)
@@ -419,7 +433,7 @@ func close_inventory() -> bool:
 
 
 func open_nearby_storage() -> bool:
-	for entry: Dictionary in resources.snapshot()["storage"]:
+	for entry: Dictionary in world_resources.snapshot()["storage"]:
 		var position: Array = entry["position"]
 		var distance: float = player.global_position.distance_to(Vector3(float(position[0]), float(position[1]), float(position[2])))
 		if distance <= 4.0:
@@ -429,9 +443,9 @@ func open_nearby_storage() -> bool:
 	return false
 
 
-func drop_selected(whole_stack: bool = false) -> bool:
-	var slot: int = resources.selected_slot()
-	var stack: Dictionary = resources.inventory.stack_at(slot)
+func _apply_drop_selected(whole_stack: bool = false) -> bool:
+	var slot: int = personal_resources.selected_slot()
+	var stack: Dictionary = personal_resources.inventory.stack_at(slot)
 	if stack.is_empty():
 		player.show_status("Selected slot is empty")
 		return false
@@ -442,18 +456,19 @@ func drop_selected(whole_stack: bool = false) -> bool:
 	if not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)) or block_catalog.is_solid_voxel(tool.get_voxel(cell)):
 		player.show_status("Drop location is blocked")
 		return false
-	var id: String = resources.drop_from_inventory(slot, int(stack["quantity"]) if whole_stack else 1, position)
+	var id: String = world_resources.drop_from_inventory(personal_resources,slot, int(stack["quantity"]) if whole_stack else 1, position)
 	if id.is_empty():
 		player.show_status("Drop rejected")
 		return false
-	resources.ground_drop(id,drop_rest_position)
+	world_resources.ground_drop(id,drop_rest_position)
 	resource_presenter.delay_pickup(id)
 	resource_presenter.sync()
 	player.show_status("Dropped resource")
 	return true
 
 
-func break_cell(cell: Vector3i) -> bool:
+func _apply_break_cell(cell: Vector3i) -> bool:
+	if _harvest.is_empty() or not _harvest_target_valid():return false
 	var tool: VoxelTool = terrain.get_voxel_tool()
 	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
 	if not _cell_interaction_valid(cell, tool):
@@ -465,18 +480,18 @@ func break_cell(cell: Vector3i) -> bool:
 		return false
 	var air: int = block_catalog.get_voxel_id(&"leyforge:air")
 	var position: Vector3 = Vector3(cell) + Vector3.ONE * 0.5
-	var prior_drops: Array = resources.drops().map(func(entry: Dictionary)->String:return entry["instance"])
-	var success: bool = resources.break_to_drop(block_catalog.canonical_id_for_voxel_id(previous), position,
+	var prior_drops: Array = world_resources.drops().map(func(entry: Dictionary)->String:return entry["instance"])
+	var success: bool = world_resources.break_to_drop(block_catalog.canonical_id_for_voxel_id(previous), position,
 		func() -> Error: return _commit_voxel(cell, air, tool), block_catalog.definition_for_voxel_id(previous)["harvest"]["outputs"])
 	if success:
 		creation.remove_object(cell)
 		creation_presenter.sync()
 		if _harvest.get("wear",false):
-			LfeHarvestRules.wear(resources, _harvest["instance"])
+			LfeHarvestRules.wear(personal_resources, _harvest["instance"])
 		_harvest.clear()
-		for entry: Dictionary in resources.drops():
+		for entry: Dictionary in world_resources.drops():
 			if entry["instance"] not in prior_drops:
-				resources.ground_drop(entry["instance"],drop_rest_position)
+				world_resources.ground_drop(entry["instance"],drop_rest_position)
 				resource_presenter.delay_pickup(entry["instance"])
 		resource_presenter.sync()
 		player.show_status("Broke %s" % block_catalog.display_name_for_voxel_id(previous))
@@ -485,7 +500,7 @@ func break_cell(cell: Vector3i) -> bool:
 	return success
 
 
-func place_cell(cell: Vector3i) -> bool:
+func _apply_place_cell(cell: Vector3i) -> bool:
 	var tool: VoxelTool = terrain.get_voxel_tool()
 	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
 	var voxel: int = player.get_selected_voxel_id()
@@ -497,7 +512,7 @@ func place_cell(cell: Vector3i) -> bool:
 	var definition: Dictionary = block_catalog.definition_for_voxel_id(voxel)
 	if definition.has("function") and (not creation.object_at(cell).is_empty() or creation.objects().size() >= 10000):
 		return false
-	var success: bool = resources.place_from_inventory(resources.selected_slot(),
+	var success: bool = world_resources.place_from_inventory(personal_resources,personal_resources.selected_slot(),
 		func() -> Error: return _commit_voxel(cell, voxel, tool))
 	if success:
 		creation.add_object(block_catalog.canonical_id_for_voxel_id(voxel), cell, posmod(roundi(player.rotation.y / (PI / 2)),4))
@@ -537,11 +552,12 @@ func advance_creation(seconds: float) -> bool:
 		_sheltered = detect_shelter()
 		_shelter_timer = 0.5
 	var sprinting: bool = not player.inventory_open and Input.is_action_pressed("sprint") and Input.get_vector("move_left","move_right","move_forward","move_back") != Vector2.ZERO and can_sprint()
-	creation.advance(seconds,_sheltered,_resting,sprinting)
-	if not creation.survival.alive():
+	authority.advance_world(seconds)
+	command(local_player_id,"advance_player",{"seconds":seconds,"sheltered":_sheltered,"resting":_resting,"sprinting":sprinting})
+	if not active_character.survival.alive():
 		player.global_position = _find_safe_spawn()
 		player.velocity = Vector3.ZERO
-		creation.survival.respawn()
+		command(local_player_id,"recover",{"spawn":player.global_position})
 		_resting = false
 		set_primary_action(false)
 		player.show_status("Recovered at safe spawn; inventory retained",5000)
@@ -552,12 +568,12 @@ func advance_creation(seconds: float) -> bool:
 	return true
 
 func can_sprint() -> bool:
-	return creation != null and creation.survival.alive() and float(creation.survival.snapshot()["stamina"]) >= 1 and float(creation.survival.snapshot()["fatigue"]) < 100
+	return creation != null and active_character.survival.alive() and float(active_character.survival.snapshot()["stamina"]) >= 1 and float(active_character.survival.snapshot()["fatigue"]) < 100
 
 # Explicit input/authority seam: begin, held continuation and immediate cancel.
 # Work is transient and never carried into another target or attempt.
-func set_primary_action(active: bool) -> void:
-	_primary_action_active=active and player!=null and not player.inventory_open and creation!=null and creation.survival.alive()
+func _apply_set_primary_action(active: bool) -> void:
+	_primary_action_active=active and player!=null and not player.inventory_open and creation!=null and active_character.survival.alive()
 	if not _primary_action_active:
 		if not _harvest.is_empty():player.show_status("Gathering cancelled")
 		_harvest.clear()
@@ -566,9 +582,9 @@ func has_active_harvest() -> bool:
 	return not _harvest.is_empty()
 
 func _harvest_input_valid() -> bool:
-	return _primary_action_active and _runtime_is_ready and player!=null and not player.inventory_open and creation.survival.alive()
+	return _primary_action_active and _runtime_is_ready and player!=null and not player.inventory_open and active_character.survival.alive()
 
-func begin_harvest(cell: Vector3i) -> bool:
+func _apply_begin_harvest(cell: Vector3i) -> bool:
 	if not _harvest_input_valid() or has_active_harvest():return false
 	player._update_targeting()
 	var tool: VoxelTool = terrain.get_voxel_tool()
@@ -578,32 +594,32 @@ func begin_harvest(cell: Vector3i) -> bool:
 		return false
 	var block: int = tool.get_voxel(cell)
 	var rule: Dictionary = block_catalog.definition_for_voxel_id(block).get("harvest",{})
-	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(resources),block_catalog)
+	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(personal_resources),block_catalog)
 	if effect.is_empty():
 		player.show_status("Needs matching %s capability %d" % [rule.get("class","tool"),int(rule.get("capability",0))])
 		return false
 	_harvest = effect
-	_harvest.merge({"cell":cell,"block":block,"work":0.0})
+	_harvest.merge({"actor":local_player_id,"cell":cell,"block":block,"work":0.0})
 	player.show_status("Gathering... hold LMB (%.2f s)" % float(effect["seconds"]))
 	_resting = false
 	return true
 
-func begin_source_harvest(id: String) -> bool:
+func _apply_begin_source_harvest(id: String) -> bool:
 	if not _harvest_input_valid() or has_active_harvest():return false
 	var entry: Dictionary = creation.source(id)
 	if entry.is_empty() or int(entry["remaining"]) <= 0 or not source_target_valid(id):return false
-	var effect: Dictionary = LfeHarvestRules.evaluate(creation.source_definition(entry["source"]),LfeHarvestRules.tool(resources),block_catalog)
+	var effect: Dictionary = LfeHarvestRules.evaluate(creation.source_definition(entry["source"]),LfeHarvestRules.tool(personal_resources),block_catalog)
 	if effect.is_empty():
 		player.show_status("This resource needs the matching tool capability")
 		return false
 	_harvest = effect
-	_harvest.merge({"source":id,"source_snapshot":entry,"work":0.0})
+	_harvest.merge({"actor":local_player_id,"source":id,"source_snapshot":entry,"work":0.0})
 	player.show_status("Gathering... hold LMB (%.2f s)" % float(effect["seconds"]))
 	_resting = false
 	return true
 
 func _harvest_target_valid() -> bool:
-	if not _harvest_input_valid():return false
+	if not _harvest_input_valid() or _harvest.get("actor")!=local_player_id:return false
 	var rule: Dictionary
 	if _harvest.has("source"):
 		var source: Dictionary = creation.source(_harvest["source"])
@@ -614,10 +630,10 @@ func _harvest_target_valid() -> bool:
 		var tool: VoxelTool = terrain.get_voxel_tool();tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
 		if not player.target_source().is_empty() or not player.has_voxel_target() or player.get_target_cell()!=_harvest["cell"] or not _cell_interaction_valid(_harvest["cell"],tool) or tool.get_voxel(_harvest["cell"])!=_harvest["block"] or not creation.can_remove(_harvest["cell"]):return false
 		rule=block_catalog.definition_for_voxel_id(_harvest["block"])["harvest"]
-	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(resources),block_catalog)
+	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(personal_resources),block_catalog)
 	return not effect.is_empty() and effect["instance"]==_harvest["instance"] and effect["wear"]==_harvest["wear"] and is_equal_approx(float(effect["seconds"]),float(_harvest["seconds"]))
 
-func advance_harvest(seconds: float) -> bool:
+func _apply_advance_harvest(seconds: float) -> bool:
 	if _harvest.is_empty() or not LfeWorldSave._finite_in_range(seconds,60) or seconds < 0:return false
 	if not _harvest_target_valid():
 		_harvest.clear()
@@ -628,25 +644,25 @@ func advance_harvest(seconds: float) -> bool:
 	# begin another zero-work attempt while the physical action remains held.
 	var result: bool = false
 	if _harvest.has("source"):
-		result = creation.harvest_source(_harvest["source"],resources)
+		result = creation.harvest_source(_harvest["source"],personal_resources,active_character.survival)
 		_harvest.clear()
 		creation_presenter.sync()
 	else:
 		result = break_cell(_harvest["cell"])
 		_harvest.clear()
-	player.show_status("Harvest complete" if result else "Harvest rejected; resources unchanged")
+	player.show_status("Harvest complete" if result else "Harvest rejected; personal_resources unchanged")
 	return result
 
 
 func craft_recipe(id: String) -> bool:
-	var result: bool = creation.survival.alive() and inventory_panel.crafting!=null and inventory_panel.context_valid() and inventory_panel.crafting.take(resources.inventory,id)
-	player.show_status("Crafted" if result else "Craft rejected: ingredients, context or capacity")
-	return result
+	var result: LfeCommandResult=command(local_player_id,"craft",{"recipe":id})
+	player.show_status("Crafted" if result.success else "Craft rejected: ingredients, context or capacity")
+	return result.success
 
 func consume_selected() -> bool:
-	var result: bool = creation.survival.consume(resources.inventory,resources.selected_slot())
-	player.show_status("Consumed" if result else "Cannot use selected item now")
-	return result
+	var result: LfeCommandResult=command(local_player_id,"consume")
+	player.show_status("Consumed" if result.success else "Cannot use selected item now")
+	return result.success
 
 func toggle_crafting() -> void:
 	inventory_panel.open_context("",true)
@@ -662,7 +678,7 @@ func _interact_object(id: String, function: String) -> bool:
 		return begin_rest(id)
 	return inventory_panel.open_context(id)
 
-func begin_rest(id: String) -> bool:
+func _apply_begin_rest(id: String) -> bool:
 	for entry: Dictionary in creation.objects():
 		if entry["instance"] == id and block_catalog.content_definition(StringName(entry["content"])).get("function") == "rest":
 			var p: Array = entry["cell"]
@@ -695,8 +711,7 @@ func _near_position(coordinates: Array, distance: float) -> bool:
 	return player.global_position.distance_to(Vector3(float(coordinates[0]),float(coordinates[1]),float(coordinates[2]))) <= distance
 
 func start_process(id: String, recipe: String) -> bool:
-	var station: LfeWorkstation = creation.station(id)
-	return station != null and object_near(id) and station.start(recipe)
+	return command(local_player_id,"start_process",{"target":id,"recipe":recipe}).success
 
 func object_near(id: String) -> bool:
 	for entry: Dictionary in creation.objects():
@@ -706,28 +721,16 @@ func object_near(id: String) -> bool:
 	return false
 
 func transfer_object(id: String, channel: String, slot: int, quantity: int, withdrawing: bool) -> int:
-	if not object_near(id) or quantity <= 0:
-		return 0
-	var inventory: LfeInventory = creation.storage(id)
-	var station: LfeWorkstation = creation.station(id)
-	if station != null:
-		match channel:
-			"input": inventory = station.input
-			"fuel": inventory = station.fuel
-			"output": inventory = station.output
-			_: return 0
-	if inventory == null or (channel == "output" and not withdrawing):
-		return 0
-	return LfeItemTransactions.transfer(inventory if withdrawing else resources.inventory,slot,resources.inventory if withdrawing else inventory,quantity,-1,true)
-
+	var source: String="storage/"+id
+	if creation.station(id)!=null:source="station/"+id+"/"+channel
+	var result: LfeCommandResult=command(local_player_id,"transfer",{"source":source if withdrawing else "inventory","destination":"inventory" if withdrawing else source,"source_slot":slot,"quantity":quantity})
+	return int(result.data.get("quantity",0))
 
 func damage_player(amount: float) -> bool:
-	var result: bool = _runtime_is_ready and creation.survival.damage(amount)
-	if result and not creation.survival.alive():set_primary_action(false)
+	var result: bool=command(local_player_id,"damage",{"amount":amount}).success
+	if result and not active_character.survival.alive():set_primary_action(false)
 	return result
 
-
-# Voxel data relevance is the shared materialisation authority for local entities.
 func region_relevant(position: Vector3) -> bool:
 	if terrain == null:
 		return false
@@ -761,18 +764,8 @@ func targeted_interaction() -> bool:
 	return false
 
 func workstation_slot_transfer(id: String, source: LfeInventory, source_slot: int, destination: LfeInventory, destination_slot: int, quantity: int) -> int:
-	if not object_near(id):
-		return 0
-	var station: LfeWorkstation = creation.station(id)
-	var storage: LfeInventory = creation.storage(id)
-	var allowed: Array = [resources.inventory]
-	if station!=null:
-		allowed.append_array([station.input,station.fuel,station.output])
-	if storage!=null:
-		allowed.append(storage)
-	if source not in allowed or destination not in allowed or (station!=null and destination==station.output):
-		return 0
-	return LfeItemTransactions.transfer(source,source_slot,destination,quantity,destination_slot,true)
+	var result: LfeCommandResult=command(local_player_id,"transfer",{"source":authority.endpoint_name(local_player_id,source),"destination":authority.endpoint_name(local_player_id,destination),"source_slot":source_slot,"destination_slot":destination_slot,"quantity":quantity})
+	return int(result.data.get("quantity",0))
 
 func drop_path_clear(a: Vector3,b: Vector3) -> bool:
 	var tool: VoxelTool = terrain.get_voxel_tool()
@@ -803,3 +796,68 @@ func drop_rest_position(position: Vector3) -> Variant:
 			if not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(Vector3i(centre.floor()))):return null
 			return centre
 	return null
+
+func set_primary_action(active: bool) -> void:
+	command(local_player_id,"primary",{"active":active})
+
+func drop_selected(whole_stack: bool = false) -> bool:
+	return command(local_player_id,"drop_selected",{"whole_stack":whole_stack}).success
+
+func break_cell(cell: Vector3i) -> bool:
+	return command(local_player_id,"break_cell",{"cell":cell}).success
+
+func place_cell(cell: Vector3i) -> bool:
+	return command(local_player_id,"place_cell",{"cell":cell}).success
+
+func begin_harvest(cell: Vector3i) -> bool:
+	return command(local_player_id,"begin_harvest",{"cell":cell}).success
+
+func begin_source_harvest(id: String) -> bool:
+	return command(local_player_id,"begin_source_harvest",{"target":id}).success
+
+func advance_harvest(seconds: float) -> bool:
+	var result: LfeCommandResult=command(local_player_id,"advance_harvest",{"seconds":seconds})
+	return result.success and bool(result.data.get("completed",false))
+
+func begin_rest(id: String) -> bool:
+	return command(local_player_id,"rest",{"target":id}).success
+
+func _sync_active_transform() -> void:
+	if active_character!=null and player!=null:
+		active_character.transform=player.get_persistent_state()
+
+# Single local controller submits directly. Future transport calls this same seam.
+func command(actor: String,operation: String,args: Dictionary={}) -> LfeCommandResult:
+	if authority==null or authority.character(actor)==null:return LfeCommandResult.rejected("invalid_actor")
+	_sync_active_transform()
+	var local_ops: Array=["primary","drop_selected","break_cell","place_cell","begin_harvest","begin_source_harvest","advance_harvest","rest"]
+	if operation not in local_ops:
+		if not _runtime_is_ready:return LfeCommandResult.rejected("not_ready")
+		return authority.execute(actor,operation,args)
+	if actor!=local_player_id:return LfeCommandResult.rejected("not_ready")
+	if operation=="primary":
+		if not args.get("active") is bool:return LfeCommandResult.rejected("invalid_target")
+		_apply_set_primary_action(args["active"])
+		return LfeCommandResult.accepted()
+	if not _runtime_is_ready:return LfeCommandResult.rejected("not_ready")
+	for field: String in ["target"]:
+		if args.has(field) and not args[field] is String:return LfeCommandResult.rejected("invalid_target")
+	var success: bool=false
+	match operation:
+		"drop_selected":success=_apply_drop_selected(bool(args.get("whole_stack",false)))
+		"break_cell","place_cell","begin_harvest":
+			if not args.get("cell") is Vector3i:return LfeCommandResult.rejected("invalid_target")
+			if operation=="break_cell":success=_apply_break_cell(args["cell"])
+			elif operation=="place_cell":success=_apply_place_cell(args["cell"])
+			else:success=_apply_begin_harvest(args["cell"])
+		"begin_source_harvest":success=_apply_begin_source_harvest(args.get("target",""))
+		"advance_harvest":
+			if not LfeWorldSave._finite_in_range(args.get("seconds"),60) or float(args["seconds"])<0:return LfeCommandResult.rejected("invalid_target")
+			if _harvest.is_empty():return LfeCommandResult.rejected("invalid_target")
+			if not _harvest_target_valid():
+				_harvest.clear()
+				return LfeCommandResult.rejected("stale_state")
+			success=_apply_advance_harvest(float(args["seconds"]))
+			if success or not _harvest.is_empty():return LfeCommandResult.accepted({"completed":success})
+		"rest":success=_apply_begin_rest(args.get("target",""))
+	return LfeCommandResult.accepted() if success else LfeCommandResult.rejected("blocked")

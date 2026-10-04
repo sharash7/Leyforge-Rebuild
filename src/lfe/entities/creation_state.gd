@@ -1,7 +1,6 @@
 class_name LfeCreationState
 extends RefCounted
 
-var survival: LfeCharacterSurvival = LfeCharacterSurvival.new()
 var recipes: LfeRecipeCatalog = LfeRecipeCatalog.new()
 var _catalog: LfeBlockCatalog
 var _objects: Dictionary = {}
@@ -58,7 +57,7 @@ func source(id: String) -> Dictionary:
 			return entry.duplicate(true)
 	return {}
 
-func harvest_source(id: String, resources: LfeResourceState) -> bool:
+func harvest_source(id: String, resources: LfePlayerResourceState, survival: LfeCharacterSurvival) -> bool:
 	for entry: Dictionary in _sources:
 		if entry["instance"] != id or int(entry["remaining"]) <= 0:
 			continue
@@ -122,33 +121,28 @@ func station(id: String) -> LfeWorkstation:
 func storage(id: String) -> LfeInventory:
 	return _objects.get(id,{}).get("inventory")
 
-func advance(seconds: float, sheltered: bool, resting: bool, sprinting: bool) -> bool:
+func advance(seconds: float) -> bool:
 	if not LfeWorldSave._finite_in_range(seconds,60) or seconds < 0:
 		return false
 	_elapsed += seconds
-	survival.advance(seconds,sheltered,resting,sprinting)
 	for entry: Dictionary in _objects.values():
 		if entry.has("station"):
 			entry["station"].advance(seconds)
 	return true
 
 func snapshot() -> Dictionary:
-	return {"survival":survival.snapshot(),"objects":objects(),"sources":sources(),"initialized":_initialized,"elapsed":_elapsed}
+	return {"objects":objects(),"sources":sources(),"initialized":_initialized,"elapsed":_elapsed}
 
 func restore(data: Variant, resources: Dictionary = {}) -> bool:
 	if not content_error.is_empty() or not recipes.error.is_empty():
 		return false
-	if not data is Dictionary or data.size() != 5 or not data.get("initialized") is bool or not data.get("objects") is Array or not data.get("sources") is Array or data["objects"].size() > 10000 or data["sources"].size() > 1000 or not LfeWorldSave._finite_in_range(data.get("elapsed"),1000000000) or float(data["elapsed"]) < 0:
-		return false
-	var character: LfeCharacterSurvival = LfeCharacterSurvival.new()
-	if not character.restore(data.get("survival")):
+	if not data is Dictionary or data.size() != 4 or not data.get("initialized") is bool or not data.get("objects") is Array or not data.get("sources") is Array or data["objects"].size() > 10000 or data["sources"].size() > 1000 or not LfeWorldSave._finite_in_range(data.get("elapsed"),1000000000) or float(data["elapsed"]) < 0:
 		return false
 	var next: Dictionary = {}
 	var seen: Dictionary = {}
 	var cells: Dictionary = {}
 	var slots: Array = []
 	if not resources.is_empty():
-		slots.append_array(resources["inventory"] + resources["equipment"])
 		for entry: Dictionary in resources["drops"]:
 			seen[entry["instance"]] = true
 			slots.append(entry["stack"])
@@ -156,7 +150,7 @@ func restore(data: Variant, resources: Dictionary = {}) -> bool:
 			seen[entry["instance"]] = true
 			slots.append_array(entry["slots"])
 	for entry: Variant in data["objects"]:
-		if not entry is Dictionary or not LfeResourceState._valid_identity(entry.get("instance")) or seen.has(entry["instance"]) or not entry.get("content") is String or not entry.get("cell") is Array or entry["cell"].size() != 3 or not LfeWorldSave._is_integer(entry.get("orientation")) or int(entry["orientation"]) < 0 or int(entry["orientation"]) > 3:
+		if not entry is Dictionary or not LfeWorldResourceState._valid_identity(entry.get("instance")) or seen.has(entry["instance"]) or not entry.get("content") is String or not entry.get("cell") is Array or entry["cell"].size() != 3 or not LfeWorldSave._is_integer(entry.get("orientation")) or int(entry["orientation"]) < 0 or int(entry["orientation"]) > 3:
 			return false
 		for coordinate: Variant in entry["cell"]:
 			if not LfeWorldSave._is_integer(coordinate) or absf(float(coordinate)) > 1000000:
@@ -186,17 +180,16 @@ func restore(data: Variant, resources: Dictionary = {}) -> bool:
 		seen[entry["instance"]] = true
 		next[entry["instance"]] = object
 	for entry: Variant in data["sources"]:
-		if not entry is Dictionary or entry.size() != 4 or not LfeResourceState._valid_identity(entry.get("instance")) or seen.has(entry["instance"]) or not LfeResourceState._valid_position(entry.get("position")) or not entry.get("source") is String or not LfeWorldSave._is_integer(entry.get("remaining")):
+		if not entry is Dictionary or entry.size() != 4 or not LfeWorldResourceState._valid_identity(entry.get("instance")) or seen.has(entry["instance"]) or not LfeWorldResourceState._valid_position(entry.get("position")) or not entry.get("source") is String or not LfeWorldSave._is_integer(entry.get("remaining")):
 			return false
 		var spec: Dictionary = source_definition(entry["source"])
 		if spec.is_empty() or int(entry["remaining"]) < 0 or int(entry["remaining"]) > int(spec["quantity"]):
 			return false
 		seen[entry["instance"]] = true
-	if not LfeResourceState.unique_instances(slots,seen):
+	if not LfeWorldResourceState.unique_instances(slots,seen):
 		return false
 	if not data["initialized"] and not data["sources"].is_empty():
 		return false
-	survival = character
 	_objects = next
 	_sources = data["sources"].duplicate(true)
 	for entry: Dictionary in _sources:

@@ -50,7 +50,7 @@ func _run() -> void:
 
 
 func _run_a() -> void:
-	var r: LfeResourceState = _world.resources
+	var r: LfeTestResourceView = LfeTestResourceView.view(_world.personal_resources,_world.world_resources)
 	_check(r.inventory.total(&"leyforge:grass") == 0 and r.drops().is_empty(), "New world starts without resources")
 	var initial_position: Vector3 = _player.global_position
 	_player.set_runtime_ready(true)
@@ -199,7 +199,7 @@ func _run_a() -> void:
 	_check(_world.request_save(), "Explicit save persists integrated Wave 3")
 	_check(not r.drops().is_empty(), "Saved acceptance retains a physical world drop")
 	_report["saved_resources"] = r.snapshot()
-	_report["saved_player"] = _world.world_save.player_state
+	_report["saved_player"] = LfeTestWorldSave.player_transform(_world.world_save)
 	_report["edits"] = _edits
 	_report["block"] = String(block)
 	_report["conserved_total"] = r.total(block) + 1
@@ -209,11 +209,11 @@ func _run_a() -> void:
 
 func _run_b() -> void:
 	var a: Dictionary = _read_report("A")
-	var r: LfeResourceState = _world.resources
-	var expected: LfeResourceState = LfeResourceState.new(_catalog)
+	var r: LfeTestResourceView = LfeTestResourceView.view(_world.personal_resources,_world.world_resources)
+	var expected: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	_check(expected.restore(a["saved_resources"]), "Prior rendered resource report valid")
 	_check(r.snapshot() == expected.snapshot(), "Exact inventory/hotbar/equipment/storage/drop identities restore")
-	_check(_world.world_save.player_state == a["saved_player"], "Exact player persistent state restore")
+	_check(LfeTestWorldSave.player_transform(_world.world_save) == a["saved_player"], "Exact player persistent state restore")
 	var coordinates: Array = a["saved_player"]["position"]
 	_check(_player.global_position.distance_to(Vector3(float(coordinates[0]), float(coordinates[1]), float(coordinates[2]))) < 0.2, "Safe player position restore")
 	_world.inventory_panel.open(true)
@@ -242,9 +242,9 @@ func _run_b() -> void:
 
 func _run_c() -> void:
 	var a: Dictionary = _read_report("A")
-	var r: LfeResourceState = _world.resources
+	var r: LfeTestResourceView = LfeTestResourceView.view(_world.personal_resources,_world.world_resources)
 	_check(_world.active_seed == int(a["seed"]) and _world.world_save.world_id != a["world_id"], "Same seed, independent world ID")
-	_check(_world.world_save.player_state.is_empty() and _world.world_save.overrides.count() == 0, "Player and overrides isolated")
+	_check(LfeTestWorldSave.player_transform(_world.world_save).is_empty() and _world.world_save.overrides.count() == 0, "Player and overrides isolated")
 	_check(r.inventory.snapshot().all(func(value: Variant) -> bool: return value == null), "Inventory isolated")
 	_check(r.equipment.snapshot() == [null, null] and r.selected_slot() == 0 and r.drops().is_empty(), "Equipment/hotbar/drops isolated")
 	var storage: Dictionary = r.snapshot()["storage"][0]
@@ -260,14 +260,14 @@ func _run_c() -> void:
 
 
 func _migration() -> void:
-	var r: LfeResourceState = _world.resources
+	var r: LfeTestResourceView = LfeTestResourceView.view(_world.personal_resources,_world.world_resources)
 	_check(_world.world_save.load_status.contains("migrated v1"), "Actual runtime loads v1 through migration")
 	_check(_world.world_save.overrides.canonical_id_at(Vector3i(-16, 0, 0)) == "leyforge:air", "v1 negative override preserved")
 	_check(r.inventory.snapshot().all(func(value: Variant) -> bool: return value == null) and r.drops().is_empty() and r.equipment.snapshot() == [null, null] and r.selected_slot() == 0, "Migration safe inventory/equipment/drop/hotbar defaults")
 	var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(_world.world_save.get_primary_path()))
 	_check(int(raw["save_version"]) == 1, "Opening migration fixture did not rewrite authority")
 	var original: String = FileAccess.get_file_as_string(_world.world_save.get_primary_path())
-	var saved: Dictionary = _world.world_save.player_state
+	var saved: Dictionary = LfeTestWorldSave.player_transform(_world.world_save)
 	_check(_player.get_persistent_state()["selected_block"] == saved["selected_block"], "Legacy v1 player selection preserved")
 	_check(absf(_player.rotation.y - float(saved["yaw"])) < 0.001, "Migration player orientation restored")
 	_check(_world.request_save(), "Runtime explicit save writes v2")
@@ -275,7 +275,7 @@ func _migration() -> void:
 	_check(int(raw["save_version"]) == LfeWorldSave.SAVE_VERSION, "Migrated runtime format now v2")
 	_check(FileAccess.get_file_as_string(_world.world_save.get_world_directory().path_join(LfeWorldSave.PREVIOUS_FILE)) == original, "Original v1 retained by atomic lifecycle")
 	_report["saved_resources"] = r.snapshot()
-	_report["saved_player"] = _world.world_save.player_state
+	_report["saved_player"] = LfeTestWorldSave.player_transform(_world.world_save)
 	_world.inventory_panel.open()
 	await _frames(2)
 	await _capture("09_migrated_v1.png")
@@ -283,17 +283,17 @@ func _migration() -> void:
 
 func _migration_restart() -> void:
 	var m: Dictionary = _read_report("M")
-	var expected: LfeResourceState = LfeResourceState.new(_catalog)
+	var expected: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	expected.restore(m["saved_resources"])
-	_check(_world.resources.snapshot() == expected.snapshot(), "Migrated v2 resource defaults restore in fresh process")
-	_check(_world.world_save.player_state == m["saved_player"], "Migrated Wave 2 player exact on restart")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot() == expected.snapshot(), "Migrated v2 resource defaults restore in fresh process")
+	_check(LfeTestWorldSave.player_transform(_world.world_save) == m["saved_player"], "Migrated Wave 2 player exact on restart")
 	_check(_world.world_save.overrides.canonical_id_at(Vector3i(-16, 0, 0)) == "leyforge:air", "Migrated voxel exact on restart")
 	_check(not _world.world_save.load_status.contains("migrated v1"), "Restart loads v2 without repeated migration")
 	await _capture("10_migrated_restart.png")
 
 
 func _stream(edits: Array) -> bool:
-	var resources_before: Dictionary = _world.resources.snapshot()
+	var resources_before: Dictionary = LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot()
 	var first: Vector3i = _cell(edits[0]["position"])
 	var camera: Camera3D = _player.get_camera()
 	camera.top_level = true
@@ -305,7 +305,7 @@ func _stream(edits: Array) -> bool:
 			unloaded = true
 			break
 	_check(unloaded, "Source terrain really streams out")
-	_check(_world.resources.snapshot() == resources_before, "Resources unchanged while chunks absent")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot() == resources_before, "Resources unchanged while chunks absent")
 	for edit: Dictionary in edits:
 		var cell: Vector3i = _cell(edit["position"])
 		await _aim(cell)
@@ -316,9 +316,9 @@ func _stream(edits: Array) -> bool:
 		query.exclude = [_player.get_rid()]
 		var collision: bool = not _player.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 		_check(collision == _catalog.is_solid_voxel(_tool.get_voxel(cell)), "Streamed voxel collision exact")
-	_check(_world.resources.snapshot() == resources_before, "Return preserves all resource identities/quantities")
+	_check(LfeTestResourceView.view(_world.personal_resources,_world.world_resources).snapshot() == resources_before, "Return preserves all resource identities/quantities")
 	_world.resource_presenter.sync()
-	_check(_world.resource_presenter._nodes.size() == _world.resources.drops().size(), "One visible node per persistent drop after return")
+	_check(_world.resource_presenter._nodes.size() == LfeTestResourceView.view(_world.personal_resources,_world.world_resources).drops().size(), "One visible node per persistent drop after return")
 	return unloaded
 
 

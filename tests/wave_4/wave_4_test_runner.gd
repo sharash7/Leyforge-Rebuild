@@ -44,7 +44,7 @@ func _run() -> void:
 	quit(0 if _failures.is_empty() else 1)
 
 func _tools() -> void:
-	var r: LfeResourceState = LfeResourceState.new(_catalog)
+	var r: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	var manual: Dictionary = {"class":"mining","capability":0,"seconds":1.2}
 	var restricted: Dictionary = {"class":"mining","capability":1,"seconds":1.2}
 	_check(not LfeHarvestRules.evaluate(manual,{},_catalog).is_empty(),"Manual stone gathering remains possible")
@@ -63,13 +63,13 @@ func _tools() -> void:
 		var wrong: Dictionary = rule.duplicate();wrong["class"]="manual"
 		_check(LfeHarvestRules.evaluate(wrong,stack,_catalog).is_empty(),"Wrong tool fails required capability")
 		for use: int in int(spec["durability"]):
-			_check(LfeHarvestRules.wear(r,stack["instance"]),"Durability authorized use %d" % use)
-		_check(int(r.equipment.stack_at(0)["durability"])==0 and not LfeHarvestRules.wear(r,stack["instance"]),"Broken state bounded and unusable")
+			_check(LfeHarvestRules.wear(r.personal,stack["instance"]),"Durability authorized use %d" % use)
+		_check(int(r.equipment.stack_at(0)["durability"])==0 and not LfeHarvestRules.wear(r.personal,stack["instance"]),"Broken state bounded and unusable")
 		_check(LfeHarvestRules.evaluate(rule,r.equipment.stack_at(0),_catalog).is_empty(),"Broken tool cannot meet capability")
 		_check(LfeItemTransactions.transfer(r.equipment,0,r.inventory,1)==1,"Broken instance moves intact")
 		slot = _slot(r.inventory,id)
 		var drop: String = r.drop_from_inventory(slot,1,Vector3(1,20,1))
-		var restored: LfeResourceState = LfeResourceState.new(_catalog)
+		var restored: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 		_check(restored.restore(r.snapshot()),"Damaged physical drop reload")
 		_check(restored.pickup(drop)==1 and restored.inventory.stack_at(_slot(restored.inventory,id))["instance"]==stack["instance"] and restored.inventory.stack_at(_slot(restored.inventory,id))["durability"]==0,"Pickup preserves durability/identity")
 		r = restored
@@ -232,8 +232,8 @@ func _survival() -> void:
 		_check(gentle.snapshot()["health"]==100 and not gentle.thirst_enabled(),"Gentle preset has no starvation damage: "+profile)
 
 func _starter_progression() -> void:
-	var r: LfeResourceState = LfeResourceState.new(_catalog)
-	var state: LfeCreationState = LfeCreationState.new(_catalog);state.initialize_sources(184552221)
+	var r: LfeTestResourceView = LfeTestResourceView.new(_catalog)
+	var state: LfeTestCreationView = LfeTestCreationView.new(_catalog);state.initialize_sources(184552221)
 	_check(r.inventory.snapshot().all(func(v: Variant)->bool:return v==null),"Starter fixture has no granted stone or tools")
 	_check(state.harvest_source(state.sources()[0]["instance"],r),"Manual timber begins starter chain")
 	_check(_craft_test(r.inventory,_recipes,"leyforge:saw_planks") and _craft_test(r.inventory,_recipes,"leyforge:split_oak_sticks"),"Timber components from canonical recipes")
@@ -256,7 +256,7 @@ func _starter_progression() -> void:
 		_check(_catalog.content_definition(StringName("leyforge:"+name))["tool"]["capability"]==1,"Representative starter class "+name)
 
 func _drop_clustering() -> void:
-	var r: LfeResourceState = LfeResourceState.new(_catalog)
+	var r: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	LfeItemTransactions.add(r.inventory,&"leyforge:stone",67)
 	var a: String=r.drop_from_inventory(0,63,Vector3(0,20,0))
 	var b: String=r.drop_from_inventory(0,1,Vector3(0.2,20,0))
@@ -266,7 +266,7 @@ func _drop_clustering() -> void:
 	_check(not r.advance_drop_clusters(0.5,func(_p:Vector3)->bool:return true,func(_a:Vector3,_b:Vector3)->bool:return false) and r.snapshot()==before,"Walls block attraction")
 	for n: int in 80:r.advance_drop_clusters(0.5,func(_p:Vector3)->bool:return true,func(_a:Vector3,_b:Vector3)->bool:return true)
 	_check(r.total(&"leyforge:stone")==67 and r.drops().size()==2 and r.drops().all(func(v:Dictionary)->bool:return int(v["stack"]["quantity"])<=64),"Convergence/partial merge preserves all 67 units and maxima")
-	var restored: LfeResourceState=LfeResourceState.new(_catalog)
+	var restored: LfeTestResourceView=LfeTestResourceView.new(_catalog)
 	_check(restored.restore(r.snapshot()) and restored.snapshot()==r.snapshot(),"Final logical positions/quantities persist exactly")
 	LfeItemTransactions.add(r.inventory,&"leyforge:wooden_pickaxe",2)
 	r.drop_from_inventory(_slot(r.inventory,&"leyforge:wooden_pickaxe"),1,Vector3(0,20,0))
@@ -276,8 +276,8 @@ func _drop_clustering() -> void:
 	_check(r.drops().filter(func(v:Dictionary)->bool:return v["stack"].has("instance")).size()==2 and r.total(&"leyforge:wooden_pickaxe")==2,"Different durable instances never merge")
 
 func _state() -> void:
-	var state: LfeCreationState=LfeCreationState.new(_catalog)
-	var r: LfeResourceState=LfeResourceState.new(_catalog)
+	var state: LfeTestCreationView=LfeTestCreationView.new(_catalog)
+	var r: LfeTestResourceView=LfeTestResourceView.new(_catalog)
 	_check(state.initialize_sources(184552221) and state.validate_source_layout(184552221),"Bounded deterministic production resource sources")
 	var timber: Dictionary=state.sources()[0]
 	_check(state.harvest_source(timber["instance"],r) and r.inventory.total(&"leyforge:oak_heartwood")==6,"Manual timber gathering exact outputs")
@@ -297,7 +297,7 @@ func _state() -> void:
 	var storage: LfeInventory=state.storage(state.object_at(Vector3i(4,20,3)))
 	LfeItemTransactions.transfer(r.inventory,0,storage,1)
 	_check(not state.can_remove(Vector3i(4,20,3)),"Filled construction storage cannot lose matter")
-	var restored: LfeCreationState=LfeCreationState.new(_catalog)
+	var restored: LfeTestCreationView=LfeTestCreationView.new(_catalog)
 	_check(restored.restore(state.snapshot(),r.snapshot()) and restored.snapshot()==state.snapshot(),"Sources/functional inventories/orientation exact restore")
 	var bad: Dictionary=state.snapshot();bad["objects"].append(bad["objects"][0].duplicate(true))
 	_check(not restored.restore(bad,r.snapshot()),"Duplicate world object identities rejected")
@@ -307,11 +307,11 @@ func _state() -> void:
 func _persistence() -> void:
 	var seed: int=184552221
 	var player: Dictionary={"position":[0.5,float(LfeWave1TerrainRules.height_at(seed,0,0))+1.05,0.5],"yaw":0.4,"pitch":-0.2,"selected_block":"leyforge:stone"}
-	var r: LfeResourceState=LfeResourceState.new(_catalog)
+	var r: LfeTestResourceView=LfeTestResourceView.new(_catalog)
 	LfeItemTransactions.add(r.inventory,&"leyforge:stone_pickaxe",1)
-	LfeHarvestRules.wear(r,r.inventory.stack_at(0)["instance"])
+	LfeHarvestRules.wear(r.personal,r.inventory.stack_at(0)["instance"])
 	LfeItemTransactions.add(r.inventory,&"leyforge:oak_heartwood",5)
-	var state: LfeCreationState=LfeCreationState.new(_catalog)
+	var state: LfeTestCreationView=LfeTestCreationView.new(_catalog)
 	state.initialize_sources(seed);state.survival.damage(12)
 	_check(state.harvest_source(state.sources()[0]["instance"],r),"Legacy v1 depletion is included in the saved compatibility fixture")
 	var cell: Vector3i=Vector3i(3,21,3)
@@ -320,16 +320,16 @@ func _persistence() -> void:
 	LfeItemTransactions.add(station.input,&"leyforge:oak_heartwood",2)
 	LfeItemTransactions.add(station.fuel,&"leyforge:oak_heartwood",1)
 	station.start("leyforge:charcoal_burn");station.advance(3)
-	var world: LfeWorldSave=LfeWorldSave.new()
+	var world: LfeTestWorldSave=LfeTestWorldSave.new()
 	_check(world.open_world("current",seed,true,_catalog,_root)==OK,"Current world opens")
 	world.worldgen_version=1 # This fixture represents existing worldgen-v1 Wave 4 state.
 	world.record_voxel_edit(cell,_catalog.get_voxel_id(&"leyforge:kiln"),0)
 	_check(world.save(player,r.snapshot(),state.snapshot())==OK,"Current complete state atomic save")
-	var loaded: LfeWorldSave=LfeWorldSave.new()
-	_check(loaded.open_world("current",seed,true,_catalog,_root)==OK and loaded.creation_state==state.snapshot() and loaded.resource_state==r.snapshot() and loaded.worldgen_version==1,"Complete historical worldgen-v1 save v3 exact reload")
+	var loaded: LfeTestWorldSave=LfeTestWorldSave.new()
+	_check(loaded.open_world("current",seed,true,_catalog,_root)==OK and loaded.legacy_creation_state==state.snapshot() and loaded.resource_state==r.snapshot() and loaded.worldgen_version==1,"Complete historical worldgen-v1 save v3 exact reload")
 	var original: String=FileAccess.get_file_as_string(world.get_primary_path())
 	var envelope: Dictionary=JSON.parse_string(original)
-	var payload: Dictionary=JSON.parse_string(envelope["payload_json"])
+	var payload: Dictionary=LfeTestWorldSave.legacy_payload(JSON.parse_string(envelope["payload_json"]),3)
 	for version: int in [1,2]:
 		var id: String="migration_v%d" % version
 		var old: Dictionary=payload.duplicate(true)
@@ -338,18 +338,18 @@ func _persistence() -> void:
 		# Genuine historical fields: v1 has no resources; v2 stacks have no instance state.
 		if version==1:old.erase("resources")
 		else:
-			var historical: LfeResourceState=LfeResourceState.new(_catalog)
+			var historical: LfeTestResourceView=LfeTestResourceView.new(_catalog)
 			LfeItemTransactions.add(historical.inventory,&"leyforge:stone",7)
 			historical.select(5)
 			old["resources"]=historical.snapshot()
 		var directory: String=_root.path_join(id);DirAccess.make_dir_recursive_absolute(directory)
 		_write_envelope(directory.path_join("world.json"),old,version)
 		var bytes: String=FileAccess.get_file_as_string(directory.path_join("world.json"))
-		var migration: LfeWorldSave=LfeWorldSave.new()
+		var migration: LfeTestWorldSave=LfeTestWorldSave.new()
 		_check(migration.open_world(id,seed,true,_catalog,_root)==OK and migration.load_status.contains("migrated v%d" % version),"Historical v%d migrates" % version)
 		_check(FileAccess.get_file_as_string(directory.path_join("world.json"))==bytes and migration.player_state==player,"Migration preserves historical bytes/player")
 		if version==2:_check(migration.resource_state==old["resources"],"v2 resources/hotbar preserved")
-		_check(migration.creation_state["survival"]["health"]==100 and migration.creation_state["objects"].is_empty(),"Migration safe Wave 4 defaults")
+		_check(migration.legacy_creation_state["survival"]["health"]==100 and migration.legacy_creation_state["objects"].is_empty(),"Migration safe Wave 4 defaults")
 		_check(migration.save(player)==OK and FileAccess.get_file_as_string(directory.path_join("world.json.previous"))==bytes,"Explicit current save retains historical previous copy")
 		# Leave legitimate old fixture for separate rendered migration process.
 		var rendered: String=_root.path_join("rendered_v%d" % version)
@@ -362,11 +362,11 @@ func _persistence() -> void:
 	var legacy_dir: String=_root.path_join("existing_wave4");DirAccess.make_dir_recursive_absolute(legacy_dir)
 	_write_envelope(legacy_dir.path_join("world.json"),old_v3,3)
 	var old_bytes: String=FileAccess.get_file_as_string(legacy_dir.path_join("world.json"))
-	var existing: LfeWorldSave=LfeWorldSave.new()
+	var existing: LfeTestWorldSave=LfeTestWorldSave.new()
 	_check(existing.open_world("existing_wave4",seed,true,_catalog,_root)==OK and existing.resource_state==r.snapshot(),"Existing Wave 4 v3 retains damaged tool/resources")
-	var old_survival: Dictionary=existing.creation_state["survival"].duplicate(true);old_survival.erase("timing")
-	var legacy_expected: LfeCreationState=LfeCreationState.new(_catalog);legacy_expected.restore(old_v3["creation"],r.snapshot())
-	_check(old_survival==old_v3["creation"]["survival"] and existing.creation_state==legacy_expected.snapshot(),"Existing v3 preserves survival/construction/processing/source depletion")
+	var old_survival: Dictionary=existing.legacy_creation_state["survival"].duplicate(true);old_survival.erase("timing")
+	var legacy_expected: LfeTestCreationView=LfeTestCreationView.new(_catalog);legacy_expected.restore(old_v3["creation"],r.snapshot())
+	_check(old_survival==old_v3["creation"]["survival"] and existing.legacy_creation_state==legacy_expected.snapshot(),"Existing v3 preserves survival/construction/processing/source depletion")
 	_check(FileAccess.get_file_as_string(legacy_dir.path_join("world.json"))==old_bytes and existing.save(player)==OK,"Existing v3 open nondestructive and compatible save")
 	for mutation: String in ["survival","recipe","progress","object","instance","source","missing_object","replenish"]:
 		var bad: Dictionary=payload.duplicate(true)
@@ -380,15 +380,15 @@ func _persistence() -> void:
 			"missing_object":bad["creation"]["objects"]=[]
 			"replenish":bad["creation"]["initialized"]=false;bad["creation"]["sources"]=[]
 		_write_envelope(world.get_primary_path(),bad,3)
-		var corrupt: LfeWorldSave=LfeWorldSave.new()
+		var corrupt: LfeTestWorldSave=LfeTestWorldSave.new()
 		_check(corrupt.open_world("current",seed,true,_catalog,_root)!=OK and corrupt.save(player)!=OK,"Corrupt state fails closed: "+mutation)
 	_write(world.get_primary_path(),original)
 	_check(loaded.save(player,r.snapshot(),state.snapshot())==OK,"Valid save rotates previous copy")
 	DirAccess.remove_absolute(world.get_primary_path())
-	var recovered: LfeWorldSave=LfeWorldSave.new()
-	_check(recovered.open_world("current",seed,true,_catalog,_root)==OK and recovered.load_status.contains("Recovered") and recovered.creation_state==state.snapshot(),"Previous copy recovers exact Wave 4 state")
-	var isolated: LfeWorldSave=LfeWorldSave.new()
-	_check(isolated.open_world("isolated",seed,true,_catalog,_root)==OK and isolated.creation_state["objects"].is_empty() and isolated.resource_state["inventory"].all(func(v: Variant)->bool:return v==null),"Same-seed world state independent")
+	var recovered: LfeTestWorldSave=LfeTestWorldSave.new()
+	_check(recovered.open_world("current",seed,true,_catalog,_root)==OK and recovered.load_status.contains("Recovered") and recovered.legacy_creation_state==state.snapshot(),"Previous copy recovers exact Wave 4 state")
+	var isolated: LfeTestWorldSave=LfeTestWorldSave.new()
+	_check(isolated.open_world("isolated",seed,true,_catalog,_root)==OK and isolated.legacy_creation_state["objects"].is_empty() and isolated.resource_state["inventory"].all(func(v: Variant)->bool:return v==null),"Same-seed world state independent")
 
 func _slot(inventory: LfeInventory,id: StringName) -> int:
 	for slot: int in inventory.capacity():
@@ -483,7 +483,7 @@ func _grid_matching() -> void:
 	for recipe: Dictionary in recipes["recipes"]:recipe.erase("grid")
 	_write(_root.path_join("legacy_recipes.json"),JSON.stringify(recipes))
 	_check(LfeRecipeCatalog.new().load_path(_root.path_join("legacy_recipes.json"),_catalog),"Six-field canonical recipe schema remains readable")
-	var state: LfeCreationState = LfeCreationState.new(_catalog);state.initialize_sources(184552221)
+	var state: LfeTestCreationView = LfeTestCreationView.new(_catalog);state.initialize_sources(184552221)
 	var sources: Array = state.sources()
 	_check(state.validate_source_layout(184552221),"Tree source identities/layout remain unchanged")
 	var bare: Dictionary = LfeHarvestRules.evaluate(state.source_definition("fallen_oak"),{},_catalog)
@@ -491,7 +491,7 @@ func _grid_matching() -> void:
 	var stone: Dictionary = LfeHarvestRules.evaluate(state.source_definition("fallen_oak"),LfeItemInstance.create(&"leyforge:stone_axe",_catalog),_catalog)
 	_check(float(bare["seconds"])>float(wooden["seconds"]) and float(wooden["seconds"])>float(stone["seconds"]),"Tree timing: manual slower than Wooden Axe, slower than Stone Axe")
 	_check(state.add_object(&"leyforge:workbench",Vector3i(2,30,2),0) and state.can_remove(Vector3i(2,30,2)),"Workbench has no persistent hidden staging inventory")
-	var restored: LfeCreationState = LfeCreationState.new(_catalog)
+	var restored: LfeTestCreationView = LfeTestCreationView.new(_catalog)
 	_check(restored.restore(state.snapshot()) and restored.snapshot()==state.snapshot(),"Workbench persists identity/orientation without new save version")
 
 func _voxel_trees() -> void:
@@ -539,13 +539,13 @@ func _voxel_trees() -> void:
 			for cell: Vector3i in cells:
 				if cell.x>=bx-16 and cell.x<bx+32 and cell.y>=0 and cell.y<32 and cell.z>=bz-16 and cell.z<bz+32:expected[cell]=11 if cells[cell]==1 else 12
 		_check(forward==expected,"Chunk meshes contain full contributions from neighbouring candidate cells without seams")
-	var legacy: LfeCreationState = LfeCreationState.new(_catalog);legacy.initialize_sources(seed,1)
-	var modern: LfeCreationState = LfeCreationState.new(_catalog);modern.initialize_sources(seed,2)
+	var legacy: LfeTestCreationView = LfeTestCreationView.new(_catalog);legacy.initialize_sources(seed,1)
+	var modern: LfeTestCreationView = LfeTestCreationView.new(_catalog);modern.initialize_sources(seed,2)
 	_check(legacy.sources().size()==20 and modern.sources().size()==8 and modern.sources().all(func(v:Dictionary)->bool:return v["source"]!="fallen_oak"),"v2 creates no legacy timber sources; v1 retains its exact layout")
 	_check(modern.validate_source_layout(seed,2) and not modern.validate_source_layout(seed,1) and legacy.validate_source_layout(seed,1) and not legacy.validate_source_layout(seed,2),"Source validation is bound to stored worldgen version")
 	var base: Vector3i = trees[0]["base"]
-	var r: LfeResourceState = LfeResourceState.new(_catalog)
-	var world: LfeWorldSave = LfeWorldSave.new();world.open_world("voxel_trees",seed,true,_catalog,_root)
+	var r: LfeTestResourceView = LfeTestResourceView.new(_catalog)
+	var world: LfeTestWorldSave = LfeTestWorldSave.new();world.open_world("voxel_trees",seed,true,_catalog,_root)
 	_check(world.worldgen_version==2,"New worlds choose worldgen v2")
 	var outputs: Array = _catalog.definition_for_id(&"leyforge:oak_heartwood")["harvest"]["outputs"]
 	_check(r.break_to_drop(&"leyforge:oak_heartwood",Vector3(base)+Vector3.ONE*0.5,func()->Error:return world.record_voxel_edit(base,0,11),outputs),"One trunk break records one sparse air override")
@@ -560,7 +560,7 @@ func _voxel_trees() -> void:
 	_check(v2.sample_voxel_id(placed)==0 and r.place_from_inventory(0,func()->Error:return world.record_voxel_edit(placed,11,0)) and r.inventory.total(&"leyforge:oak_heartwood")==0,"Same Heartwood inventory places exactly one voxel")
 	var player: Dictionary = {"position":[0.5,18.05,0.5],"yaw":0.0,"pitch":0.0,"selected_block":"leyforge:oak_heartwood"}
 	_check(world.save(player,r.snapshot())==OK,"Mined and placed tree overrides save without serialising untouched trees")
-	var loaded: LfeWorldSave = LfeWorldSave.new()
+	var loaded: LfeTestWorldSave = LfeTestWorldSave.new()
 	_check(loaded.open_world("voxel_trees",seed,true,_catalog,_root)==OK and loaded.worldgen_version==2 and loaded.overrides.count()==2 and loaded.overrides.voxel_id_at(base,11)==0 and loaded.overrides.voxel_id_at(placed,0)==11,"Fresh v2 reload preserves mined and placed wood exactly")
 	_check(r.break_to_drop(&"leyforge:oak_heartwood",Vector3(placed),func()->Error:return loaded.record_voxel_edit(placed,0,0),outputs) and r.pickup(r.drops()[0]["instance"])==1 and r.inventory.total(&"leyforge:oak_heartwood")==1 and loaded.overrides.count()==1,"Re-mining placed wood returns exactly once and clears the redundant override")
 	var rule: Dictionary = _catalog.definition_for_id(&"leyforge:oak_heartwood")["harvest"]
@@ -581,7 +581,7 @@ func _generated_tree_cells(generator: LfeWave1TerrainGenerator, origins: Array[V
 	return result
 
 func _grounded_drops() -> void:
-	var r: LfeResourceState = LfeResourceState.new(_catalog)
+	var r: LfeTestResourceView = LfeTestResourceView.new(_catalog)
 	LfeItemTransactions.add(r.inventory,&"leyforge:oak_heartwood",3)
 	var id: String = r.drop_from_inventory(0,1,Vector3(0,8,0))
 	var before: Dictionary = r.drop(id)
@@ -591,7 +591,7 @@ func _grounded_drops() -> void:
 	_check(not r.settle_drops(func(_p:Vector3)->bool:return false,flat) and r.snapshot()==before,"Unloaded drops do not settle against unavailable terrain")
 	_check(not r.ground_drop(id,func(_p:Vector3)->Variant:return null) and r.snapshot()==before,"Missing loaded support retains safe position for later settling")
 	_check(r.ground_drop(id,func(p:Vector3)->Variant:return Vector3(p.x,-0.825,p.z)) and r.drop(id)["stack"]==before["drops"][0]["stack"],"Support removal resettles downward without losing matter")
-	var ledges: LfeResourceState = LfeResourceState.new(_catalog);LfeItemTransactions.add(ledges.inventory,&"leyforge:stone",2)
+	var ledges: LfeTestResourceView = LfeTestResourceView.new(_catalog);LfeItemTransactions.add(ledges.inventory,&"leyforge:stone",2)
 	ledges.drop_from_inventory(0,1,Vector3(0,3.175,0));ledges.drop_from_inventory(0,1,Vector3(0.5,1.175,0))
 	before=ledges.snapshot()
 	for tick: int in 20:ledges.advance_drop_clusters(1,func(_p:Vector3)->bool:return true,func(_a:Vector3,_b:Vector3)->bool:return true)
@@ -644,19 +644,25 @@ func _held_gathering() -> void:
 	_check(world.is_runtime_ready(),"Held-action focused world streams real terrain")
 	if not world.is_runtime_ready():world.free();return
 	world.player.set_runtime_ready(false)
+	var other: LfePlayerCharacter=world.authority.add_character("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",world.spawn_position+Vector3(1,0,0))
+	var other_before: Dictionary=other.snapshot()
+	for operation: String in ["primary","begin_harvest","begin_source_harvest","advance_harvest","break_cell","place_cell","drop_selected","rest"]:
+		var before: Array=world.authority.players_snapshot()
+		var edits_before: int=world.world_save.overrides.count()
+		_check(world.command("cccccccccccccccccccccccccccccccc",operation,{}).reason_code=="invalid_actor" and world.authority.players_snapshot()==before and world.world_save.overrides.count()==edits_before,"Live voxel authority rejects unknown actor: "+operation)
 	var trees: Array[Dictionary] = LfeStarterTreeRules.candidates(world.active_seed,Vector2i(-40,-40),Vector2i(40,40))
 	trees.sort_custom(func(a:Dictionary,b:Dictionary)->bool:return Vector3(a["base"]).length_squared()<Vector3(b["base"]).length_squared())
 	var base: Vector3i = trees[0]["base"]
 	for family: String in ["voxel","source"]:
 		var source: bool = family=="source"
 		var tool_id: StringName = &"leyforge:stone_pickaxe" if source else &"leyforge:stone_axe"
-		if not world.resources.equipment.stack_at(0).is_empty():LfeItemTransactions.transfer(world.resources.equipment,0,world.resources.inventory,1)
-		LfeItemTransactions.add(world.resources.inventory,tool_id,2)
-		var slot: int = _slot(world.resources.inventory,tool_id)
-		LfeItemTransactions.transfer(world.resources.inventory,slot,world.resources.equipment,1,0)
+		if not LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment.stack_at(0).is_empty():LfeItemTransactions.transfer(LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment,0,LfeTestResourceView.view(world.personal_resources,world.world_resources).inventory,1)
+		LfeItemTransactions.add(LfeTestResourceView.view(world.personal_resources,world.world_resources).inventory,tool_id,2)
+		var slot: int = _slot(LfeTestResourceView.view(world.personal_resources,world.world_resources).inventory,tool_id)
+		LfeItemTransactions.transfer(LfeTestResourceView.view(world.personal_resources,world.world_resources).inventory,slot,LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment,1,0)
 		var targets: Array = [{"source":world.creation.sources()[0]["instance"]},{"source":world.creation.sources()[1]["instance"]}] if source else [{"cell":base},{"cell":base+Vector3i.UP}]
 		await _hold_aim(world,targets[0])
-		var resources: Dictionary = world.resources.snapshot();var state: Dictionary = world.creation.snapshot();var edits: int = world.world_save.overrides.count()
+		var resources: Dictionary = LfeTestResourceView.view(world.personal_resources,world.world_resources).snapshot();var state: Dictionary = world.creation.snapshot();var edits: int = world.world_save.overrides.count()
 		_check(not _hold_begin(world,targets[0]),family+": begin without active primary input is rejected")
 		# A/B: tap/release, and a longer incomplete hold, both reset immediately.
 		for fraction: float in [0.01,0.5]:
@@ -665,37 +671,37 @@ func _held_gathering() -> void:
 			var seconds: float = float(world._harvest.get("seconds",1))
 			_check(not world.advance_harvest(seconds*fraction),family+": incomplete held work cannot mutate")
 			world.set_primary_action(false)
-			_check(not world.has_active_harvest() and not world.advance_harvest(60) and world.resources.snapshot()==resources and world.creation.snapshot()==state and world.world_save.overrides.count()==edits,family+": release cancels immediately without output, wear, block edit or depletion")
+			_check(not world.has_active_harvest() and not world.advance_harvest(60) and LfeTestResourceView.view(world.personal_resources,world.world_resources).snapshot()==resources and world.creation.snapshot()==state and world.world_save.overrides.count()==edits,family+": release cancels immediately without output, wear, block edit or depletion")
 		# D: switching target discards first-target work and never transfers it.
 		world.set_primary_action(true);_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.75)
 		await _hold_aim(world,targets[1])
-		_check(not world.advance_harvest(60) and not world.has_active_harvest() and world.resources.snapshot()==resources and world.creation.snapshot()==state,family+": target switch cancels first attempt")
+		_check(not world.advance_harvest(60) and not world.has_active_harvest() and LfeTestResourceView.view(world.personal_resources,world.world_resources).snapshot()==resources and world.creation.snapshot()==state,family+": target switch cancels first attempt")
 		_check(_hold_begin(world,targets[1]) and world._harvest.get("work",-1)==0,family+": second target begins from zero")
-		_check(not world.advance_harvest(float(world._harvest["seconds"])*0.25) and world.resources.snapshot()==resources,family+": prior work cannot complete second target")
+		_check(not world.advance_harvest(float(world._harvest["seconds"])*0.25) and LfeTestResourceView.view(world.personal_resources,world.world_resources).snapshot()==resources,family+": prior work cannot complete second target")
 		world.set_primary_action(false);await _hold_aim(world,targets[0])
 		# E: another instance of the same tool cancels, even with identical class.
 		world.set_primary_action(true);_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.5)
-		slot=_slot(world.resources.inventory,tool_id)
-		LfeItemTransactions.transfer(world.resources.equipment,0,world.resources.inventory,1)
-		LfeItemTransactions.transfer(world.resources.inventory,slot,world.resources.equipment,1,0)
-		var switched: Dictionary = world.resources.snapshot()
-		_check(not world.advance_harvest(60) and not world.has_active_harvest() and world.resources.snapshot()==switched and world.creation.snapshot()==state,family+": changing equipped instance cancels without extra wear/output")
+		slot=_slot(LfeTestResourceView.view(world.personal_resources,world.world_resources).inventory,tool_id)
+		LfeItemTransactions.transfer(LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment,0,LfeTestResourceView.view(world.personal_resources,world.world_resources).inventory,1)
+		LfeItemTransactions.transfer(LfeTestResourceView.view(world.personal_resources,world.world_resources).inventory,slot,LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment,1,0)
+		var switched: Dictionary = LfeTestResourceView.view(world.personal_resources,world.world_resources).snapshot()
+		_check(not world.advance_harvest(60) and not world.has_active_harvest() and LfeTestResourceView.view(world.personal_resources,world.world_resources).snapshot()==switched and world.creation.snapshot()==state,family+": changing equipped instance cancels without extra wear/output")
 		# Capability/durability invalidation cannot fall back and keep old work.
 		_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.5)
-		var equipment: Array = world.resources.equipment.snapshot();var broken: Array = equipment.duplicate(true);broken[0]["durability"]=0
-		world.resources.equipment.restore(broken)
+		var equipment: Array = LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment.snapshot();var broken: Array = equipment.duplicate(true);broken[0]["durability"]=0
+		LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment.restore(broken)
 		_check(not world.advance_harvest(60) and not world.has_active_harvest(),family+": lost capability cancels accumulated work")
-		world.resources.equipment.restore(equipment)
+		LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment.restore(equipment)
 		# G: menu open cancels immediately; held input cannot advance behind it.
 		_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.5)
-		var before_menu: Dictionary = world.resources.snapshot()
+		var before_menu: Dictionary = LfeTestResourceView.view(world.personal_resources,world.world_resources).snapshot()
 		world.inventory_panel.open();world.set_primary_action(true)
-		_check(not world.has_active_harvest() and not _hold_begin(world,targets[0]) and not world.advance_harvest(60) and world.resources.snapshot()==before_menu,family+": menu captures input and prevents background gathering")
+		_check(not world.has_active_harvest() and not _hold_begin(world,targets[0]) and not world.advance_harvest(60) and LfeTestResourceView.view(world.personal_resources,world.world_resources).snapshot()==before_menu,family+": menu captures input and prevents background gathering")
 		world.close_inventory();world.set_primary_action(false)
 		await _hold_aim(world,targets[0]);world.set_primary_action(true);_hold_begin(world,targets[0])
 		world.damage_player(100)
 		_check(not world.has_active_harvest() and not world.advance_harvest(60),family+": death immediately cancels harvesting")
-		world.creation.survival.respawn()
+		world.active_character.survival.respawn()
 		# Range/occlusion checks use actual production targeting, not fixture tokens.
 		world.set_primary_action(true);_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.5)
 		var camera: Camera3D = world.player.get_camera();var eye: Vector3 = camera.global_position
@@ -726,14 +732,15 @@ func _held_gathering() -> void:
 		# C/F: full held work completes once, then the next target starts at zero.
 		await _hold_aim(world,targets[0]);_hold_begin(world,targets[0])
 		var content: StringName = &"leyforge:stone" if source else &"leyforge:oak_heartwood"
-		var quantity: int = 6 if source else 1;var total: int = world.resources.total(content)
-		var durability: int = int(world.resources.equipment.stack_at(0)["durability"])
-		_check(world.advance_harvest(60) and not world.has_active_harvest() and world.resources.total(content)==total+quantity and world.resources.equipment.stack_at(0)["durability"]==durability-1,family+": full hold performs exactly one conserved operation and one wear")
-		_check(not world.advance_harvest(60) and world.resources.total(content)==total+quantity,family+": cleared target cannot complete twice")
+		var quantity: int = 6 if source else 1;var total: int = LfeTestResourceView.view(world.personal_resources,world.world_resources).total(content)
+		var durability: int = int(LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment.stack_at(0)["durability"])
+		_check(world.advance_harvest(60) and not world.has_active_harvest() and LfeTestResourceView.view(world.personal_resources,world.world_resources).total(content)==total+quantity and LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment.stack_at(0)["durability"]==durability-1,family+": full hold performs exactly one conserved operation and one wear")
+		_check(not world.advance_harvest(60) and LfeTestResourceView.view(world.personal_resources,world.world_resources).total(content)==total+quantity,family+": cleared target cannot complete twice")
 		await _hold_aim(world,targets[1])
 		_check(_hold_begin(world,targets[1]) and world._harvest.get("work",-1)==0,family+": continuing held action can begin next target without releasing")
-		_check(world.advance_harvest(60) and world.resources.total(content)==total+2*quantity and world.resources.equipment.stack_at(0)["durability"]==durability-2,family+": consecutive held operations conserve exact output and wear")
+		_check(world.advance_harvest(60) and LfeTestResourceView.view(world.personal_resources,world.world_resources).total(content)==total+2*quantity and LfeTestResourceView.view(world.personal_resources,world.world_resources).equipment.stack_at(0)["durability"]==durability-2,family+": consecutive held operations conserve exact output and wear")
 		world.set_primary_action(false)
+	_check(other.snapshot()==other_before,"Local held harvesting, death and recovery never mutate inactive character B")
 	world.free()
 
 func _hold_point(world: LeyforgeWave1Playground, target: Dictionary) -> Vector3:

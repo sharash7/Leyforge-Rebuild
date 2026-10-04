@@ -14,7 +14,7 @@ static func valid(value: Variant, catalog: LfeBlockCatalog, allow_empty: bool = 
 	if not catalog.is_inventory_content(id) or quantity <= 0 or quantity > catalog.stack_limit(id):
 		return false
 	if LfeItemInstance.is_stateful(id, catalog):
-		return value.size() == 4 and quantity == 1 and LfeResourceState._valid_identity(value.get("instance")) and LfeWorldSave._is_integer(value.get("durability")) and int(value["durability"]) >= 0 and int(value["durability"]) <= int(catalog.content_definition(id)["tool"]["durability"])
+		return value.size() == 4 and quantity == 1 and LfeWorldResourceState._valid_identity(value.get("instance")) and LfeWorldSave._is_integer(value.get("durability")) and int(value["durability"]) >= 0 and int(value["durability"]) <= int(catalog.content_definition(id)["tool"]["durability"])
 	return value.size() == 2
 
 

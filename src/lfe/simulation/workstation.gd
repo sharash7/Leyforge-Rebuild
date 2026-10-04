@@ -33,7 +33,7 @@ func restore(data: Variant) -> bool:
 	var c: LfeInventory = LfeInventory.new(_catalog, 3)
 	if not a.restore(data.get("input")) or not b.restore(data.get("fuel")) or not c.restore(data.get("output")):
 		return false
-	if not LfeResourceState.unique_instances(a.snapshot() + b.snapshot() + c.snapshot()):
+	if not LfeWorldResourceState.unique_instances(a.snapshot() + b.snapshot() + c.snapshot()):
 		return false
 	input.restore(a.snapshot()); fuel.restore(b.snapshot()); output.restore(c.snapshot())
 	_active = data["active"]

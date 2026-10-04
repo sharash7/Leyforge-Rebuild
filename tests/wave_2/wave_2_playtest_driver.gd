@@ -153,7 +153,7 @@ func _run_a() -> void:
 		await get_tree().physics_frame
 	_check(_player.is_on_floor(), "Run A player floor did not stream back after edits.")
 	_check(_world.request_save(), "Run A save action failed.")
-	_report["saved_player"] = _world.world_save.player_state
+	_report["saved_player"] = LfeTestWorldSave.player_transform(_world.world_save)
 	_report["edits"] = _edits
 	_report["override_count"] = _world.world_save.overrides.count()
 	_check(FileAccess.file_exists(_world.world_save.get_primary_path()), "Run A save file was not promoted.")
@@ -167,7 +167,7 @@ func _run_b() -> void:
 	_check(_world.world_save.world_id == String(previous_report["world_id"]), "World ID changed on restart.")
 	_check(_seed == int(previous_report["seed"]), "Seed changed on restart.")
 	var expected_player: Dictionary = previous_report["saved_player"]
-	_check(_world.world_save.player_state == expected_player, "Saved player state changed on restart.")
+	_check(LfeTestWorldSave.player_transform(_world.world_save) == expected_player, "Saved player state changed on restart.")
 	var expected_position: Array = expected_player["position"]
 	var expected_vector: Vector3 = Vector3(
 		float(expected_position[0]), float(expected_position[1]), float(expected_position[2])
@@ -220,7 +220,7 @@ func _run_c() -> void:
 		await _aim_at(cell)
 		var base_id: int = (_terrain.generator as LfeWave1TerrainGenerator).sample_voxel_id(cell)
 		_check(_voxel_tool.get_voxel(cell) == base_id, "Isolation world inherited edit at %s." % cell)
-	_check(_world.world_save.player_state.is_empty(), "Isolation world inherited player state.")
+	_check(LfeTestWorldSave.player_transform(_world.world_save).is_empty(), "Isolation world inherited player state.")
 	await _capture_frame("05_isolated_world.png")
 	_report["isolated_edit_count"] = 0
 

@@ -1,14 +1,8 @@
-class_name LfeResourceState
+class_name LfeWorldResourceState
 extends RefCounted
 
-const PLAYER_SLOTS: int = 27
-const HOTBAR_SLOTS: int = 9
-const EQUIPMENT_SLOTS: Array[String] = ["hand", "body"]
 const CRATE_PATH: String = "res://content/world_objects/wave_3_crate.json"
 
-var inventory: LfeInventory
-var equipment: LfeInventory
-var _selected: int = 0
 var _catalog: LfeBlockCatalog
 var _drops: Dictionary = {}
 var _storage: Dictionary = {}
@@ -18,22 +12,13 @@ var _crate: Dictionary = {}
 
 func _init(catalog: LfeBlockCatalog) -> void:
 	_catalog = catalog
-	inventory = LfeInventory.new(catalog, PLAYER_SLOTS)
-	equipment = LfeInventory.new(catalog, EQUIPMENT_SLOTS.size(), EQUIPMENT_SLOTS)
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(CRATE_PATH))
 	if data is Dictionary and data.get("schema_version") == 1 and data.get("id") is String and data.get("display_name") is String and data.get("color") is String and LfeWorldSave._is_integer(data.get("slots")) and int(data["slots"]) > 0 and int(data["slots"]) <= 27:
 		_crate = data
 
 
-func selected_slot() -> int:
-	return _selected
 
 
-func select(slot: int) -> bool:
-	if slot < 0 or slot >= HOTBAR_SLOTS:
-		return false
-	_selected = slot
-	return true
 
 
 func storage_definition() -> Dictionary:
@@ -79,19 +64,12 @@ func snapshot() -> Dictionary:
 	var items: Array = drops()
 	items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["instance"] < b["instance"])
 	return {
-		"inventory": inventory.snapshot(), "hotbar_selected": _selected,
-		"equipment": equipment.snapshot(), "drops": items, "storage": containers,
+		"drops": items, "storage": containers,
 	}
 
 
 func restore(data: Variant) -> bool:
-	if _busy or _crate.is_empty() or not data is Dictionary or data.size() != 5:
-		return false
-	var player_next: LfeInventory = LfeInventory.new(_catalog, PLAYER_SLOTS)
-	var equipment_next: LfeInventory = LfeInventory.new(_catalog, EQUIPMENT_SLOTS.size(), EQUIPMENT_SLOTS)
-	if not player_next.restore(data.get("inventory")) or not equipment_next.restore(data.get("equipment")):
-		return false
-	if not LfeWorldSave._is_integer(data.get("hotbar_selected")) or int(data["hotbar_selected"]) < 0 or int(data["hotbar_selected"]) >= HOTBAR_SLOTS:
+	if _busy or _crate.is_empty() or not data is Dictionary or data.size() != 2:
 		return false
 	if not data.get("drops") is Array or not data.get("storage") is Array or data["drops"].size() > 10000 or data["storage"].size() > 1:
 		return false
@@ -123,22 +101,19 @@ func restore(data: Variant) -> bool:
 			"instance": entry["instance"], "content": entry["content"],
 			"position": _normalized_position(entry["position"]), "inventory": container,
 		}
-	var instance_slots: Array = player_next.snapshot() + equipment_next.snapshot()
+	var instance_slots: Array = []
 	for entry: Dictionary in drops_next.values():
 		instance_slots.append(entry["stack"])
 	for entry: Dictionary in storage_next.values():
 		instance_slots.append_array((entry["inventory"] as LfeInventory).snapshot())
 	if not unique_instances(instance_slots, seen):
 		return false
-	inventory = player_next
-	equipment = equipment_next
-	_selected = int(data["hotbar_selected"])
 	_drops = drops_next
 	_storage = storage_next
 	return true
 
 
-func pickup(id: String) -> int:
+func pickup(personal: LfePlayerResourceState, id: String) -> int:
 	if _busy or not _drops.has(id):
 		return 0
 	var entry: Dictionary = _drops[id]
@@ -147,9 +122,9 @@ func pickup(id: String) -> int:
 	if stack.has("instance"):
 		var temporary: LfeInventory = LfeInventory.new(_catalog, 1)
 		temporary.restore([stack])
-		accepted = LfeItemTransactions.transfer(temporary, 0, inventory, 1)
+		accepted = LfeItemTransactions.transfer(temporary, 0, personal.inventory, 1)
 	else:
-		accepted = LfeItemTransactions.add(inventory, StringName(stack["content"]), int(stack["quantity"]), true)
+		accepted = LfeItemTransactions.add(personal.inventory, StringName(stack["content"]), int(stack["quantity"]), true)
 	if accepted == 0:
 		return 0
 	var left: int = int(stack["quantity"]) - accepted
@@ -160,14 +135,14 @@ func pickup(id: String) -> int:
 	return accepted
 
 
-func drop_from_inventory(slot: int, quantity: int, position: Vector3) -> String:
+func drop_from_inventory(personal: LfePlayerResourceState, slot: int, quantity: int, position: Vector3) -> String:
 	if _busy or _drops.size() >= 10000 or not _valid_position([position.x, position.y, position.z]):
 		return ""
-	var stack: Dictionary = inventory.stack_at(slot)
+	var stack: Dictionary = personal.inventory.stack_at(slot)
 	if stack.is_empty() or quantity <= 0 or quantity > int(stack["quantity"]):
 		return ""
 	var id: String = _new_identity()
-	if not LfeItemTransactions.remove(inventory, slot, quantity):
+	if not LfeItemTransactions.remove(personal.inventory, slot, quantity):
 		return ""
 	_drops[id] = _drop_entry(id, StringName(stack["content"]), quantity, position)
 	if stack.has("instance"):
@@ -208,14 +183,14 @@ func break_to_drop(block: StringName, position: Vector3, world_commit: Callable,
 	return true
 
 
-func place_from_inventory(slot: int, world_commit: Callable) -> bool:
+func place_from_inventory(personal: LfePlayerResourceState, slot: int, world_commit: Callable) -> bool:
 	if _busy or not world_commit.is_valid():
 		return false
-	var stack: Dictionary = inventory.stack_at(slot)
+	var stack: Dictionary = personal.inventory.stack_at(slot)
 	if stack.is_empty() or _catalog.placeable_voxel(StringName(stack["content"])) < 0:
 		return false
-	var prepared: LfeInventory = LfeInventory.new(_catalog, PLAYER_SLOTS)
-	prepared.restore(inventory.snapshot())
+	var prepared: LfeInventory = LfeInventory.new(_catalog, LfePlayerResourceState.PLAYER_SLOTS)
+	prepared.restore(personal.inventory.snapshot())
 	if not LfeItemTransactions.remove(prepared, slot, 1):
 		return false
 	_busy = true
@@ -223,12 +198,12 @@ func place_from_inventory(slot: int, world_commit: Callable) -> bool:
 	_busy = false
 	if result != OK:
 		return false
-	inventory.restore(prepared.snapshot())
+	personal.inventory.restore(prepared.snapshot())
 	return true
 
 
 func total(id: StringName) -> int:
-	var result: int = inventory.total(id) + equipment.total(id)
+	var result: int = 0
 	for entry: Dictionary in _drops.values():
 		if StringName(entry["stack"]["content"]) == id:
 			result += int(entry["stack"]["quantity"])

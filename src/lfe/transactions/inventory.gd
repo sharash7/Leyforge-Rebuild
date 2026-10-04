@@ -41,7 +41,7 @@ func validate(values: Variant) -> bool:
 			return false
 		if values[slot] != null and not accepts(slot, StringName(values[slot]["content"])):
 			return false
-	return LfeResourceState.unique_instances(values)
+	return LfeWorldResourceState.unique_instances(values)
 
 
 func restore(values: Variant) -> bool:

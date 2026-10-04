@@ -52,19 +52,20 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 
 ## Current playable build
 
-Wave 4 - Survival & Creation is the current implemented slice: deterministic
-streamed voxel terrain, conserved inventory/drops/storage, gathering while holding LMB,
-stateful tools and durability, atomic canonical crafting, a fuelled kiln,
-functional construction and shelter/rest, bounded survival and save v3 with
-nondestructive v1/v2 migration.
+The current build is 0.5.0-wave5-w5.1: W5.1 Authority & State Separation
+preserves the normal Wave 4 survival/creation loop while adding a stable local
+profile, independent world-local character records, shared world owners and
+actor-aware commands. Save v4 retains nondestructive v1/v2/v3 migration and
+the existing safe promotion and previous-copy recovery path.
 
-See `docs/WAVE_4_SURVIVAL_AND_CREATION.md` for the connected loop, controls,
-architecture, verification and intentional limits. Wave 0-3 regression gates
-remain active. Wave 4 is otherwise owner accepted; the hold-LMB interaction
-hotfix in `0.4.5-wave4` awaits its owner spot-check. See
-`docs/WAVE_4_HOLD_GATHER_INTERACTION_HOTFIX.md`; the Dense Stone unit-cube repair
-remains documented in `docs/WAVE_4_DENSE_STONE_PRESENTATION_HOTFIX.md`. Repair 3's
-real generated voxel trees, placeable Heartwood and grounded drops remain documented in
-`docs/WAVE_4_MANUAL_ACCEPTANCE_REPAIR_3.md`. The unified 2x2 Inventory / 3x3
-Workbench crafting remains. New worlds use worldgen v2; existing v1 worlds
-retain their original generation. Wave 5 has not begun.
+See docs/WAVE_5_PART_1_AUTHORITY_AND_STATE_SEPARATION.md for identity,
+ownership, save shape, command boundaries, verification and the exact owner
+manual launch command. W5.1 owner manual acceptance is pending. It introduces
+no networking; W5.2 has not begun.
+
+The connected playable loop and controls remain in
+docs/WAVE_4_SURVIVAL_AND_CREATION.md. Held gathering, Dense Stone unit cubes,
+generated voxel trees, placeable Heartwood, grounded drops and unified 2x2
+Inventory / 3x3 Workbench crafting remain documented in the Wave 4 hotfix and
+repair records. New worlds use worldgen v2; existing v1 worlds retain their
+original generation. Wave 0–4 regression gates remain active.

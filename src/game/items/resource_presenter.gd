@@ -18,7 +18,7 @@ func sync() -> void:
 	if _world==null:
 		return
 	var seen: Dictionary = {}
-	for entry: Dictionary in _world.resources.drops():
+	for entry: Dictionary in _world.world_resources.drops():
 		var id: String = entry["instance"]
 		var position: Vector3 = _position(entry)
 		if not _world.region_relevant(position):
@@ -36,10 +36,10 @@ func sync() -> void:
 			_nodes.erase(id)
 	# Cooldowns survive dematerialisation, but disappear with picked-up records.
 	for id: String in _cooldowns.keys():
-		if _world.resources.drop(id).is_empty():
+		if _world.world_resources.drop(id).is_empty():
 			_cooldowns.erase(id)
 	seen.clear()
-	for entry: Dictionary in _world.resources.snapshot()["storage"]:
+	for entry: Dictionary in _world.world_resources.snapshot()["storage"]:
 		if not _world.region_relevant(_position(entry)):
 			continue
 		seen[entry["instance"]]=true
@@ -63,14 +63,14 @@ func _physics_process(delta: float) -> void:
 		return
 	if not OS.get_cmdline_user_args().has("--wave4-playtest") and not OS.get_cmdline_user_args().has("--wave3-playtest"):
 		# Rendered conservation drivers advance clustering explicitly for exact restart assertions.
-		_world.resources.advance_drop_clusters(minf(delta,1),_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
+		_world.world_resources.advance_drop_clusters(minf(delta,1),_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
 	if _world.player.is_runtime_ready():
-		for entry: Dictionary in _world.resources.drops():
+		for entry: Dictionary in _world.world_resources.drops():
 			var id: String = entry["instance"]
 			if not _nodes.has(id) or Time.get_ticks_msec()<int(_cooldowns.get(id,0)):
 				continue
 			if (_world.player.global_position+Vector3.UP*0.8).distance_to(_position(entry))<=1.65:
-				var accepted: int = _world.resources.pickup(id)
+				var accepted: int = int(_world.command(_world.local_player_id,"pickup",{"target":id}).data.get("quantity",0))
 				if accepted>0:
 					_world.player.show_status("Picked up %d" % accepted)
 	sync()
@@ -126,7 +126,7 @@ func _make_crate(entry: Dictionary) -> Node3D:
 	cube.size=shape.size
 	mesh.mesh=cube
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color=Color.from_string(_world.resources.storage_definition()["color"],Color.SADDLE_BROWN)
+	material.albedo_color=Color.from_string(_world.world_resources.storage_definition()["color"],Color.SADDLE_BROWN)
 	mesh.material_override=material
 	body.add_child(mesh)
 	add_child(body)

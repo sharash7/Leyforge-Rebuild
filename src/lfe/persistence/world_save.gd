@@ -1,7 +1,7 @@
 class_name LfeWorldSave
 extends RefCounted
 
-const SAVE_VERSION: int = 3
+const SAVE_VERSION: int = 4
 const WORLDGEN_VERSION: int = 2
 const CONTENT_VERSION: int = 1
 const SAVE_FILE: String = "world.json"
@@ -14,8 +14,10 @@ var seed: int = 0
 var worldgen_version: int = WORLDGEN_VERSION
 var created_utc: String = ""
 var last_saved_utc: String = ""
-var player_state: Dictionary = {}
-var resource_state: Dictionary = {}
+var players_state: Array = []
+var world_resource_state: Dictionary = {}
+var owner_player_id: String = ""
+var local_player_id: String = ""
 var creation_state: Dictionary = {}
 var overrides: LfeVoxelOverrideStore = LfeVoxelOverrideStore.new()
 var load_status: String = ""
@@ -41,8 +43,8 @@ func get_primary_path() -> String:
 	return _world_directory.path_join(SAVE_FILE)
 
 
-func is_dirty(current_player_state: Dictionary, current_resources: Dictionary = {}, current_creation: Dictionary = {}) -> bool:
-	return _edits_dirty or player_state != current_player_state or (not current_resources.is_empty() and resource_state != current_resources) or (not current_creation.is_empty() and creation_state != current_creation) or last_saved_utc.is_empty()
+func is_dirty(current_players: Variant,current_resources: Dictionary,current_creation: Dictionary) -> bool:
+	return _edits_dirty or players_state != current_players or world_resource_state != current_resources or creation_state != current_creation or last_saved_utc.is_empty()
 
 
 func record_voxel_edit(cell: Vector3i, voxel_id: int, base_voxel_id: int) -> Error:
@@ -61,11 +63,19 @@ func open_world(
 	requested_seed: int,
 	seed_was_explicit: bool,
 	catalog: LfeBlockCatalog,
-	root_path: String = "user://worlds"
+	root_path: String = "user://worlds",
+	player_id: String = ""
 ) -> Error:
 	_is_open = false
 	worldgen_version = WORLDGEN_VERSION
 	_last_error = ""
+	local_player_id = player_id
+	if local_player_id.is_empty():
+		var profile: LfeLocalProfile = LfeLocalProfile.new()
+		if profile.open_profile() != OK:return _fail(ERR_INVALID_DATA,profile.error)
+		local_player_id = profile.player_id
+	if not LfeWorldResourceState._valid_identity(local_player_id):return _fail(ERR_INVALID_PARAMETER,"Invalid local player identity.")
+
 	if not _valid_world_id(selected_id):
 		return _fail(ERR_INVALID_PARAMETER, "World ID must be 1-64 ASCII letters, digits, underscores or hyphens.")
 	_catalog = catalog
@@ -84,8 +94,9 @@ func open_world(
 		display_name = world_id
 		created_utc = Time.get_datetime_string_from_system(true)
 		last_saved_utc = ""
-		player_state = {}
-		resource_state = LfeResourceState.new(_catalog).snapshot()
+		players_state = []
+		owner_player_id = local_player_id
+		world_resource_state = LfeWorldResourceState.new(_catalog).snapshot()
 		creation_state = LfeCreationState.new(_catalog).snapshot()
 		overrides = LfeVoxelOverrideStore.new()
 		load_status = "New world; not yet saved"
@@ -110,8 +121,9 @@ func open_world(
 	display_name = String(metadata["display_name"])
 	created_utc = String(metadata["created_utc"])
 	last_saved_utc = String(metadata["last_saved_utc"])
-	player_state = decoded["player"]
-	resource_state = decoded["resources"]
+	players_state = decoded["players"]
+	owner_player_id = decoded["owner"]
+	world_resource_state = decoded["world_resources"]
 	creation_state = decoded["creation"]
 	overrides = decoded["overrides"]
 	_expected_primary_hash = String(decoded["file_hash"]) if path_to_load == primary else ""
@@ -125,23 +137,18 @@ func open_world(
 	return OK
 
 
-func save(current_player_state: Dictionary, current_resources: Variant = null, current_creation: Variant = null) -> Error:
+func save(current_players: Variant = null,current_resources: Variant = null,current_creation: Variant = null) -> Error:
 	if not _is_open or _catalog == null or _world_directory.is_empty():
-		return _fail(ERR_UNCONFIGURED, "World save is not open.")
-	if not _valid_player_state(current_player_state):
-		return ERR_INVALID_DATA
-	var resources_to_save: Variant = resource_state if current_resources == null else current_resources
-	var resource_validator: LfeResourceState = LfeResourceState.new(_catalog)
-	if not resource_validator.restore(resources_to_save):
-		return _fail(ERR_INVALID_DATA, "Invalid Wave 3 resources; refusing save.")
-	var creation_validator: LfeCreationState = LfeCreationState.new(_catalog)
-	if not creation_validator.restore(creation_state if current_creation == null else current_creation, resource_validator.snapshot()):
-		return _fail(ERR_INVALID_DATA, "Invalid survival/creation state; refusing save.")
-	if not creation_validator.initialize_sources(seed,worldgen_version) or not creation_validator.validate_source_layout(seed,worldgen_version) or not _valid_object_voxels(creation_validator.snapshot(), overrides):
-		return _fail(ERR_INVALID_DATA, "Functional object does not match its authoritative voxel.")
+		return _fail(ERR_UNCONFIGURED,"World save is not open.")
+	var normalized: Dictionary = _validate_snapshot(players_state if current_players == null else current_players,world_resource_state if current_resources == null else current_resources,creation_state if current_creation == null else current_creation,owner_player_id)
+	if normalized.is_empty():return _fail(ERR_INVALID_DATA,"Invalid player roster, world state or duplicate instance; refusing save.")
+	var creation_validator: LfeCreationState = normalized["creation_owner"]
+	if not creation_validator.initialize_sources(seed,worldgen_version) or not creation_validator.validate_source_layout(seed,worldgen_version) or not _valid_object_voxels(creation_validator.snapshot(),overrides):
+		return _fail(ERR_INVALID_DATA,"Functional object does not match its authoritative voxel.")
 	var proposed_saved_utc: String = Time.get_datetime_string_from_system(true)
 	var metadata: Dictionary = {
 		"world_id": world_id,
+		"owner_player_id": owner_player_id,
 		"display_name": display_name,
 		"seed": seed,
 		"save_version": SAVE_VERSION,
@@ -152,9 +159,9 @@ func save(current_player_state: Dictionary, current_resources: Variant = null, c
 	}
 	var payload: Dictionary = {
 		"metadata": metadata,
-		"player": current_player_state,
+		"players": normalized["players"],
 		"voxel_overrides": overrides.serialized_entries(),
-		"resources": resource_validator.snapshot(),
+		"world_resources": normalized["world_resources"],
 		"creation": creation_validator.snapshot(),
 	}
 	var payload_json: String = JSON.stringify(payload, "", true, true)
@@ -211,8 +218,8 @@ func save(current_player_state: Dictionary, current_resources: Variant = null, c
 			DirAccess.rename_absolute(previous, primary)
 		return _fail(promote_error, "Could not promote validated world save; previous copy retained.")
 	_expected_primary_hash = serialized.sha256_text()
-	player_state = current_player_state.duplicate(true)
-	resource_state = resource_validator.snapshot()
+	players_state = normalized["players"].duplicate(true)
+	world_resource_state = normalized["world_resources"].duplicate(true)
 	creation_state = creation_validator.snapshot()
 	last_saved_utc = proposed_saved_utc
 	_edits_dirty = false
@@ -226,6 +233,9 @@ func _decode_file(path: String) -> Dictionary:
 	if file == null:
 		_fail(ERR_FILE_CANT_OPEN, "Could not open world save %s." % path)
 		return {}
+	if file.get_length()>16*1024*1024:
+		_fail(ERR_INVALID_DATA,"World save exceeds bounded size.")
+		return {}
 	var raw_text: String = file.get_as_text()
 	var envelope_parser: JSON = JSON.new()
 	if envelope_parser.parse(raw_text) != OK or not envelope_parser.data is Dictionary:
@@ -236,7 +246,7 @@ func _decode_file(path: String) -> Dictionary:
 		_fail(ERR_INVALID_DATA, "World save has no valid save version.")
 		return {}
 	var version: int = int(envelope["save_version"])
-	if version not in [1, 2, SAVE_VERSION]:
+	if version not in [1, 2, 3, SAVE_VERSION]:
 		_fail(ERR_INVALID_DATA, "Unsupported save version %d; this build supports %d." % [version, SAVE_VERSION])
 		return {}
 	if not envelope.get("payload_json") is String or not envelope.get("sha256") is String:
@@ -251,38 +261,96 @@ func _decode_file(path: String) -> Dictionary:
 		_fail(ERR_PARSE_ERROR, "Malformed world save payload at %s." % path)
 		return {}
 	var payload: Dictionary = payload_parser.data
-	if not payload.get("metadata") is Dictionary or not payload.get("player") is Dictionary:
-		_fail(ERR_INVALID_DATA, "World metadata or player state is missing.")
+	if not payload.get("metadata") is Dictionary:
+		_fail(ERR_INVALID_DATA,"World metadata is missing.")
 		return {}
 	var metadata: Dictionary = payload["metadata"]
-	if not _valid_metadata(metadata, version):
-		return {}
-	var parsed_player: Dictionary = payload["player"]
-	if not _valid_player_state(parsed_player):
-		return {}
+	if not _valid_metadata(metadata,version):return {}
 	var parsed_overrides: LfeVoxelOverrideStore = LfeVoxelOverrideStore.new()
-	if parsed_overrides.load_entries(payload.get("voxel_overrides"), _catalog) != OK:
-		_fail(ERR_INVALID_DATA, parsed_overrides.get_last_error())
+	if parsed_overrides.load_entries(payload.get("voxel_overrides"),_catalog)!=OK:
+		_fail(ERR_INVALID_DATA,parsed_overrides.get_last_error())
 		return {}
-	var resources: LfeResourceState = LfeResourceState.new(_catalog)
-	if version >= 2 and not resources.restore(payload.get("resources")):
-		_fail(ERR_INVALID_DATA, "Malformed Wave 3 resources or unknown canonical content.")
+	var roster: Variant
+	var world_resources: Variant
+	var creation_data: Variant
+	var owner: String = local_player_id
+	if version==SAVE_VERSION:
+		if payload.size()!=5 or not LfeWorldResourceState._valid_identity(metadata.get("owner_player_id")):
+			_fail(ERR_INVALID_DATA,"Invalid v4 ownership boundaries.")
+			return {}
+		owner=metadata["owner_player_id"]
+		roster=payload.get("players")
+		world_resources=payload.get("world_resources")
+		creation_data=payload.get("creation")
+	else:
+		# Legacy single-player ownership is assigned to the profile performing migration.
+		if not payload.get("player") is Dictionary or not _valid_player_state(payload["player"]):return {}
+		var personal: Dictionary = LfePlayerResourceState.new(_catalog).snapshot()
+		world_resources=LfeWorldResourceState.new(_catalog).snapshot()
+		if version>=2:
+			var mixed: Variant=payload.get("resources")
+			if not mixed is Dictionary or mixed.size()!=5:
+				_fail(ERR_INVALID_DATA,"Malformed legacy resources.")
+				return {}
+			personal={"inventory":mixed.get("inventory"),"equipment":mixed.get("equipment"),"hotbar_selected":mixed.get("hotbar_selected")}
+			world_resources={"drops":mixed.get("drops"),"storage":mixed.get("storage")}
+		var survival: Dictionary = LfeCharacterSurvival.new().snapshot()
+		creation_data=LfeCreationState.new(_catalog).snapshot()
+		if version==3:
+			var mixed: Variant=payload.get("creation")
+			if not mixed is Dictionary or mixed.size()!=5 or not mixed.get("survival") is Dictionary:
+				_fail(ERR_INVALID_DATA,"Malformed legacy survival/creation.")
+				return {}
+			survival=mixed["survival"]
+			creation_data=mixed.duplicate(true)
+			creation_data.erase("survival")
+		roster=[{"player_id":local_player_id,"transform":payload["player"],"resources":personal,"survival":survival}]
+	var normalized: Dictionary=_validate_snapshot(roster,world_resources,creation_data,owner)
+	if normalized.is_empty():
+		_fail(ERR_INVALID_DATA,"Malformed character/world state or duplicate instance.")
 		return {}
-	var creation: LfeCreationState = LfeCreationState.new(_catalog)
-	if version == SAVE_VERSION and not creation.restore(payload.get("creation"), resources.snapshot()):
-		_fail(ERR_INVALID_DATA, "Malformed survival, workstation or item-instance state.")
+	var creation: LfeCreationState=normalized["creation_owner"]
+	if version>=3 and (not creation.snapshot()["initialized"] or not creation.validate_source_layout(int(metadata["seed"]),int(metadata["worldgen_version"])) or not _valid_object_voxels(creation.snapshot(),parsed_overrides)):
+		_fail(ERR_INVALID_DATA,"Functional world object/voxel mismatch.")
 		return {}
-	if version == SAVE_VERSION and (not creation.snapshot()["initialized"] or not creation.validate_source_layout(int(metadata["seed"]),int(metadata["worldgen_version"])) or not _valid_object_voxels(creation.snapshot(), parsed_overrides)):
-		_fail(ERR_INVALID_DATA, "Functional world object/voxel mismatch.")
-		return {}
-	return {
-		"creation": creation.snapshot(),
-		"resources": resources.snapshot(),
-		"metadata": metadata,
-		"player": parsed_player,
-		"overrides": parsed_overrides,
-		"file_hash": raw_text.sha256_text(),
-	}
+	return {"creation":creation.snapshot(),"players":normalized["players"],"world_resources":normalized["world_resources"],"owner":owner,"metadata":metadata,"overrides":parsed_overrides,"file_hash":raw_text.sha256_text()}
+
+# Validate the entire authoritative graph, including item identities in all owners.
+const MAX_PLAYERS: int = 64
+
+func _validate_snapshot(roster: Variant,world_data: Variant,creation_data: Variant,owner: String) -> Dictionary:
+	if not roster is Array or roster.is_empty() or roster.size()>MAX_PLAYERS:return {}
+	var ids: Dictionary={}
+	var players: Array=[]
+	var slots: Array=[]
+	for entry: Variant in roster:
+		if not entry is Dictionary or not LfeWorldResourceState._valid_identity(entry.get("player_id")) or ids.has(entry["player_id"]):return {}
+		var character: LfePlayerCharacter=LfePlayerCharacter.new(entry["player_id"],_catalog)
+		if not character.restore(entry):return {}
+		ids[character.player_id]=true;players.append(character.snapshot())
+		slots.append_array(character.resources.inventory.snapshot()+character.resources.equipment.snapshot())
+	if not ids.has(owner):return {}
+	var world: LfeWorldResourceState=LfeWorldResourceState.new(_catalog)
+	if not world.restore(world_data):return {}
+	var creation: LfeCreationState=LfeCreationState.new(_catalog)
+	if not creation.restore(creation_data,world.snapshot()):return {}
+	var seen: Dictionary={}
+	for entry: Dictionary in world.snapshot()["drops"]:
+		seen[entry["instance"]]=true;slots.append(entry["stack"])
+	for entry: Dictionary in world.snapshot()["storage"]:
+		seen[entry["instance"]]=true;slots.append_array(entry["slots"])
+	for entry: Dictionary in creation.objects():
+		if seen.has(entry["instance"]):return {}
+		seen[entry["instance"]]=true
+		if entry.has("slots"):slots.append_array(entry["slots"])
+		if entry.has("station"):
+			for channel: String in ["input","fuel","output"]:slots.append_array(entry["station"][channel])
+	for entry: Dictionary in creation.sources():
+		if seen.has(entry["instance"]):return {}
+		seen[entry["instance"]]=true
+	if not LfeWorldResourceState.unique_instances(slots,seen):return {}
+	players.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return a["player_id"]<b["player_id"])
+	return {"players":players,"world_resources":world.snapshot(),"creation_owner":creation}
 
 
 func _valid_metadata(metadata: Dictionary, envelope_version: int) -> bool:
@@ -316,23 +384,8 @@ func _valid_metadata(metadata: Dictionary, envelope_version: int) -> bool:
 
 
 func _valid_player_state(state: Dictionary) -> bool:
-	var position_value: Variant = state.get("position")
-	if not position_value is Array or (position_value as Array).size() != 3:
-		_fail(ERR_INVALID_DATA, "Player position must have three coordinates.")
-		return false
-	for component: Variant in position_value:
-		if not _finite_in_range(component, 1000000.0):
-			_fail(ERR_INVALID_DATA, "Player position contains an invalid coordinate.")
-			return false
-	if not _finite_in_range(state.get("yaw"), 1000000.0):
-		_fail(ERR_INVALID_DATA, "Player yaw is invalid.")
-		return false
-	if not _finite_in_range(state.get("pitch"), 1.553344):
-		_fail(ERR_INVALID_DATA, "Player pitch is invalid.")
-		return false
-	var selected: Variant = state.get("selected_block", "")
-	if not selected is String or (not String(selected).is_empty() and not _catalog.has_id(StringName(selected))):
-		_fail(ERR_INVALID_DATA, "Player selected block has an unknown canonical ID.")
+	if not LfePlayerCharacter.valid_transform(state,_catalog):
+		_fail(ERR_INVALID_DATA,"Invalid player transform or selected block.")
 		return false
 	return true
 

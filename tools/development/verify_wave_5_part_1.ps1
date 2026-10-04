@@ -8,8 +8,8 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $godotPath = (Resolve-Path -LiteralPath $GodotExecutable).Path
 if ($godotPath.EndsWith('.disabled', [StringComparison]::OrdinalIgnoreCase)) { throw 'Quarantined executables cannot be used.' }
-$evidenceRoot = Join-Path $repositoryRoot ('.verification\wave4\run-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff'))
-$tempRoot = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) ('lfw4-' + [Guid]::NewGuid().ToString('N'))))
+$evidenceRoot = Join-Path $repositoryRoot ('.verification\wave5\w5_1\run-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff'))
+$tempRoot = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) ('lfw51-' + [Guid]::NewGuid().ToString('N'))))
 $expectedTempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
 if (-not $tempRoot.StartsWith($expectedTempRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid external test root.' }
 $testProject = Join-Path $tempRoot "project"
@@ -90,24 +90,30 @@ try {
     Write-Output "GODOT_VERSION=$version"
     Invoke-Godot 'import' @('--headless','--editor','--path',$testProject,'--quit') ''
     $unit = "$tempRoot\unit"
-    Invoke-Godot 'focused' @('--headless','--path',$testProject,'--script','res://tests/wave_4/wave_4_test_runner.gd','--','--wave4-focused','--wave4-test-survival',"--wave4-test-root=$unit","--wave4-test-out=$evidenceRoot") 'WAVE_4_TEST_PASS'
+    Invoke-Godot 'wave4_fixture_focused' @('--headless','--path',$testProject,'--script','res://tests/wave_4/wave_4_test_runner.gd','--','--wave4-focused','--wave4-test-survival',"--wave4-test-root=$unit","--wave4-test-out=$evidenceRoot") 'WAVE_4_TEST_PASS'
     $focused = Get-Content -LiteralPath (Join-Path $evidenceRoot 'focused.json') -Raw | ConvertFrom-Json
     if (-not $focused.passed) { throw 'Focused report failed.' }
-    $gate.focused_checks = $focused.checks
+    $gate.wave4_fixture_checks = $focused.checks
+    Invoke-Godot 'w51_focused' @('--headless','--path',$testProject,'--script','res://tests/wave_5_part_1/w5_1_test_runner.gd','--',"--w51-root=$unit","--w51-out=$evidenceRoot") 'W5_1_FOCUSED_PASS'
+    Invoke-Godot 'w51_restart' @('--headless','--path',$testProject,'--script','res://tests/wave_5_part_1/w5_1_test_runner.gd','--','--w51-restart',"--w51-root=$unit","--w51-out=$evidenceRoot") 'W5_1_RESTART_PASS'
+    $focused = Get-Content -LiteralPath (Join-Path $evidenceRoot 'w51_focused.json') -Raw | ConvertFrom-Json
+    $restart = Get-Content -LiteralPath (Join-Path $evidenceRoot 'w51_restart.json') -Raw | ConvertFrom-Json
+    if (-not $focused.passed -or -not $restart.passed) { throw 'W5.1 focused/restart report failed.' }
+    $gate.focused_checks = $focused.checks + $restart.checks
     $gate.rendered_checks = 0
     if (-not $SkipRenderedPlaytest) {
         $worldRoot = "$tempRoot\worlds"
 
-        foreach ($phase in @('A','B','C','D','M1','N1','M2','N2')) {
-            $id = if ($phase -eq 'D') { 'wave4_isolation' } elseif ($phase -in @('M1','N1')) { 'rendered_v1' } elseif ($phase -in @('M2','N2')) { 'rendered_v2' } else { 'wave4_acceptance' }
-            $selectedRoot = if ($phase -in @('M1','N1','M2','N2')) { $unit } else { $worldRoot }
-            Invoke-Godot "rendered_$phase" @('--path',$testProject,'--','--wave4-playtest',"--wave4-run=$phase","--world-id=$id","--world-root=$selectedRoot",'--seed=184552221',"--wave4-playtest-out=$evidenceRoot") "WAVE_4_RENDERED_${phase}_PASS"
+        foreach ($phase in @('A','B','C','D','M1','N1','M2','N2','M3','N3')) {
+            $id = if ($phase -eq 'D') { 'wave4_isolation' } elseif ($phase -in @('M1','N1')) { 'rendered_v1' } elseif ($phase -in @('M2','N2')) { 'rendered_v2' } elseif ($phase -in @('M3','N3')) { 'rendered_v3' } else { 'wave5_acceptance' }
+            $selectedRoot = if ($phase -in @('M1','N1','M2','N2','M3','N3')) { $unit } else { $worldRoot }
+            Invoke-Godot "rendered_$phase" @('--path',$testProject,'--','--wave4-playtest','--w51-playtest',"--wave4-run=$phase","--world-id=$id","--world-root=$selectedRoot",'--seed=184552221',"--wave4-playtest-out=$evidenceRoot") "WAVE_4_RENDERED_${phase}_PASS"
             $report = Get-Content -LiteralPath (Join-Path $evidenceRoot "run_$phase.json") -Raw | ConvertFrom-Json
             if (-not $report.passed) { throw "Rendered report $phase failed." }
             if ($report.survival_profile -ne 'Standard' -or $report.survival_acceleration) { throw "Rendered manual candidate must use Standard production timing." }
             $gate.rendered_checks += $report.checks
         }
-        foreach ($frame in @('01_gathering.png','02_crafting.png','03_workstation.png','04_shelter.png','05_survival.png','06_saved.png','07_restart.png','08_completed.png','09_isolation.png','10_migration_v1.png','11_migration_v2.png','12_drop_before.png','12_drop_motion.png','13_furnace_completed.png','14_resource_scale.png','15_personal_grid.png','16_workbench_grid.png','17_tree_variation.png','18_generated_woodland.png','19_partial_tree_grounded_drop.png','20_placed_heartwood.png','21_distant_woodland.png','22_drop_resettled.png','23_dense_stone_unit_cube.png','24_hold_voxel_cancelled.png','25_hold_source_cancelled.png')) {
+        foreach ($frame in @('01_gathering.png','02_crafting.png','03_workstation.png','04_shelter.png','05_survival.png','06_saved.png','07_restart.png','08_completed.png','09_isolation.png','10_migration_v1.png','11_migration_v2.png','12_drop_before.png','12_drop_motion.png','13_furnace_completed.png','14_resource_scale.png','15_personal_grid.png','16_workbench_grid.png','17_tree_variation.png','18_generated_woodland.png','19_partial_tree_grounded_drop.png','20_placed_heartwood.png','21_distant_woodland.png','22_drop_resettled.png','23_dense_stone_unit_cube.png','24_hold_voxel_cancelled.png','25_hold_source_cancelled.png','26_migration_v3.png')) {
             $path = Join-Path $evidenceRoot $frame
             if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) { throw "Missing rendered frame $frame" }
         }
@@ -116,14 +122,15 @@ try {
         $gate.survival_profile = 'Standard'
         $gate.survival_acceleration = $false
     } else {
-        Write-Output 'WAVE_4_RENDERED_SKIPPED; FULL EXIT GATE NOT CERTIFIED'
+        Write-Output 'WAVE_5_PART_1_RENDERED_SKIPPED; FULL EXIT GATE NOT CERTIFIED'
     }
     if (-not $SkipRegression) {
-        foreach ($wave in @('0','1','2','3')) {
+        foreach ($wave in @('0','1','2','3','4')) {
             $gatePath = Join-Path $testProject "tools\development\verify_wave_$wave.ps1"
             $priorInfo = New-Object Diagnostics.ProcessStartInfo
             $priorInfo.FileName = 'powershell.exe'
             $priorInfo.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $gatePath + '" -GodotExecutable "' + $godotPath + '"'
+            if ($wave -eq '4') { $priorInfo.Arguments += ' -SkipRegression' }
             $priorInfo.WorkingDirectory = $testProject
             $priorInfo.UseShellExecute = $false
             $priorInfo.CreateNoWindow = $true
@@ -161,9 +168,9 @@ try {
     $gate.snapshot_matches_source = $true
     $gate.certified = $gate.rendered -and $gate.regressions
     $gate.passed = $true
-    Write-Output 'WAVE_4_VALIDATION_PASS'
+    Write-Output 'WAVE_5_PART_1_VALIDATION_PASS'
 } finally {
-    Write-Output "WAVE_4_EVIDENCE=$evidenceRoot"
+    Write-Output "WAVE_5_PART_1_EVIDENCE=$evidenceRoot"
     $gate | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidenceRoot 'gate.json') -Encoding UTF8
     $env:APPDATA = $originalAppData
     $env:LOCALAPPDATA = $originalLocalAppData
