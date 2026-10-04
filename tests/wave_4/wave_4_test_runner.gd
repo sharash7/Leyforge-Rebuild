@@ -35,6 +35,7 @@ func _run() -> void:
 	_voxel_trees()
 	_grounded_drops()
 	_dense_stone_presentation()
+	await _held_gathering()
 	var report: Dictionary = {"passed":_failures.is_empty(),"checks":_checks,"failures":_failures,"runner":Engine.get_version_info()["string"],"property_seed":928143,"property_steps":300}
 	_write(_out.path_join("focused.json"),JSON.stringify(report,"\t",true,true))
 	for failure: String in _failures:
@@ -632,3 +633,126 @@ func _dense_stone_presentation() -> void:
 			_check(body.get_meta("source")==entry["instance"] and body.collision_layer==8,"Existing source identity and targeting collision layer remain unchanged")
 		_check(count==4 and world.creation.snapshot()==before,"Both layouts retain exactly four Dense Stone sources and unchanged authoritative state")
 		presenter.free();world.free()
+
+func _held_gathering() -> void:
+	# Real production world/voxel/source authority in the gate's isolated profile.
+	var world: LeyforgeWave1Playground = LeyforgeWave1Playground.new()
+	root.add_child(world);world._playtest_mode=true;world.player._playtest_mode=true;world.set_physics_process(false)
+	for frame: int in 900:
+		await physics_frame
+		if world.is_runtime_ready():break
+	_check(world.is_runtime_ready(),"Held-action focused world streams real terrain")
+	if not world.is_runtime_ready():world.free();return
+	world.player.set_runtime_ready(false)
+	var trees: Array[Dictionary] = LfeStarterTreeRules.candidates(world.active_seed,Vector2i(-40,-40),Vector2i(40,40))
+	trees.sort_custom(func(a:Dictionary,b:Dictionary)->bool:return Vector3(a["base"]).length_squared()<Vector3(b["base"]).length_squared())
+	var base: Vector3i = trees[0]["base"]
+	for family: String in ["voxel","source"]:
+		var source: bool = family=="source"
+		var tool_id: StringName = &"leyforge:stone_pickaxe" if source else &"leyforge:stone_axe"
+		if not world.resources.equipment.stack_at(0).is_empty():LfeItemTransactions.transfer(world.resources.equipment,0,world.resources.inventory,1)
+		LfeItemTransactions.add(world.resources.inventory,tool_id,2)
+		var slot: int = _slot(world.resources.inventory,tool_id)
+		LfeItemTransactions.transfer(world.resources.inventory,slot,world.resources.equipment,1,0)
+		var targets: Array = [{"source":world.creation.sources()[0]["instance"]},{"source":world.creation.sources()[1]["instance"]}] if source else [{"cell":base},{"cell":base+Vector3i.UP}]
+		await _hold_aim(world,targets[0])
+		var resources: Dictionary = world.resources.snapshot();var state: Dictionary = world.creation.snapshot();var edits: int = world.world_save.overrides.count()
+		_check(not _hold_begin(world,targets[0]),family+": begin without active primary input is rejected")
+		# A/B: tap/release, and a longer incomplete hold, both reset immediately.
+		for fraction: float in [0.01,0.5]:
+			world.set_primary_action(true)
+			_check(_hold_begin(world,targets[0]),family+": held press begins validated attempt")
+			var seconds: float = float(world._harvest.get("seconds",1))
+			_check(not world.advance_harvest(seconds*fraction),family+": incomplete held work cannot mutate")
+			world.set_primary_action(false)
+			_check(not world.has_active_harvest() and not world.advance_harvest(60) and world.resources.snapshot()==resources and world.creation.snapshot()==state and world.world_save.overrides.count()==edits,family+": release cancels immediately without output, wear, block edit or depletion")
+		# D: switching target discards first-target work and never transfers it.
+		world.set_primary_action(true);_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.75)
+		await _hold_aim(world,targets[1])
+		_check(not world.advance_harvest(60) and not world.has_active_harvest() and world.resources.snapshot()==resources and world.creation.snapshot()==state,family+": target switch cancels first attempt")
+		_check(_hold_begin(world,targets[1]) and world._harvest.get("work",-1)==0,family+": second target begins from zero")
+		_check(not world.advance_harvest(float(world._harvest["seconds"])*0.25) and world.resources.snapshot()==resources,family+": prior work cannot complete second target")
+		world.set_primary_action(false);await _hold_aim(world,targets[0])
+		# E: another instance of the same tool cancels, even with identical class.
+		world.set_primary_action(true);_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.5)
+		slot=_slot(world.resources.inventory,tool_id)
+		LfeItemTransactions.transfer(world.resources.equipment,0,world.resources.inventory,1)
+		LfeItemTransactions.transfer(world.resources.inventory,slot,world.resources.equipment,1,0)
+		var switched: Dictionary = world.resources.snapshot()
+		_check(not world.advance_harvest(60) and not world.has_active_harvest() and world.resources.snapshot()==switched and world.creation.snapshot()==state,family+": changing equipped instance cancels without extra wear/output")
+		# Capability/durability invalidation cannot fall back and keep old work.
+		_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.5)
+		var equipment: Array = world.resources.equipment.snapshot();var broken: Array = equipment.duplicate(true);broken[0]["durability"]=0
+		world.resources.equipment.restore(broken)
+		_check(not world.advance_harvest(60) and not world.has_active_harvest(),family+": lost capability cancels accumulated work")
+		world.resources.equipment.restore(equipment)
+		# G: menu open cancels immediately; held input cannot advance behind it.
+		_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.5)
+		var before_menu: Dictionary = world.resources.snapshot()
+		world.inventory_panel.open();world.set_primary_action(true)
+		_check(not world.has_active_harvest() and not _hold_begin(world,targets[0]) and not world.advance_harvest(60) and world.resources.snapshot()==before_menu,family+": menu captures input and prevents background gathering")
+		world.close_inventory();world.set_primary_action(false)
+		await _hold_aim(world,targets[0]);world.set_primary_action(true);_hold_begin(world,targets[0])
+		world.damage_player(100)
+		_check(not world.has_active_harvest() and not world.advance_harvest(60),family+": death immediately cancels harvesting")
+		world.creation.survival.respawn()
+		# Range/occlusion checks use actual production targeting, not fixture tokens.
+		world.set_primary_action(true);_hold_begin(world,targets[0]);world.advance_harvest(float(world._harvest["seconds"])*0.5)
+		var camera: Camera3D = world.player.get_camera();var eye: Vector3 = camera.global_position
+		camera.global_position+=Vector3.UP*20;camera.look_at(eye,Vector3.FORWARD)
+		_check(not world.advance_harvest(60) and not world.has_active_harvest(),family+": target leaving range cancels")
+		await _hold_aim(world,targets[0]);_hold_begin(world,targets[0])
+		var point: Vector3 = _hold_point(world,targets[0]);var blocker: Vector3i = Vector3i(camera.global_position.lerp(point,0.5).floor())
+		var voxel_tool: VoxelTool = world.terrain.get_voxel_tool();voxel_tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+		var old: int = voxel_tool.get_voxel(blocker);voxel_tool.set_voxel(blocker,11)
+		_check(not world.advance_harvest(60) and not world.has_active_harvest(),family+": actual voxel occlusion cancels")
+		voxel_tool.set_voxel(blocker,old)
+		await _hold_aim(world,targets[0]);_hold_begin(world,targets[0])
+		if source:
+			var original_source: Dictionary = world.creation._sources[0].duplicate(true)
+			world.creation._sources[0]["remaining"]-=1
+			_check(not world.advance_harvest(60) and not world.has_active_harvest(),family+": changed source record cancels the stale attempt")
+			world.creation._sources[0]=original_source
+		else:
+			voxel_tool.set_voxel(base,12)
+			_check(not world.advance_harvest(60) and not world.has_active_harvest(),family+": changed voxel identity cancels the stale attempt")
+			voxel_tool.set_voxel(base,11)
+		await _hold_aim(world,targets[0]);_hold_begin(world,targets[0])
+		camera.global_position+=Vector3(1000,0,1000);world.player.global_position+=Vector3(1000,0,1000)
+		for frame: int in 600:
+			await physics_frame
+			if not world.region_relevant(point):break
+		_check(not world.region_relevant(point) and not world.advance_harvest(60) and not world.has_active_harvest(),family+": actual chunk unloading cancels the attempt")
+		# C/F: full held work completes once, then the next target starts at zero.
+		await _hold_aim(world,targets[0]);_hold_begin(world,targets[0])
+		var content: StringName = &"leyforge:stone" if source else &"leyforge:oak_heartwood"
+		var quantity: int = 6 if source else 1;var total: int = world.resources.total(content)
+		var durability: int = int(world.resources.equipment.stack_at(0)["durability"])
+		_check(world.advance_harvest(60) and not world.has_active_harvest() and world.resources.total(content)==total+quantity and world.resources.equipment.stack_at(0)["durability"]==durability-1,family+": full hold performs exactly one conserved operation and one wear")
+		_check(not world.advance_harvest(60) and world.resources.total(content)==total+quantity,family+": cleared target cannot complete twice")
+		await _hold_aim(world,targets[1])
+		_check(_hold_begin(world,targets[1]) and world._harvest.get("work",-1)==0,family+": continuing held action can begin next target without releasing")
+		_check(world.advance_harvest(60) and world.resources.total(content)==total+2*quantity and world.resources.equipment.stack_at(0)["durability"]==durability-2,family+": consecutive held operations conserve exact output and wear")
+		world.set_primary_action(false)
+	world.free()
+
+func _hold_point(world: LeyforgeWave1Playground, target: Dictionary) -> Vector3:
+	if target.has("cell"):return Vector3(target["cell"])+Vector3.ONE*0.5
+	var p: Array = world.creation.source(target["source"])["position"]
+	return Vector3(float(p[0]),floorf(float(p[1]))+0.5,float(p[2]))
+
+func _hold_aim(world: LeyforgeWave1Playground, target: Dictionary) -> void:
+	var point: Vector3 = _hold_point(world,target)
+	world.player.global_position=point+Vector3(2.5,-0.45,0)
+	var camera: Camera3D = world.player.get_camera();camera.top_level=true
+	camera.global_position=point+Vector3(1.7,1 if target.has("source") else 0,0);camera.look_at(point,Vector3.UP)
+	for frame: int in 600:
+		await physics_frame
+		if world.region_relevant(point):break
+	world.creation_presenter.sync()
+	for frame: int in 4:await physics_frame
+	world.player._update_targeting()
+	_check(world.player.target_source()==target["source"] if target.has("source") else world.player.has_voxel_target() and world.player.get_target_cell()==target["cell"],"Focused held-action aim resolves actual target")
+
+func _hold_begin(world: LeyforgeWave1Playground, target: Dictionary) -> bool:
+	return world.begin_source_harvest(target["source"]) if target.has("source") else world.begin_harvest(target["cell"])

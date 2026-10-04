@@ -83,6 +83,7 @@ func _new_loop() -> void:
 	await _craft("craft_stone_pickaxe")
 	_equip("stone_pickaxe")
 	var pick: Dictionary=r.equipment.stack_at(0)
+	await _hold_source_demo(12)
 	await _gather(12)
 	await _gather(13)
 	_check(int(r.equipment.stack_at(0)["durability"])==int(pick["durability"])-2,"Mining capability and exact durability loss")
@@ -146,7 +147,10 @@ func _new_loop() -> void:
 	_world.close_inventory()
 	var previous: Dictionary=r.snapshot()
 	await _aim(_home+Vector3i(2,1,1))
+	var storage_camera: Camera3D = _player.get_camera();storage_camera.global_position=Vector3(_home+Vector3i(2,1,1))+Vector3(0.5,1.4,0.5);storage_camera.look_at(Vector3(_home+Vector3i(2,1,1))+Vector3.ONE*0.5,Vector3.FORWARD)
+	_held(true)
 	_check(not _world.begin_harvest(_home+Vector3i(2,1,1)) and r.snapshot()==previous,"Filled storage cannot be broken into lost contents")
+	_held(false)
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
 	_check(_world.detect_shelter(),"Inventory-built enclosure provides real shelter")
 	await _view_home()
@@ -258,12 +262,14 @@ func _gather(index: int) -> void:
 	_check(_player.target_source()==entry["instance"],"Crosshair/highlight resolves actual physical source")
 	var spec: Dictionary=_world.creation.source_definition(entry["source"])
 	var before: Dictionary=_world.creation.survival.snapshot()
+	_held(true)
 	_check(_player.try_break_target(),"LMB production path starts source gather: "+entry["source"])
 	if entry["source"]=="fallen_oak":
 		var seconds: float = float(_world._harvest.get("seconds",0))
 		_tree_times.append(seconds)
 		_check(not _world.advance_harvest(seconds/2) and _world.creation.source(entry["instance"])["remaining"]==entry["remaining"],"Tree remains before timed work completes")
 	_check(_world.advance_harvest(2.0),"Complete authorized timed source gathering")
+	_held(false)
 	if entry["source"]=="fallen_oak":
 		await _frames(2)
 		_check(not _world.creation_presenter._nodes.has(entry["instance"]),"Depleted tree removes trunk and canopy together; no ghost leaves")
@@ -276,8 +282,10 @@ func _mine(cell: Vector3i) -> void:
 	camera.look_at(Vector3(cell)+Vector3.ONE*0.5,Vector3.FORWARD);await _frames(2)
 	_player.global_position=Vector3(cell)+Vector3(2.5,2.05,0.5)
 	var id: StringName=_catalog.canonical_id_for_voxel_id(_tool.get_voxel(cell))
+	_held(true)
 	_check(_player.try_break_target(),"Player target starts timed voxel harvest")
 	_check(_world.advance_harvest(2.0),"Voxel harvest commits after work")
+	_held(false)
 	var drops: Array=_world.resources.drops()
 	_check(not drops.is_empty(),"Harvest physically represents its output")
 	for entry: Dictionary in drops:
@@ -529,7 +537,10 @@ func _check(condition: bool,message: String) -> void:
 func _recover_function(cell: Vector3i) -> void:
 	var original: String = _world.creation.object_at(cell)
 	await _aim(cell)
+	var camera: Camera3D = _player.get_camera();camera.global_position=Vector3(cell)+Vector3(0.5,1.4,0.5);camera.look_at(Vector3(cell)+Vector3.ONE*0.5,Vector3.FORWARD)
+	_held(true)
 	_check(_world.begin_harvest(cell) and _world.advance_harvest(2),"Empty functional block follows production recovery rule")
+	_held(false)
 	_check(_world.creation.object_at(cell).is_empty(),"Breaking removes durable functional identity")
 	for entry: Dictionary in _world.resources.drops():
 		_check(_world.resources.pickup(entry["instance"])==1 and entry["stack"]["content"]=="leyforge:lamp","Recovery drop returns exactly its crafted object")
@@ -609,7 +620,9 @@ func _drop_demo() -> void:
 	camera.global_position=Vector3(support)+Vector3(0.5,1.4,0.5)
 	camera.look_at(Vector3(support)+Vector3.ONE*0.5,Vector3.FORWARD)
 	_player.global_position=Vector3(support)+Vector3(2.5,2.05,0.5);await _frames(2)
+	_held(true)
 	_check(_player.try_break_target() and _world.advance_harvest(2) and _tool.get_voxel(support)==0,"LMB removes the actual terrain supporting a drop")
+	_held(false)
 	for entry: Dictionary in _world.resources.drops():
 		if prior.has(entry["instance"]):continue
 		var stack: Dictionary = entry["stack"]
@@ -704,6 +717,7 @@ func _tree_demonstration() -> void:
 	_check(_player.global_position.distance_to(before)>0.5 and _player.global_position.distance_to(Vector3(base))<before.distance_to(Vector3(base)),"Player walks toward a generated voxel tree using production movement")
 	for cell: Vector3i in LfeStarterTreeRules.cells(tree):
 		if cell.y>=base.y+2:_tree_kept.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:oak_heartwood" if LfeStarterTreeRules.cells(tree)[cell]==1 else "leyforge:oak_leaves"})
+	await _hold_voxel_demo(base)
 	await _chop_block(base,true)
 	var neighbour: Vector3i = base+Vector3i.UP
 	_check(_tool.get_voxel(neighbour)==11,"Mining the basal trunk leaves the adjacent trunk standing")
@@ -711,7 +725,9 @@ func _tree_demonstration() -> void:
 	var leaf: Vector3i = base+Vector3i(0,int(tree["height"])+1,0)
 	await _aim(leaf);_player.global_position=Vector3(base)+Vector3(2.5,0.05,0.5)
 	var resources: Dictionary = _world.resources.snapshot()
+	_held(true)
 	_check(_player.try_break_target() and _world.advance_harvest(2),"Top Oak Leaves voxel is individually targetable and breakable")
+	_held(false)
 	_check(_tool.get_voxel(leaf)==0 and _world.resources.snapshot()==resources,"Breaking a leaf yields no timber or item output")
 	_edits.append({"position":[leaf.x,leaf.y,leaf.z],"block":"leyforge:air"})
 	for index: int in range(_tree_kept.size()-1,-1,-1):
@@ -749,11 +765,11 @@ func _chop_logs(count: int) -> void:
 		for layer: int in 2:
 			var cell: Vector3i = base+Vector3i(0,layer,0)
 			if _world._voxel_id_at(cell)!=11:continue
-			await _chop_block(cell);left-=1
+			await _chop_block(cell,false,left>1);left-=1
 			if left==0:return
 	_check(false,"Enough real tree voxels exist for the fresh crafting progression")
 
-func _chop_block(cell: Vector3i, demonstrate: bool = false) -> void:
+func _chop_block(cell: Vector3i, demonstrate: bool = false, keep_held: bool = false) -> void:
 	await _aim(cell)
 	_player.global_position=Vector3(cell)+Vector3(2.5,0.05,0.5)
 	var camera: Camera3D = _player.get_camera();camera.global_position=Vector3(cell)+Vector3(1.7,0.5,0.5)
@@ -762,11 +778,14 @@ func _chop_block(cell: Vector3i, demonstrate: bool = false) -> void:
 	var neighbour: int = _tool.get_voxel(cell+Vector3i.UP)
 	var overrides: int = _world.world_save.overrides.count()
 	var equipment: Dictionary = _world.resources.equipment.stack_at(0)
+	_held(true)
 	_check(_player.target_source().is_empty() and _player.try_break_target(),"LMB targets a real Heartwood voxel through the normal terrain path")
 	var seconds: float = float(_world._harvest.get("seconds",0));var wear: bool = _world._harvest.get("wear",false)
 	_tree_times.append(seconds)
 	_check(not _world.advance_harvest(seconds/2) and _tool.get_voxel(cell)==11,"Partial chopping leaves the single trunk voxel intact")
 	_check(_world.advance_harvest(2) and _tool.get_voxel(cell)==0,"Completed chopping removes only the targeted trunk voxel")
+	if not keep_held:_held(false)
+	else:_check(Input.is_action_pressed("break_block"),"Continuous chopping retains held input across successive voxel attempts")
 	_check(_tool.get_voxel(cell+Vector3i.UP)==neighbour,"Chopping preserves the neighbouring trunk/canopy voxel")
 	if wear:_check(_world.resources.equipment.stack_at(0)["durability"]==equipment["durability"]-1,"Each correct axe block action costs exactly one durability")
 	var drops: Array = _world.resources.drops()
@@ -830,3 +849,44 @@ func _dense_stone_demonstration(index: int) -> void:
 	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Presentation inspection preserves source depletion, identities and conservation")
 	_report["dense_stone_presentation"]={"source":entry["source"],"instance":entry["instance"],"mesh_count":meshes.size(),"collision_count":collisions.size(),"size":[1,1,1],"remaining":entry["remaining"]}
 	await _capture("23_dense_stone_unit_cube.png")
+
+func _held(active: bool) -> void:
+	if active:Input.action_press("break_block")
+	else:Input.action_release("break_block")
+	_player.sync_primary_action_input()
+
+func _hold_voxel_demo(cell: Vector3i) -> void:
+	await _aim(cell)
+	var camera: Camera3D = _player.get_camera();camera.global_position=Vector3(cell)+Vector3(1.7,0.5,0.5)
+	camera.look_at(Vector3(cell)+Vector3.ONE*0.5,Vector3.UP)
+	_player.global_position=Vector3(cell)+Vector3(2.5,0.05,0.5)
+	await _hold_cancel_demo("voxel","24_hold_voxel_cancelled.png")
+
+func _hold_source_demo(index: int) -> void:
+	var entry: Dictionary = _world.creation.sources()[index-12]
+	var p: Array = entry["position"];var point: Vector3 = Vector3(float(p[0]),floorf(float(p[1]))+0.5,float(p[2]))
+	_player.global_position=point+Vector3(2.5,-0.45,0)
+	await _aim_point(point);await _drop_view(point)
+	await _hold_cancel_demo("source","25_hold_source_cancelled.png")
+
+func _hold_cancel_demo(family: String, frame: String) -> void:
+	var resources: Dictionary = _world.resources.snapshot();var creation: Dictionary = _world.creation.snapshot();var edits: int = _world.world_save.overrides.count()
+	Input.action_press("break_block");_player._handle_interaction_actions()
+	_check(_world.has_active_harvest(),"Real continuous-input adapter starts held "+family+" work")
+	_check(not _world.advance_harvest(float(_world._harvest.get("seconds",1))*0.25),"Short held "+family+" press does not complete")
+	# The release callback precedes GUI capture; it must clear authority immediately.
+	Input.action_release("break_block")
+	var released: InputEventMouseButton = InputEventMouseButton.new();released.button_index=MOUSE_BUTTON_LEFT;released.pressed=false
+	_player._input(released)
+	_check(not _world.has_active_harvest() and not _world.advance_harvest(60),"LMB release immediately cancels "+family+" work")
+	_check(_world.resources.snapshot()==resources and _world.creation.snapshot()==creation and _world.world_save.overrides.count()==edits,"Released "+family+" attempt retains exact block/source/output/durability state")
+	# Opening the actual inventory shell while held cancels the action too.
+	Input.action_press("break_block");_player._handle_interaction_actions()
+	_check(_world.has_active_harvest(),"A new held "+family+" attempt begins from zero")
+	_world.advance_harvest(float(_world._harvest.get("seconds",1))*0.25)
+	_key(KEY_I)
+	_check(_player.inventory_open and not _world.has_active_harvest() and not _world.advance_harvest(60),"Inventory immediately cancels held "+family+" work")
+	_key(KEY_I);_held(false)
+	_check(_world.resources.snapshot()==resources and _world.creation.snapshot()==creation,"Menu cancellation creates no background "+family+" output or wear")
+	_player.show_status("Hold LMB — release cancels gathering")
+	await _capture(frame)

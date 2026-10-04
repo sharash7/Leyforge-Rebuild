@@ -64,7 +64,7 @@ func _ready() -> void:
 	_build_target_highlight()
 	_instruction_label.text = (
 		"WASD move  |  Shift sprint  |  Space jump  |  1–9 / wheel hotbar\n"
-		+ "LMB gather/mine  |  RMB interact/place  |  F5 save  |  F10 save and quit\n"
+		+ "Hold LMB — gather/mine  |  RMB interact/place  |  F5 save  |  F10 save and quit\n"
 		+ "I inventory  |  E alternate interact  |  C inventory crafting  |  F consume\nQ drop one (Shift: stack)  |  Escape close/release"
 	)
 	if DisplayServer.get_name() != "headless" and not _playtest_mode:
@@ -92,6 +92,7 @@ func configure(
 
 func set_runtime_ready(ready: bool) -> void:
 	_runtime_ready = ready
+	if not ready and gameplay_authority!=null:gameplay_authority.set_primary_action(false)
 	if ready:
 		_set_status("Terrain ready", 1500)
 	else:
@@ -186,6 +187,15 @@ func show_status(message: String, duration_msec: int = 2500) -> void:
 	_set_status(message, duration_msec)
 
 
+# Release reaches authority even if a Control consumes the mouse event later.
+func _input(event: InputEvent) -> void:
+	if event.is_action_released("break_block") and gameplay_authority!=null:
+		gameplay_authority.set_primary_action(false)
+
+func sync_primary_action_input() -> void:
+	if gameplay_authority==null or development_selector:return
+	gameplay_authority.set_primary_action(Input.is_action_pressed("break_block") and not inventory_open and (_playtest_mode or Input.mouse_mode==Input.MOUSE_MODE_CAPTURED))
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not development_selector and gameplay_authority != null:
 		if event is InputEventKey and event.pressed and not event.echo:
@@ -221,6 +231,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 	if event.is_action_pressed("release_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if gameplay_authority!=null:gameplay_authority.set_primary_action(false)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -250,6 +261,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if inventory_open:
+		if gameplay_authority!=null:gameplay_authority.set_primary_action(false)
 		velocity = Vector3.ZERO
 		_update_debug_overlay()
 		return
@@ -301,9 +313,13 @@ func _handle_interaction_actions() -> void:
 		elif gameplay_authority != null:
 			gameplay_authority.drop_selected(Input.is_key_pressed(KEY_SHIFT))
 	if not _playtest_mode and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		if gameplay_authority!=null:gameplay_authority.set_primary_action(false)
 		return
-	if Input.is_action_just_pressed("break_block"):
-		try_break_target()
+	if development_selector:
+		if Input.is_action_just_pressed("break_block"):try_break_target()
+	elif gameplay_authority!=null:
+		sync_primary_action_input()
+		if Input.is_action_pressed("break_block") and not gameplay_authority.has_active_harvest():try_break_target()
 	if Input.is_action_just_pressed("place_block"):
 		try_place_target()
 
@@ -417,7 +433,7 @@ func _update_targeting() -> void:
 				if not _source_target.is_empty():
 					var entry: Dictionary = gameplay_authority.creation.source(_source_target)
 					var spec: Dictionary = gameplay_authority.creation.source_definition(entry["source"])
-					_context_text="%s — LMB gather (%d remaining)" % [spec["display_name"],int(entry["remaining"])]
+					_context_text="%s — Hold LMB gather (%d remaining)" % [spec["display_name"],int(entry["remaining"])]
 				else:
 					_context_text="Storage crate — RMB open"
 				return
@@ -431,7 +447,7 @@ func _update_targeting() -> void:
 	_target_highlight.scale=Vector3.ONE
 	_target_highlight.visible=true
 	var definition: Dictionary = _catalog.definition_for_voxel_id(_voxel_tool.get_voxel(_target_cell))
-	_context_text=definition.get("display_name","")+" — LMB gather"
+	_context_text=definition.get("display_name","")+" — Hold LMB gather"
 	if definition.get("function","") in ["kiln","storage","rest","workbench"]:
 		_context_text=definition["display_name"]+" — RMB interact"
 

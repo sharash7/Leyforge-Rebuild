@@ -105,6 +105,7 @@ func open_context(id: String = "", focus_crafting: bool = false) -> bool:
 	_label(_body,"Click source, then destination. Right-click splits half; Shift-click quick transfers. Take crafting output to craft once.",12)
 	var close_button: Button = Button.new();close_button.text="Close [Escape] — returns staged crafting items"
 	close_button.pressed.connect(_world.close_inventory);_body.add_child(close_button)
+	_world.set_primary_action(false)
 	_panel.show();_hotbar.hide();_world.player.inventory_open=true
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	_refresh()

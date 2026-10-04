@@ -17,6 +17,7 @@ var creation: LfeCreationState
 var creation_presenter: LeyforgeCreationPresenter
 var creation_panel: LeyforgeCreationPanel
 var _harvest: Dictionary = {}
+var _primary_action_active: bool = false
 var _sheltered: bool = false
 var _shelter_timer: float = 0.0
 var _resting: bool = false
@@ -525,6 +526,7 @@ func _physics_process(delta: float) -> void:
 	# Rendered drivers advance this same simulation seam with fixed durations,
 	# so restart equality is independent of startup/render frame counts.
 	if not OS.get_cmdline_user_args().has("--wave4-playtest"):
+		player.sync_primary_action_input()
 		advance_creation(delta)
 
 func advance_creation(seconds: float) -> bool:
@@ -541,7 +543,7 @@ func advance_creation(seconds: float) -> bool:
 		player.velocity = Vector3.ZERO
 		creation.survival.respawn()
 		_resting = false
-		_harvest.clear()
+		set_primary_action(false)
 		player.show_status("Recovered at safe spawn; inventory retained",5000)
 	if not _harvest.is_empty():
 		advance_harvest(seconds)
@@ -552,11 +554,27 @@ func advance_creation(seconds: float) -> bool:
 func can_sprint() -> bool:
 	return creation != null and creation.survival.alive() and float(creation.survival.snapshot()["stamina"]) >= 1 and float(creation.survival.snapshot()["fatigue"]) < 100
 
+# Explicit input/authority seam: begin, held continuation and immediate cancel.
+# Work is transient and never carried into another target or attempt.
+func set_primary_action(active: bool) -> void:
+	_primary_action_active=active and player!=null and not player.inventory_open and creation!=null and creation.survival.alive()
+	if not _primary_action_active:
+		if not _harvest.is_empty():player.show_status("Gathering cancelled")
+		_harvest.clear()
+
+func has_active_harvest() -> bool:
+	return not _harvest.is_empty()
+
+func _harvest_input_valid() -> bool:
+	return _primary_action_active and _runtime_is_ready and player!=null and not player.inventory_open and creation.survival.alive()
+
 func begin_harvest(cell: Vector3i) -> bool:
+	if not _harvest_input_valid() or has_active_harvest():return false
+	player._update_targeting()
 	var tool: VoxelTool = terrain.get_voxel_tool()
 	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
-	if not _cell_interaction_valid(cell,tool) or not creation.can_remove(cell) or not creation.survival.alive():
-		player.show_status("Harvest blocked; empty station/storage or recover health")
+	if not player.target_source().is_empty() or not player.has_voxel_target() or player.get_target_cell()!=cell or not _cell_interaction_valid(cell,tool) or not creation.can_remove(cell):
+		player.show_status("Harvest blocked; keep targeting a valid block")
 		return false
 	var block: int = tool.get_voxel(cell)
 	var rule: Dictionary = block_catalog.definition_for_voxel_id(block).get("harvest",{})
@@ -566,44 +584,48 @@ func begin_harvest(cell: Vector3i) -> bool:
 		return false
 	_harvest = effect
 	_harvest.merge({"cell":cell,"block":block,"work":0.0})
-	player.show_status("Gathering %.1f s" % float(effect["seconds"]))
+	player.show_status("Gathering... hold LMB (%.2f s)" % float(effect["seconds"]))
 	_resting = false
 	return true
 
 func begin_source_harvest(id: String) -> bool:
+	if not _harvest_input_valid() or has_active_harvest():return false
 	var entry: Dictionary = creation.source(id)
-	if entry.is_empty() or int(entry["remaining"]) <= 0 or not source_target_valid(id) or not creation.survival.alive():
-		return false
+	if entry.is_empty() or int(entry["remaining"]) <= 0 or not source_target_valid(id):return false
 	var effect: Dictionary = LfeHarvestRules.evaluate(creation.source_definition(entry["source"]),LfeHarvestRules.tool(resources),block_catalog)
 	if effect.is_empty():
 		player.show_status("This resource needs the matching tool capability")
 		return false
 	_harvest = effect
-	_harvest.merge({"source":id,"work":0.0})
-	player.show_status("Gathering %.1f s" % float(effect["seconds"]))
+	_harvest.merge({"source":id,"source_snapshot":entry,"work":0.0})
+	player.show_status("Gathering... hold LMB (%.2f s)" % float(effect["seconds"]))
 	_resting = false
 	return true
 
-func advance_harvest(seconds: float) -> bool:
-	if _harvest.is_empty() or not LfeWorldSave._finite_in_range(seconds,60) or seconds < 0:
-		return false
-	var equipped: Dictionary = LfeHarvestRules.tool(resources)
-	if _harvest["instance"] != equipped.get("instance","") or not creation.survival.alive():
-		_harvest.clear()
-		return false
+func _harvest_target_valid() -> bool:
+	if not _harvest_input_valid():return false
+	var rule: Dictionary
 	if _harvest.has("source"):
 		var source: Dictionary = creation.source(_harvest["source"])
-		if source.is_empty() or not source_target_valid(_harvest["source"]):
-			_harvest.clear()
-			return false
+		if source!=_harvest["source_snapshot"] or not source_target_valid(_harvest["source"]):return false
+		rule=creation.source_definition(source["source"])
 	else:
-		var tool: VoxelTool = terrain.get_voxel_tool()
-		if not _cell_interaction_valid(_harvest["cell"],tool) or tool.get_voxel(_harvest["cell"]) != _harvest["block"]:
-			_harvest.clear()
-			return false
-	_harvest["work"] = float(_harvest["work"]) + seconds
-	if float(_harvest["work"]) < float(_harvest["seconds"]):
+		player._update_targeting()
+		var tool: VoxelTool = terrain.get_voxel_tool();tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+		if not player.target_source().is_empty() or not player.has_voxel_target() or player.get_target_cell()!=_harvest["cell"] or not _cell_interaction_valid(_harvest["cell"],tool) or tool.get_voxel(_harvest["cell"])!=_harvest["block"] or not creation.can_remove(_harvest["cell"]):return false
+		rule=block_catalog.definition_for_voxel_id(_harvest["block"])["harvest"]
+	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(resources),block_catalog)
+	return not effect.is_empty() and effect["instance"]==_harvest["instance"] and effect["wear"]==_harvest["wear"] and is_equal_approx(float(effect["seconds"]),float(_harvest["seconds"]))
+
+func advance_harvest(seconds: float) -> bool:
+	if _harvest.is_empty() or not LfeWorldSave._finite_in_range(seconds,60) or seconds < 0:return false
+	if not _harvest_target_valid():
+		_harvest.clear()
 		return false
+	_harvest["work"] = float(_harvest["work"]) + seconds
+	if float(_harvest["work"]) < float(_harvest["seconds"]):return false
+	# One completion per call. Excess time is discarded; a later input step may
+	# begin another zero-work attempt while the physical action remains held.
 	var result: bool = false
 	if _harvest.has("source"):
 		result = creation.harvest_source(_harvest["source"],resources)
@@ -614,6 +636,7 @@ func advance_harvest(seconds: float) -> bool:
 		_harvest.clear()
 	player.show_status("Harvest complete" if result else "Harvest rejected; resources unchanged")
 	return result
+
 
 func craft_recipe(id: String) -> bool:
 	var result: bool = creation.survival.alive() and inventory_panel.crafting!=null and inventory_panel.context_valid() and inventory_panel.crafting.take(resources.inventory,id)
@@ -699,7 +722,9 @@ func transfer_object(id: String, channel: String, slot: int, quantity: int, with
 
 
 func damage_player(amount: float) -> bool:
-	return _runtime_is_ready and creation.survival.damage(amount)
+	var result: bool = _runtime_is_ready and creation.survival.damage(amount)
+	if result and not creation.survival.alive():set_primary_action(false)
+	return result
 
 
 # Voxel data relevance is the shared materialisation authority for local entities.

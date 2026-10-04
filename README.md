@@ -53,17 +53,18 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 ## Current playable build
 
 Wave 4 - Survival & Creation is the current implemented slice: deterministic
-streamed voxel terrain, conserved inventory/drops/storage, timed gathering,
+streamed voxel terrain, conserved inventory/drops/storage, gathering while holding LMB,
 stateful tools and durability, atomic canonical crafting, a fuelled kiln,
 functional construction and shelter/rest, bounded survival and save v3 with
 nondestructive v1/v2 migration.
 
 See `docs/WAVE_4_SURVIVAL_AND_CREATION.md` for the connected loop, controls,
 architecture, verification and intentional limits. Wave 0-3 regression gates
-remain active. The owner has accepted Wave 4 subject to the final Dense Stone
-presentation spot-check in `0.4.4-wave4`; see
-`docs/WAVE_4_DENSE_STONE_PRESENTATION_HOTFIX.md`. Repair 3's real generated voxel
-trees, placeable Heartwood and grounded drops remain documented in
+remain active. Wave 4 is otherwise owner accepted; the hold-LMB interaction
+hotfix in `0.4.5-wave4` awaits its owner spot-check. See
+`docs/WAVE_4_HOLD_GATHER_INTERACTION_HOTFIX.md`; the Dense Stone unit-cube repair
+remains documented in `docs/WAVE_4_DENSE_STONE_PRESENTATION_HOTFIX.md`. Repair 3's
+real generated voxel trees, placeable Heartwood and grounded drops remain documented in
 `docs/WAVE_4_MANUAL_ACCEPTANCE_REPAIR_3.md`. The unified 2x2 Inventory / 3x3
 Workbench crafting remains. New worlds use worldgen v2; existing v1 worlds
 retain their original generation. Wave 5 has not begun.

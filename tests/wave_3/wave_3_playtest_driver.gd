@@ -396,10 +396,16 @@ func _check(condition: bool, message: String) -> void:
 
 
 func _harvest_target() -> bool:
+	Input.action_press("break_block");_player.sync_primary_action_input()
+	_player._update_targeting()
+	var cell: Vector3i = _player.get_target_cell()
 	if not _player.try_break_target():
+		Input.action_release("break_block");_player.sync_primary_action_input()
 		return false
 	for frame: int in 180:
 		await get_tree().physics_frame
 		if _world._harvest.is_empty():
-			return _player._voxel_tool.get_voxel(_player.get_target_cell()) == _catalog.get_voxel_id(&"leyforge:air")
+			Input.action_release("break_block");_player.sync_primary_action_input()
+			return _player._voxel_tool.get_voxel(cell) == _catalog.get_voxel_id(&"leyforge:air")
+	Input.action_release("break_block");_player.sync_primary_action_input()
 	return false
