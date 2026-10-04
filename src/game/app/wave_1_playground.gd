@@ -230,7 +230,7 @@ func _build_environment() -> void:
 
 func _build_terrain() -> void:
 	_generator = LfeWave1TerrainGenerator.new()
-	_generator.configure(active_seed, block_catalog)
+	_generator.configure(active_seed, block_catalog,world_save.worldgen_version)
 	_generator.set_override_store(world_save.overrides)
 
 	var mesher: VoxelMesherBlocky = VoxelMesherBlocky.new()
@@ -395,7 +395,7 @@ func _build_resources() -> void:
 	inventory_panel = LeyforgeInventoryPanel.new()
 	add_child(inventory_panel)
 	inventory_panel.configure(self)
-	if not creation.initialize_sources(active_seed):
+	if not creation.initialize_sources(active_seed,world_save.worldgen_version):
 		_fail_startup("Invalid gathering source definitions")
 		return
 	creation_presenter = LeyforgeCreationPresenter.new()
@@ -445,6 +445,7 @@ func drop_selected(whole_stack: bool = false) -> bool:
 	if id.is_empty():
 		player.show_status("Drop rejected")
 		return false
+	resources.ground_drop(id,drop_rest_position)
 	resource_presenter.delay_pickup(id)
 	resource_presenter.sync()
 	player.show_status("Dropped resource")
@@ -463,6 +464,7 @@ func break_cell(cell: Vector3i) -> bool:
 		return false
 	var air: int = block_catalog.get_voxel_id(&"leyforge:air")
 	var position: Vector3 = Vector3(cell) + Vector3.ONE * 0.5
+	var prior_drops: Array = resources.drops().map(func(entry: Dictionary)->String:return entry["instance"])
 	var success: bool = resources.break_to_drop(block_catalog.canonical_id_for_voxel_id(previous), position,
 		func() -> Error: return _commit_voxel(cell, air, tool), block_catalog.definition_for_voxel_id(previous)["harvest"]["outputs"])
 	if success:
@@ -471,8 +473,10 @@ func break_cell(cell: Vector3i) -> bool:
 		if _harvest.get("wear",false):
 			LfeHarvestRules.wear(resources, _harvest["instance"])
 		_harvest.clear()
-		if not resources.drops().is_empty():
-			resource_presenter.delay_pickup(String(resources.drops().back()["instance"]))
+		for entry: Dictionary in resources.drops():
+			if entry["instance"] not in prior_drops:
+				resources.ground_drop(entry["instance"],drop_rest_position)
+				resource_presenter.delay_pickup(entry["instance"])
 		resource_presenter.sync()
 		player.show_status("Broke %s" % block_catalog.display_name_for_voxel_id(previous))
 	else:
@@ -759,3 +763,18 @@ func drop_path_clear(a: Vector3,b: Vector3) -> bool:
 		if block_catalog.is_solid_voxel(tool.get_voxel(Vector3i(point.floor()))):
 			return false
 	return true
+
+
+# Resting centre = support top + 0.125m half-cube + 0.05m clearance.
+# No loaded support within the bounded probe leaves the record for a later settle.
+func drop_rest_position(position: Vector3) -> Variant:
+	var tool: VoxelTool = terrain.get_voxel_tool();tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	var start: Vector3i = Vector3i(position.floor())
+	for depth: int in 64:
+		var cell: Vector3i = start-Vector3i(0,depth,0)
+		if not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)):return null
+		if block_catalog.is_solid_voxel(tool.get_voxel(cell)):
+			var centre: Vector3 = Vector3(position.x,cell.y+1.175,position.z)
+			if not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(Vector3i(centre.floor()))):return null
+			return centre
+	return null

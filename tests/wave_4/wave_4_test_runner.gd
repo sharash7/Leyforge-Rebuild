@@ -32,6 +32,8 @@ func _run() -> void:
 	_survival()
 	_state()
 	_persistence()
+	_voxel_trees()
+	_grounded_drops()
 	var report: Dictionary = {"passed":_failures.is_empty(),"checks":_checks,"failures":_failures,"runner":Engine.get_version_info()["string"],"property_seed":928143,"property_steps":300}
 	_write(_out.path_join("focused.json"),JSON.stringify(report,"\t",true,true))
 	for failure: String in _failures:
@@ -309,6 +311,7 @@ func _persistence() -> void:
 	LfeItemTransactions.add(r.inventory,&"leyforge:oak_heartwood",5)
 	var state: LfeCreationState=LfeCreationState.new(_catalog)
 	state.initialize_sources(seed);state.survival.damage(12)
+	_check(state.harvest_source(state.sources()[0]["instance"],r),"Legacy v1 depletion is included in the saved compatibility fixture")
 	var cell: Vector3i=Vector3i(3,21,3)
 	state.add_object(&"leyforge:kiln",cell,3)
 	var station: LfeWorkstation=state.station(state.object_at(cell))
@@ -317,10 +320,11 @@ func _persistence() -> void:
 	station.start("leyforge:charcoal_burn");station.advance(3)
 	var world: LfeWorldSave=LfeWorldSave.new()
 	_check(world.open_world("current",seed,true,_catalog,_root)==OK,"Current world opens")
+	world.worldgen_version=1 # This fixture represents existing worldgen-v1 Wave 4 state.
 	world.record_voxel_edit(cell,_catalog.get_voxel_id(&"leyforge:kiln"),0)
 	_check(world.save(player,r.snapshot(),state.snapshot())==OK,"Current complete state atomic save")
 	var loaded: LfeWorldSave=LfeWorldSave.new()
-	_check(loaded.open_world("current",seed,true,_catalog,_root)==OK and loaded.creation_state==state.snapshot() and loaded.resource_state==r.snapshot(),"Complete save v3 exact reload")
+	_check(loaded.open_world("current",seed,true,_catalog,_root)==OK and loaded.creation_state==state.snapshot() and loaded.resource_state==r.snapshot() and loaded.worldgen_version==1,"Complete historical worldgen-v1 save v3 exact reload")
 	var original: String=FileAccess.get_file_as_string(world.get_primary_path())
 	var envelope: Dictionary=JSON.parse_string(original)
 	var payload: Dictionary=JSON.parse_string(envelope["payload_json"])
@@ -487,3 +491,112 @@ func _grid_matching() -> void:
 	_check(state.add_object(&"leyforge:workbench",Vector3i(2,30,2),0) and state.can_remove(Vector3i(2,30,2)),"Workbench has no persistent hidden staging inventory")
 	var restored: LfeCreationState = LfeCreationState.new(_catalog)
 	_check(restored.restore(state.snapshot()) and restored.snapshot()==state.snapshot(),"Workbench persists identity/orientation without new save version")
+
+func _voxel_trees() -> void:
+	var seed: int = 184552221
+	var v1: LfeWave1TerrainGenerator = LfeWave1TerrainGenerator.new();v1.configure(seed,_catalog,1)
+	var v2: LfeWave1TerrainGenerator = LfeWave1TerrainGenerator.new();v2.configure(seed,_catalog,2)
+	_check(_catalog.placeable_voxel(&"leyforge:oak_heartwood")==11 and _catalog.content_definition(&"leyforge:oak_heartwood")["kind"]=="block","Existing Heartwood ID resolves one placeable block projection")
+	_check(not _catalog.is_inventory_content(&"leyforge:oak_leaves") and _catalog.definition_for_id(&"leyforge:oak_leaves")["harvest"]["outputs"].is_empty(),"Real leaves have no timber or collectible output")
+	# Historical baseline pins, plus base terrain comparisons at signed coordinates.
+	for pair: Array in [[Vector3i(0,18,0),0],[Vector3i(0,17,0),1],[Vector3i(0,16,0),2],[Vector3i(0,13,0),3]]:
+		_check(v1.sample_voxel_id(pair[0])==pair[1],"Historical v1 voxel pin "+str(pair[0]))
+	for x: int in [-129,-17,-1,0,16,127,257]:
+		for z: int in [-96,-1,0,31,128]:
+			var height: int = LfeWave1TerrainRules.height_at(seed,x,z)
+			for y: int in [height-4,height-1,height]:
+				_check(v2.sample_voxel_id(Vector3i(x,y,z))==v1.sample_voxel_id(Vector3i(x,y,z)),"v2 preserves the signed-coordinate base terrain")
+	var trees: Array[Dictionary] = LfeStarterTreeRules.candidates(seed,Vector2i(-40,-40),Vector2i(40,40))
+	_check(trees.size()>15 and trees==LfeStarterTreeRules.candidates(seed,Vector2i(-40,-40),Vector2i(40,40)),"Useful woodland density is repeated deterministically")
+	_check(trees!=LfeStarterTreeRules.candidates(seed+1,Vector2i(-40,-40),Vector2i(40,40)),"Different seed changes spatial candidates")
+	_check(LfeStarterTreeRules.candidates(seed,Vector2i(300,-350),Vector2i(380,-270)).size()>10,"Trees continue outside starter region at signed distant coordinates")
+	var heights: Dictionary = {};var sides: Dictionary = {};var boundaries: Dictionary = {}
+	for tree: Dictionary in trees:
+		var base: Vector3i = tree["base"];heights[tree["height"]]=true;sides[base.x<0]=true
+		_check(v1.sample_voxel_id(base)==0 and v2.sample_voxel_id(base)==11 and v2.sample_voxel_id(base+Vector3i.DOWN)==1,"Grass-supported individual Heartwood trunk")
+		var cells: Dictionary = LfeStarterTreeRules.cells(tree);var all_match: bool = true
+		for cell: Vector3i in cells:all_match=all_match and v1.sample_voxel_id(cell)==0 and v2.sample_voxel_id(cell)==(11 if cells[cell]==1 else 12)
+		_check(all_match,"All generated trunk/canopy cells are real voxels, absent from v1")
+	for tree: Dictionary in LfeStarterTreeRules.candidates(seed,Vector2i(-160,-160),Vector2i(160,160)):
+		var base: Vector3i = tree["base"]
+		if not boundaries.has(base.x<0) and posmod(base.x,16)+int(tree["radius"])>=16:boundaries[base.x<0]=tree
+	_check(heights.size()==3 and sides.size()==2,"Deterministic height variants occur on positive and negative coordinates")
+	_check(boundaries.size()==2,"Natural canopies cross positive and negative chunk boundaries")
+	for boundary: Dictionary in boundaries.values():
+		var base: Vector3i = boundary["base"];var bx: int = floori(float(base.x)/16)*16;var bz: int = floori(float(base.z)/16)*16
+		var origins: Array[Vector3i] = []
+		for z: int in [bz-16,bz,bz+16]:
+			for x: int in [bx-16,bx,bx+16]:
+				for y: int in [0,16]:origins.append(Vector3i(x,y,z))
+		var forward: Dictionary = _generated_tree_cells(v2,origins)
+		origins.reverse();var backward: Dictionary = _generated_tree_cells(v2,origins)
+		_check(forward==backward,"Opposite chunk generation order yields identical boundary trees")
+		var expected: Dictionary = {}
+		for tree: Dictionary in LfeStarterTreeRules.candidates(seed,Vector2i(bx-16,bz-16),Vector2i(bx+31,bz+31)):
+			var cells: Dictionary = LfeStarterTreeRules.cells(tree)
+			for cell: Vector3i in cells:
+				if cell.x>=bx-16 and cell.x<bx+32 and cell.y>=0 and cell.y<32 and cell.z>=bz-16 and cell.z<bz+32:expected[cell]=11 if cells[cell]==1 else 12
+		_check(forward==expected,"Chunk meshes contain full contributions from neighbouring candidate cells without seams")
+	var legacy: LfeCreationState = LfeCreationState.new(_catalog);legacy.initialize_sources(seed,1)
+	var modern: LfeCreationState = LfeCreationState.new(_catalog);modern.initialize_sources(seed,2)
+	_check(legacy.sources().size()==20 and modern.sources().size()==8 and modern.sources().all(func(v:Dictionary)->bool:return v["source"]!="fallen_oak"),"v2 creates no legacy timber sources; v1 retains its exact layout")
+	_check(modern.validate_source_layout(seed,2) and not modern.validate_source_layout(seed,1) and legacy.validate_source_layout(seed,1) and not legacy.validate_source_layout(seed,2),"Source validation is bound to stored worldgen version")
+	var base: Vector3i = trees[0]["base"]
+	var r: LfeResourceState = LfeResourceState.new(_catalog)
+	var world: LfeWorldSave = LfeWorldSave.new();world.open_world("voxel_trees",seed,true,_catalog,_root)
+	_check(world.worldgen_version==2,"New worlds choose worldgen v2")
+	var outputs: Array = _catalog.definition_for_id(&"leyforge:oak_heartwood")["harvest"]["outputs"]
+	_check(r.break_to_drop(&"leyforge:oak_heartwood",Vector3(base)+Vector3.ONE*0.5,func()->Error:return world.record_voxel_edit(base,0,11),outputs),"One trunk break records one sparse air override")
+	_check(r.drops().size()==1 and r.drops()[0]["stack"]=={"content":"leyforge:oak_heartwood","quantity":1} and world.overrides.count()==1,"One trunk voxel yields exactly one Heartwood drop")
+	v2.set_override_store(world.overrides)
+	var origin: Vector3i = Vector3i(floori(float(base.x)/16)*16,floori(float(base.y)/16)*16,floori(float(base.z)/16)*16)
+	var buffer: VoxelBuffer = VoxelBuffer.new();buffer.create(16,16,16);v2._generate_block(buffer,origin,0)
+	var local: Vector3i = base-origin
+	_check(buffer.get_voxel(local.x,local.y,local.z,VoxelBuffer.CHANNEL_TYPE)==0 and world.overrides.voxel_id_at(base+Vector3i.UP,v2.sample_voxel_id(base+Vector3i.UP))==11,"Mined trunk stays air while its neighbour remains Heartwood")
+	r.pickup(r.drops()[0]["instance"])
+	var placed: Vector3i = base+Vector3i(4,8,0)
+	_check(v2.sample_voxel_id(placed)==0 and r.place_from_inventory(0,func()->Error:return world.record_voxel_edit(placed,11,0)) and r.inventory.total(&"leyforge:oak_heartwood")==0,"Same Heartwood inventory places exactly one voxel")
+	var player: Dictionary = {"position":[0.5,18.05,0.5],"yaw":0.0,"pitch":0.0,"selected_block":"leyforge:oak_heartwood"}
+	_check(world.save(player,r.snapshot())==OK,"Mined and placed tree overrides save without serialising untouched trees")
+	var loaded: LfeWorldSave = LfeWorldSave.new()
+	_check(loaded.open_world("voxel_trees",seed,true,_catalog,_root)==OK and loaded.worldgen_version==2 and loaded.overrides.count()==2 and loaded.overrides.voxel_id_at(base,11)==0 and loaded.overrides.voxel_id_at(placed,0)==11,"Fresh v2 reload preserves mined and placed wood exactly")
+	_check(r.break_to_drop(&"leyforge:oak_heartwood",Vector3(placed),func()->Error:return loaded.record_voxel_edit(placed,0,0),outputs) and r.pickup(r.drops()[0]["instance"])==1 and r.inventory.total(&"leyforge:oak_heartwood")==1 and loaded.overrides.count()==1,"Re-mining placed wood returns exactly once and clears the redundant override")
+	var rule: Dictionary = _catalog.definition_for_id(&"leyforge:oak_heartwood")["harvest"]
+	var manual: Dictionary = LfeHarvestRules.evaluate(rule,{},_catalog)
+	var wood: Dictionary = LfeHarvestRules.evaluate(rule,LfeItemInstance.create(&"leyforge:wooden_axe",_catalog),_catalog)
+	var stone: Dictionary = LfeHarvestRules.evaluate(rule,LfeItemInstance.create(&"leyforge:stone_axe",_catalog),_catalog)
+	_check(manual["seconds"]>wood["seconds"] and wood["seconds"]>stone["seconds"] and not manual["wear"] and wood["wear"] and stone["wear"],"Per-voxel chopping retains manual/wood/Stone speed and durability rules")
+
+func _generated_tree_cells(generator: LfeWave1TerrainGenerator, origins: Array[Vector3i]) -> Dictionary:
+	var result: Dictionary = {}
+	for origin: Vector3i in origins:
+		var buffer: VoxelBuffer = VoxelBuffer.new();buffer.create(16,16,16);generator._generate_block(buffer,origin,0)
+		for z: int in 16:
+			for y: int in 16:
+				for x: int in 16:
+					var value: int = buffer.get_voxel(x,y,z,VoxelBuffer.CHANNEL_TYPE)
+					if value in [11,12]:result[origin+Vector3i(x,y,z)]=value
+	return result
+
+func _grounded_drops() -> void:
+	var r: LfeResourceState = LfeResourceState.new(_catalog)
+	LfeItemTransactions.add(r.inventory,&"leyforge:oak_heartwood",3)
+	var id: String = r.drop_from_inventory(0,1,Vector3(0,8,0))
+	var before: Dictionary = r.drop(id)
+	var flat: Callable = func(p:Vector3)->Variant:return Vector3(p.x,1.175,p.z)
+	_check(r.ground_drop(id,flat) and is_equal_approx(float(r.drop(id)["position"][1]),1.175) and r.drop(id)["position"][0]==0 and r.drop(id)["position"][2]==0 and r.drop(id)["stack"]==before["stack"] and r.drop(id)["instance"]==id,"Spawn settling changes only logical resting position")
+	before=r.snapshot()
+	_check(not r.settle_drops(func(_p:Vector3)->bool:return false,flat) and r.snapshot()==before,"Unloaded drops do not settle against unavailable terrain")
+	_check(not r.ground_drop(id,func(_p:Vector3)->Variant:return null) and r.snapshot()==before,"Missing loaded support retains safe position for later settling")
+	_check(r.ground_drop(id,func(p:Vector3)->Variant:return Vector3(p.x,-0.825,p.z)) and r.drop(id)["stack"]==before["drops"][0]["stack"],"Support removal resettles downward without losing matter")
+	var ledges: LfeResourceState = LfeResourceState.new(_catalog);LfeItemTransactions.add(ledges.inventory,&"leyforge:stone",2)
+	ledges.drop_from_inventory(0,1,Vector3(0,3.175,0));ledges.drop_from_inventory(0,1,Vector3(0.5,1.175,0))
+	before=ledges.snapshot()
+	for tick: int in 20:ledges.advance_drop_clusters(1,func(_p:Vector3)->bool:return true,func(_a:Vector3,_b:Vector3)->bool:return true)
+	_check(ledges.snapshot()==before and ledges.total(&"leyforge:stone")==2,"Different ledges do not attract upward or merge through air")
+	LfeItemTransactions.add(r.inventory,&"leyforge:wooden_axe",1)
+	var slot: int = _slot(r.inventory,&"leyforge:wooden_axe")
+	var tool: Dictionary = r.inventory.stack_at(slot)
+	var tool_drop: String = r.drop_from_inventory(slot,1,Vector3(2,8,0))
+	r.ground_drop(tool_drop,flat)
+	_check(r.drop(tool_drop)["stack"]==tool,"Stateful item grounding preserves instance identity and durability")

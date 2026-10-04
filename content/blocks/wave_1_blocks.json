@@ -280,24 +280,56 @@
         ]
       },
       "function": "workbench"
-    }
-  ],
-  "items": [
+    },
     {
       "id": "leyforge:oak_heartwood",
       "display_name": "Oak Heartwood",
-      "color": "#865329FF",
-      "kind": "item",
+      "color": "#86552FFF",
+      "kind": "block",
       "inventory_capable": true,
       "stack_limit": 64,
-      "placeable": false,
+      "placeable": true,
       "equipment_slots": [],
-      "world_visual": {
-        "form": "oak_log",
-        "log_color": "#86552FFF",
-        "leaf_color": "#447C39FF"
+      "voxel_id": 11,
+      "solid": true,
+      "breakable": true,
+      "development_placeable": false,
+      "drop_content": "leyforge:oak_heartwood",
+      "harvest": {
+        "class": "woodcutting",
+        "capability": 0,
+        "seconds": 1.0,
+        "outputs": [
+          {
+            "content": "leyforge:oak_heartwood",
+            "quantity": 1
+          }
+        ]
       }
     },
+    {
+      "id": "leyforge:oak_leaves",
+      "voxel_id": 12,
+      "display_name": "Oak Leaves",
+      "color": "#447C39FF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": false,
+      "kind": "block",
+      "inventory_capable": false,
+      "stack_limit": 0,
+      "placeable": false,
+      "equipment_slots": [],
+      "drop_content": "",
+      "harvest": {
+        "class": "manual",
+        "capability": 0,
+        "seconds": 0.25,
+        "outputs": []
+      }
+    }
+  ],
+  "items": [
     {
       "id": "leyforge:charcoal",
       "display_name": "Charcoal",

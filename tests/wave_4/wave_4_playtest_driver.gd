@@ -39,7 +39,7 @@ func _run() -> void:
 		"M1","M2":await _migration()
 		"N1","N2":await _migration_restart()
 		_:_check(false,"Unknown acceptance phase")
-	_report.merge({"phase":_phase,"checks":_checks,"passed":_failures.is_empty(),"failures":_failures,"world_id":_world.world_save.world_id,"seed":_world.active_seed,"runner":Engine.get_version_info()["string"],"setup_only":["Camera/viewer and player positioning at test interaction cells","Controlled environmental health damage command","Fixed-duration calls to the production simulation seam"],"state_injection":false,"survival_profile":_world.creation.survival.profile_name,"survival_acceleration":false,"tree_work_seconds":_tree_times})
+	_report.merge({"phase":_phase,"checks":_checks,"passed":_failures.is_empty(),"failures":_failures,"world_id":_world.world_save.world_id,"seed":_world.active_seed,"runner":Engine.get_version_info()["string"],"setup_only":["Camera/viewer and player positioning at test interaction cells","Controlled environmental health damage command","Fixed-duration calls to the production simulation seam"],"state_injection":false,"survival_profile":_world.creation.survival.profile_name,"survival_acceleration":false,"tree_work_seconds":_tree_times,"worldgen_version":_world.world_save.worldgen_version})
 	_write_report()
 	for failure: String in _failures:push_error("Wave 4 rendered %s: %s" % [_phase,failure])
 	print("WAVE_4_RENDERED_%s_%s checks=%d" % [_phase,"PASS" if _failures.is_empty() else "FAIL",_checks])
@@ -56,7 +56,8 @@ func _new_loop() -> void:
 	Input.action_release("move_forward");Input.action_release("sprint")
 	await _frames(4);_player.set_runtime_ready(false)
 	_check(_player.global_position.distance_to(origin)>0.5 and float(_world.creation.survival.snapshot()["stamina"])<100,"Production movement and stamina exertion")
-	await _gather(0)
+	await _tree_demonstration()
+	await _chop_logs(6)
 	_key(KEY_I)
 	_check(_world.inventory_panel.crafting!=null and _world.inventory_panel.crafting.size==2 and _world.inventory_panel._panel.visible,"I opens backpack/hotbar/equipment and personal grid in one shell")
 	await _capture("02_crafting.png")
@@ -72,7 +73,7 @@ func _new_loop() -> void:
 	await _craft("split_oak_sticks")
 	await _craft("craft_wooden_axe")
 	_equip("wooden_axe")
-	await _gather(1)
+	await _chop_logs(6)
 	_equip("wooden_pickaxe")
 	# Open a narrow real terrain shaft; all material enters conserved drops.
 	var height: int=LfeWave1TerrainRules.height_at(_world.active_seed,3,2)
@@ -87,8 +88,8 @@ func _new_loop() -> void:
 	_check(int(r.equipment.stack_at(0)["durability"])==int(pick["durability"])-2,"Mining capability and exact durability loss")
 	await _craft("craft_stone_axe")
 	_equip("stone_axe")
-	await _gather(2);await _gather(3)
-	_check(_tree_times.size()>=3 and _tree_times[0]>_tree_times[1] and _tree_times[1]>_tree_times[2],"Rendered tree work timing improves manual -> Wooden Axe -> Stone Axe")
+	await _chop_logs(12)
+	_check(_tree_times.has(1.0) and _tree_times.has(1.0/1.5) and _tree_times.has(1.0/3.0),"Rendered tree work timing improves manual -> Wooden Axe -> Stone Axe")
 	await _resource_view(4)
 	await _capture("01_gathering.png")
 	await _resource_view(15)
@@ -243,7 +244,7 @@ func _migration_restart() -> void:
 	_check(not _world.world_save.load_status.contains("migrated"),"Migrated current schema reload without repeated migration")
 
 func _gather(index: int) -> void:
-	var entry: Dictionary=_world.creation.sources()[index]
+	var entry: Dictionary=_world.creation.sources()[index-12 if _world.world_save.worldgen_version==2 else index]
 	var p: Array=entry["position"]
 	_player.global_position=Vector3(float(p[0]),float(p[1])+0.65,float(p[2])-1.0)
 	var center: Vector3=Vector3(float(p[0]),floorf(float(p[1]))+0.3,float(p[2]))
@@ -270,6 +271,8 @@ func _gather(index: int) -> void:
 
 func _mine(cell: Vector3i) -> void:
 	await _aim(cell)
+	var camera: Camera3D = _player.get_camera();camera.global_position=Vector3(cell)+Vector3(0.5,1.4,0.5)
+	camera.look_at(Vector3(cell)+Vector3.ONE*0.5,Vector3.FORWARD);await _frames(2)
 	_player.global_position=Vector3(cell)+Vector3(2.5,2.05,0.5)
 	var id: StringName=_catalog.canonical_id_for_voxel_id(_tool.get_voxel(cell))
 	_check(_player.try_break_target(),"Player target starts timed voxel harvest")
@@ -431,11 +434,18 @@ func _stream() -> void:
 	_check(_world.creation_presenter._nodes.is_empty() and _world.resource_presenter._nodes.is_empty() and _world.resource_presenter._crates.is_empty(),"All source/drop/functional/crate Nodes dematerialise with unloaded terrain")
 	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Unloading presentation retains authoritative records exactly")
 
+	var distant: Array[Dictionary] = LfeStarterTreeRules.candidates(_world.active_seed,Vector2i(320,320),Vector2i(360,360))
+	_check(not distant.is_empty(),"Coordinate generation supplies trees beyond the origin source region")
+	if not distant.is_empty():
+		var base: Vector3i = distant[0]["base"];await _aim(base)
+		_check(_tool.get_voxel(base)==11 and _tool.get_voxel(base+Vector3i.UP)==11,"Real distant chunk contains naturally generated trunk voxels")
+		await _voxel_tree_view(distant[0]);await _capture("21_distant_woodland.png")
 	_player.global_position=original_player
 	for entry: Dictionary in _built:
 		var p: Array=entry["position"];var cell: Vector3i=Vector3i(int(p[0]),int(p[1]),int(p[2]))
 		await _aim(cell)
 		_check(_tool.get_voxel(cell)==_catalog.get_voxel_id(StringName(entry["block"])),"Streamed constructed voxel exact at "+str(cell))
+	_verify_tree_cells(true)
 	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Stream-out/back preserves station, survival, storage, tools and drops")
 	var expected_nodes: int=_world.creation.objects().size()
 	for entry: Dictionary in _world.creation.sources():
@@ -445,6 +455,10 @@ func _stream() -> void:
 	_check(_world.resource_presenter._nodes.size()==_world.resources.drops().size(),"Drops rematerialise exactly once from retained logical records")
 
 func _verify_restored(report: Dictionary) -> void:
+	_tree_kept=report.get("tree_kept",[]).duplicate(true)
+	_edits=report.get("edits",[]).duplicate(true)
+	_verify_tree_cells(false)
+	_check(_world.world_save.worldgen_version==report.get("worldgen_version",1),"Fresh process retains stored generator version")
 	var resources: LfeResourceState=LfeResourceState.new(_catalog)
 	_check(resources.restore(report["resources"]),"Saved resource report valid")
 	var creation: LfeCreationState=LfeCreationState.new(_catalog)
@@ -457,9 +471,10 @@ func _verify_restored(report: Dictionary) -> void:
 		_check(_world._voxel_id_at(cell)==_catalog.get_voxel_id(StringName(entry["block"])),"Fresh process construction exact")
 
 func _snapshot_report() -> void:
-	_report.merge({"resources":_world.resources.snapshot(),"creation":_world.creation.snapshot(),"player":_world.world_save.player_state,"ledger":_ledger,"built":_built,"edits":_edits,"kiln":_kiln,"rest":_rest,"home":[_home.x,_home.y,_home.z]})
+	_report.merge({"resources":_world.resources.snapshot(),"creation":_world.creation.snapshot(),"player":_world.world_save.player_state,"ledger":_ledger,"built":_built,"edits":_edits,"kiln":_kiln,"rest":_rest,"home":[_home.x,_home.y,_home.z],"tree_kept":_tree_kept,"tree_mined":_tree_mined})
 
 func _restore_report(report: Dictionary) -> void:
+	_tree_kept=report.get("tree_kept",[]).duplicate(true);_tree_mined=report.get("tree_mined",[]).duplicate(true)
 	_ledger=report["ledger"].duplicate(true);_built=report["built"].duplicate(true);_edits=report["edits"].duplicate(true)
 	_kiln=report["kiln"];_rest=report["rest"]
 	var p: Array=report["home"];_home=Vector3i(int(p[0]),int(p[1]),int(p[2]))
@@ -569,22 +584,53 @@ func _drop_demo() -> void:
 	camera.global_position=_world.resource_presenter._nodes[id].global_position+Vector3(1.8,1.6,-1.8)
 	camera.look_at(_world.resource_presenter._nodes[id].global_position+Vector3.UP*0.12,Vector3.UP)
 	_player._update_targeting()
+	await _drop_view(_world.resource_presenter._nodes[id].global_position)
 	await _capture("12_drop_before.png")
 	var transform: Transform3D=visual.transform
 	await _frames(35)
 	_check(visual.transform!=transform and _world.resources.snapshot()==records,"Visible bob/rotation leave logical position and dirty state unchanged")
 	var positions: Array=_world.resources.drops().map(func(v:Dictionary)->Array:return v["position"])
-	_world.resources.advance_drop_clusters(1,_world.region_relevant,_world.drop_path_clear)
+	_world.resources.advance_drop_clusters(1,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
 	_check(_world.resources.drops().map(func(v:Dictionary)->Array:return v["position"])!=positions,"Nearby drops drift slowly through clear local space")
-	for tick: int in 60:_world.resources.advance_drop_clusters(0.5,_world.region_relevant,_world.drop_path_clear)
+	for tick: int in 60:_world.resources.advance_drop_clusters(0.5,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
 	_world.resource_presenter.sync()
 	_check(_world.resources.drops().size()==1 and _world.resources.drops()[0]["stack"]["quantity"]==2,"Compatible drop convergence merges without losing quantity")
+	var shown: Array = _world.resources.drops()[0]["position"]
+	await _drop_view(Vector3(float(shown[0]),float(shown[1]),float(shown[2])))
 	await _capture("12_drop_motion.png")
+	# Remove the real loaded support through LMB, retaining the conserved planks.
+	var merged: Dictionary = _world.resources.drops()[0]
+	var resting: Array = merged["position"]
+	var old_position: Vector3 = Vector3(float(resting[0]),float(resting[1]),float(resting[2]))
+	var support: Vector3i = Vector3i(old_position.floor())+Vector3i.DOWN
+	var prior: Array = _world.resources.drops().map(func(v:Dictionary)->String:return v["instance"])
+	await _aim(support)
+	camera.global_position=Vector3(support)+Vector3(0.5,1.4,0.5)
+	camera.look_at(Vector3(support)+Vector3.ONE*0.5,Vector3.FORWARD)
+	_player.global_position=Vector3(support)+Vector3(2.5,2.05,0.5);await _frames(2)
+	_check(_player.try_break_target() and _world.advance_harvest(2) and _tool.get_voxel(support)==0,"LMB removes the actual terrain supporting a drop")
+	for entry: Dictionary in _world.resources.drops():
+		if prior.has(entry["instance"]):continue
+		var stack: Dictionary = entry["stack"]
+		_adjust(stack["content"],int(stack["quantity"]))
+		_check(_world.resources.pickup(entry["instance"])==int(stack["quantity"]),"Support harvest produces and conserves only its own output")
+	_edits.append({"position":[support.x,support.y,support.z],"block":"leyforge:air"})
+	_world.resources.advance_drop_clusters(0.1,_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
+	var lowered: Dictionary = _world.resources.drop(merged["instance"])
+	var lp: Array = lowered.get("position",resting)
+	var position: Vector3 = Vector3(float(lp[0]),float(lp[1]),float(lp[2]))
+	_check(position.y<old_position.y and position==_world.drop_rest_position(position),"Removing support resettles the same drop downward onto actual terrain")
+	_check(lowered.get("stack",{})==merged["stack"] and _world.resources.drops().size()==1,"Ground correction retains exact drop identity and two-unit quantity")
+	_world.resource_presenter.sync();await _drop_view(position)
+	await _capture("22_drop_resettled.png")
 	_verify_accounting()
 
 
 func _resource_view(index: int) -> void:
-	var p: Array=_world.creation.sources()[index]["position"]
+	if index<12 and _world.world_save.worldgen_version==2:
+		await _voxel_tree_view(_local_trees()[4])
+		return
+	var p: Array=_world.creation.sources()[index-12 if _world.world_save.worldgen_version==2 else index]["position"]
 	var point: Vector3=Vector3(float(p[0]),floorf(float(p[1]))+0.3,float(p[2]))
 	await _aim_point(point)
 	var camera: Camera3D=_player.get_camera()
@@ -624,3 +670,144 @@ func _personal_grid_checks() -> void:
 	_check(_world.close_inventory() and _world.resources.snapshot()==before,"Closing populated 2x2 restores exact resources/identities")
 	await _resource_view(4)
 	await _capture("17_tree_variation.png")
+
+var _tree_kept: Array = []
+var _tree_mined: Array = []
+
+func _local_trees() -> Array[Dictionary]:
+	var trees: Array[Dictionary] = LfeStarterTreeRules.candidates(_world.active_seed,Vector2i(-40,-40),Vector2i(40,40))
+	trees.sort_custom(func(a:Dictionary,b:Dictionary)->bool:return Vector3(a["base"]).length_squared()<Vector3(b["base"]).length_squared())
+	return trees
+
+func _voxel_tree_view(tree: Dictionary) -> void:
+	var base: Vector3i = tree["base"]
+	await _aim(base)
+	var camera: Camera3D = _player.get_camera()
+	camera.global_position=Vector3(base)+Vector3(7,5,-8)
+	camera.look_at(Vector3(base)+Vector3(0.5,2.5,0.5),Vector3.UP)
+	await _frames(3)
+
+func _tree_demonstration() -> void:
+	_check(_world.world_save.worldgen_version==2 and _world.creation.sources().all(func(v:Dictionary)->bool:return v["source"]!="fallen_oak"),"Fresh production v2 world uses voxel timber without finite tree sources")
+	var trees: Array[Dictionary] = _local_trees()
+	_check(trees.size()>15,"Several naturally distributed generated trees surround the starter region")
+	if trees.is_empty():return
+	var tree: Dictionary = trees[0];var base: Vector3i = tree["base"]
+	_tree_mined=[base.x,base.y,base.z]
+	await _voxel_tree_view(tree);await _capture("18_generated_woodland.png")
+	# Position the approach, then use production walking toward the real trunk.
+	_player.global_position=Vector3(base)+Vector3(0.5,0.05,-3.5);_player.rotation.y=PI;_player.velocity=Vector3.ZERO
+	var before: Vector3 = _player.global_position
+	_player.set_runtime_ready(true);Input.action_press("move_forward");await _frames(24);Input.action_release("move_forward")
+	await _frames(4);_player.set_runtime_ready(false)
+	_check(_player.global_position.distance_to(before)>0.5 and _player.global_position.distance_to(Vector3(base))<before.distance_to(Vector3(base)),"Player walks toward a generated voxel tree using production movement")
+	for cell: Vector3i in LfeStarterTreeRules.cells(tree):
+		if cell.y>=base.y+2:_tree_kept.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:oak_heartwood" if LfeStarterTreeRules.cells(tree)[cell]==1 else "leyforge:oak_leaves"})
+	await _chop_block(base,true)
+	var neighbour: Vector3i = base+Vector3i.UP
+	_check(_tool.get_voxel(neighbour)==11,"Mining the basal trunk leaves the adjacent trunk standing")
+	# Individually remove the top leaf; every other canopy voxel stays intact.
+	var leaf: Vector3i = base+Vector3i(0,int(tree["height"])+1,0)
+	await _aim(leaf);_player.global_position=Vector3(base)+Vector3(2.5,0.05,0.5)
+	var resources: Dictionary = _world.resources.snapshot()
+	_check(_player.try_break_target() and _world.advance_harvest(2),"Top Oak Leaves voxel is individually targetable and breakable")
+	_check(_tool.get_voxel(leaf)==0 and _world.resources.snapshot()==resources,"Breaking a leaf yields no timber or item output")
+	_edits.append({"position":[leaf.x,leaf.y,leaf.z],"block":"leyforge:air"})
+	for index: int in range(_tree_kept.size()-1,-1,-1):
+		if _tree_kept[index]["position"]==[leaf.x,leaf.y,leaf.z]:_tree_kept.remove_at(index)
+	_verify_tree_cells(false)
+	# Place the gathered canonical Heartwood through normal RMB, mine it again,
+	# then retain one placed voxel for actual streamed/restart verification.
+	var support: Vector3i = base+Vector3i(3,-1,-3)
+	support.y=LfeWave1TerrainRules.height_at(_world.active_seed,support.x,support.z)
+	var placed: Vector3i = support+Vector3i.UP
+	_player.global_position=Vector3(support)+Vector3(2.5,1.05,0.5)
+	_select("oak_heartwood");await _aim(support);_player._update_targeting()
+	_check(_player.get_placement_cell()==placed and _player.try_place_target() and _world.resources.inventory.total(&"leyforge:oak_heartwood")==0,"RMB places exactly one gathered canonical Heartwood block")
+	_check(_tool.get_voxel(placed)==11 and _tool.get_voxel(placed+Vector3i.UP)==_world._generator.sample_voxel_id(placed+Vector3i.UP),"Placed Heartwood is one voxel and spawns no tree")
+	await _aim(placed)
+	var camera: Camera3D = _player.get_camera();camera.global_position=Vector3(placed)+Vector3(3,2,-3)
+	camera.look_at(Vector3(placed)+Vector3.ONE*0.5,Vector3.UP);await _frames(12)
+	await _capture("20_placed_heartwood.png")
+	await _chop_block(placed)
+	# Recovered wood was already in the material ledger before its temporary place.
+	_adjust("leyforge:oak_heartwood",-1)
+	_check(_world.resources.inventory.total(&"leyforge:oak_heartwood")==1,"Re-mined placed Heartwood returns exactly once")
+	_select("oak_heartwood");await _aim(support)
+	_check(_player.try_place_target(),"Place recovered Heartwood for sparse save/restart proof")
+	_built.append({"position":[placed.x,placed.y,placed.z],"block":"leyforge:oak_heartwood"})
+	# Its air edit now has a later place, verified in _built instead.
+	for index: int in range(_edits.size()-1,-1,-1):
+		if _edits[index]["position"]==[placed.x,placed.y,placed.z]:_edits.remove_at(index)
+
+func _chop_logs(count: int) -> void:
+	var left: int = count
+	for tree: Dictionary in _local_trees():
+		var base: Vector3i = tree["base"]
+		# The lowest two logs are exposed below every canopy variant.
+		for layer: int in 2:
+			var cell: Vector3i = base+Vector3i(0,layer,0)
+			if _world._voxel_id_at(cell)!=11:continue
+			await _chop_block(cell);left-=1
+			if left==0:return
+	_check(false,"Enough real tree voxels exist for the fresh crafting progression")
+
+func _chop_block(cell: Vector3i, demonstrate: bool = false) -> void:
+	await _aim(cell)
+	_player.global_position=Vector3(cell)+Vector3(2.5,0.05,0.5)
+	var camera: Camera3D = _player.get_camera();camera.global_position=Vector3(cell)+Vector3(1.7,0.5,0.5)
+	camera.look_at(Vector3(cell)+Vector3.ONE*0.5,Vector3.UP);await _frames(2)
+	_player._update_targeting()
+	var neighbour: int = _tool.get_voxel(cell+Vector3i.UP)
+	var overrides: int = _world.world_save.overrides.count()
+	var equipment: Dictionary = _world.resources.equipment.stack_at(0)
+	_check(_player.target_source().is_empty() and _player.try_break_target(),"LMB targets a real Heartwood voxel through the normal terrain path")
+	var seconds: float = float(_world._harvest.get("seconds",0));var wear: bool = _world._harvest.get("wear",false)
+	_tree_times.append(seconds)
+	_check(not _world.advance_harvest(seconds/2) and _tool.get_voxel(cell)==11,"Partial chopping leaves the single trunk voxel intact")
+	_check(_world.advance_harvest(2) and _tool.get_voxel(cell)==0,"Completed chopping removes only the targeted trunk voxel")
+	_check(_tool.get_voxel(cell+Vector3i.UP)==neighbour,"Chopping preserves the neighbouring trunk/canopy voxel")
+	if wear:_check(_world.resources.equipment.stack_at(0)["durability"]==equipment["durability"]-1,"Each correct axe block action costs exactly one durability")
+	var drops: Array = _world.resources.drops()
+	_check(drops.size()==1 and drops[0]["stack"]=={"content":"leyforge:oak_heartwood","quantity":1},"Each trunk voxel creates exactly one canonical Heartwood drop")
+	if drops.is_empty():return
+	var id: String = drops[0]["instance"];var p: Array = drops[0]["position"]
+	var position: Vector3 = Vector3(float(p[0]),float(p[1]),float(p[2]))
+	_check(position==_world.drop_rest_position(position),"New trunk drop settles at the actual local support surface")
+	if demonstrate:
+		var tree: Dictionary = _local_trees()[0]
+		await _voxel_tree_view(tree);await _capture("19_partial_tree_grounded_drop.png")
+		var saved: Dictionary = _world.resources.snapshot();var visual: MeshInstance3D = _world.resource_presenter._nodes[id].get_node("Visual");var transform: Transform3D = visual.transform
+		await _frames(25)
+		_check(visual.transform!=transform and _world.resources.snapshot()==saved and absf(visual.position.y)<=0.02,"Grounded drop gently bobs/rotates without changing its logical resting position")
+		# Actual proximity pickup honours the existing real-time cooldown.
+		_player.global_position=position+Vector3(0,0.1,0);_player.velocity=Vector3.ZERO;_player.set_runtime_ready(true)
+		await _frames(85);_player.set_runtime_ready(false)
+		_check(_world.resources.drop(id).is_empty() and _world.resources.inventory.total(&"leyforge:oak_heartwood")==1,"Player proximity picks up the exact Heartwood after cooldown")
+	else:_check(_world.resources.pickup(id)==1,"Production pickup returns the single mined Heartwood")
+	_adjust("leyforge:oak_heartwood",1)
+	_edits.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:air"})
+
+func _verify_tree_cells(physical: bool) -> void:
+	for entry: Dictionary in _tree_kept:
+		var p: Array = entry["position"];var cell: Vector3i = Vector3i(int(p[0]),int(p[1]),int(p[2]))
+		_check((_tool.get_voxel(cell) if physical else _world._voxel_id_at(cell))==_catalog.get_voxel_id(StringName(entry["block"])),"Remaining generated trunk/leaf voxel stays exact")
+	for entry: Dictionary in _edits:
+		var p: Array = entry["position"];var cell: Vector3i = Vector3i(int(p[0]),int(p[1]),int(p[2]))
+		_check((_tool.get_voxel(cell) if physical else _world._voxel_id_at(cell))==0,"Individual mined voxel remains air")
+
+# Find a close, unobstructed evidence view without altering terrain or drop state.
+func _drop_view(position: Vector3) -> void:
+	var camera: Camera3D = _player.get_camera();camera.top_level=true
+	for height: float in [1.2,2.5,4.0]:
+		for direction: Vector2 in [Vector2(1,0),Vector2(-1,0),Vector2(0,1),Vector2(0,-1),Vector2(1,1),Vector2(-1,1),Vector2(1,-1),Vector2(-1,-1)]:
+			var offset: Vector2 = direction.normalized()*1.5
+			var eye: Vector3 = position+Vector3(offset.x,height,offset.y)
+			var clear: bool = true
+			for step: int in 17:
+				var cell: Vector3i = Vector3i(eye.lerp(position,float(step)/16).floor())
+				if not _tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)) or _catalog.is_solid_voxel(_tool.get_voxel(cell)):clear=false;break
+			if not clear:continue
+			camera.global_position=eye;camera.look_at(position,Vector3.UP);await _frames(12)
+			return
+	_check(false,"An unobstructed evidence view exists for the grounded drop")

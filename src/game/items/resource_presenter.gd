@@ -55,7 +55,7 @@ func _process(delta: float) -> void:
 	for id: String in _nodes:
 		var phase: float = float(String(id).substr(0,6).hex_to_int()%1000)/1000.0*TAU
 		var visual: MeshInstance3D = _nodes[id].get_node("Visual")
-		visual.position.y=0.12+sin(_animation*1.7+phase)*0.045
+		visual.position.y=sin(_animation*1.7+phase)*0.02
 		visual.rotation.y=_animation*0.45+phase
 
 func _physics_process(delta: float) -> void:
@@ -63,7 +63,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if not OS.get_cmdline_user_args().has("--wave4-playtest") and not OS.get_cmdline_user_args().has("--wave3-playtest"):
 		# Rendered conservation drivers advance clustering explicitly for exact restart assertions.
-		_world.resources.advance_drop_clusters(minf(delta,1),_world.region_relevant,_world.drop_path_clear)
+		_world.resources.advance_drop_clusters(minf(delta,1),_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
 	if _world.player.is_runtime_ready():
 		for entry: Dictionary in _world.resources.drops():
 			var id: String = entry["instance"]

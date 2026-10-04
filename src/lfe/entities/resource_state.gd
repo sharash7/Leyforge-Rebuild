@@ -282,13 +282,13 @@ static func unique_instances(slots: Array, seen: Dictionary = {}) -> bool:
 
 # Local, bounded authority update. Visual animation never calls this method.
 # Stateful instances are never combined; ordinary merges respect stack maxima.
-func advance_drop_clusters(seconds: float, relevant: Callable, clear_path: Callable) -> bool:
+func advance_drop_clusters(seconds: float, relevant: Callable, clear_path: Callable, resting_position: Callable = Callable()) -> bool:
 	if _busy or not LfeWorldSave._finite_in_range(seconds,1) or seconds<=0 or not relevant.is_valid() or not clear_path.is_valid():
 		return false
 	var ids: Array = _drops.keys()
 	ids.sort()
 	var buckets: Dictionary = {}
-	var changed: bool = false
+	var changed: bool = settle_drops(relevant,resting_position) if resting_position.is_valid() else false
 	var pairs: int = 0
 	for id: String in ids:
 		if not _drops.has(id):
@@ -314,7 +314,8 @@ func advance_drop_clusters(seconds: float, relevant: Callable, clear_path: Calla
 							continue
 						var q: Array = anchor["position"]
 						var target: Vector3 = Vector3(float(q[0]),float(q[1]),float(q[2]))
-						var distance: float = position.distance_to(target)
+						if absf(position.y-target.y)>0.2:continue
+						var distance: float = Vector2(position.x,position.z).distance_to(Vector2(target.x,target.z))
 						if distance>2 or not clear_path.call(position,target):
 							continue
 						if distance<=0.3:
@@ -327,7 +328,11 @@ func advance_drop_clusters(seconds: float, relevant: Callable, clear_path: Calla
 									_drops.erase(id)
 								changed=true
 						else:
-							var next: Vector3 = position.move_toward(target,0.18*seconds)
+							var next: Vector3 = position.move_toward(Vector3(target.x,position.y,target.z),0.18*seconds)
+							if resting_position.is_valid():
+								var rested: Variant = resting_position.call(next)
+								if not rested is Vector3 or absf(rested.y-position.y)>0.2:continue
+								next=rested
 							entry["position"]=[next.x,next.y,next.z]
 							changed=true
 						found=true
@@ -335,4 +340,29 @@ func advance_drop_clusters(seconds: float, relevant: Callable, clear_path: Calla
 			if not buckets.has(bucket):
 				buckets[bucket]=[]
 			buckets[bucket].append(id)
+	return changed
+
+
+# Only positions change. Resolve support through the world's loaded voxel query.
+var _settle_cursor: int = 0
+
+func ground_drop(id: String, resting_position: Callable) -> bool:
+	if not _drops.has(id) or not resting_position.is_valid():return false
+	var p: Array = _drops[id]["position"]
+	var before: Vector3 = Vector3(float(p[0]),float(p[1]),float(p[2]))
+	var after: Variant = resting_position.call(before)
+	if not after is Vector3 or not after.is_finite() or after.x!=before.x or after.z!=before.z or absf(after.y)>1000000 or before==after:return false
+	_drops[id]["position"]=[after.x,after.y,after.z]
+	return true
+
+func settle_drops(relevant: Callable, resting_position: Callable) -> bool:
+	if not relevant.is_valid() or not resting_position.is_valid() or _drops.is_empty():return false
+	var ids: Array = _drops.keys();ids.sort()
+	var changed: bool = false
+	var count: int = mini(64,ids.size())
+	for index: int in count:
+		var id: String = ids[(_settle_cursor+index)%ids.size()]
+		var p: Array = _drops[id]["position"]
+		if relevant.call(Vector3(float(p[0]),float(p[1]),float(p[2]))):changed=ground_drop(id,resting_position) or changed
+	_settle_cursor=(_settle_cursor+count)%ids.size()
 	return changed

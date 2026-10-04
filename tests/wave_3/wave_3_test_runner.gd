@@ -224,10 +224,11 @@ func _persistence() -> void:
 	_check(isolated.seed == loaded.seed and isolated.overrides.count() == 0 and isolated.resource_state == LfeResourceState.new(_catalog).snapshot(), "Complete same-seed isolation")
 	var envelope: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(world.get_primary_path()))
 	var original_payload: Dictionary = JSON.parse_string(envelope["payload_json"])
-	_check(original_payload["metadata"]["save_version"] == LfeWorldSave.SAVE_VERSION and original_payload["metadata"]["worldgen_version"] == 1 and original_payload["metadata"]["content_version"] == 1, "Only save schema increments")
+	_check(original_payload["metadata"]["save_version"] == LfeWorldSave.SAVE_VERSION and original_payload["metadata"]["worldgen_version"] == world.worldgen_version and original_payload["metadata"]["content_version"] == 1, "Only save schema increments")
 	var v1: Dictionary = original_payload.duplicate(true)
 	v1["metadata"]["world_id"] = "migration"
 	v1["metadata"]["save_version"] = 1
+	v1["metadata"]["worldgen_version"] = 1
 	v1.erase("resources")
 	var v1_text: String = _envelope(v1, 1)
 	var migration_path: String = _root.path_join("migration/world.json")

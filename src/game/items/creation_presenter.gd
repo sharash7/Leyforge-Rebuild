@@ -59,7 +59,7 @@ func _source(entry: Dictionary) -> Node3D:
 	var size: Vector3 = Vector3(0.65,0.55,0.65)
 	var center: Vector3 = Vector3(0,0.275,0)
 	if entry["source"]=="fallen_oak":
-		var visual: Dictionary = _world.block_catalog.content_definition(StringName(spec["content"]))["world_visual"]
+		var visual: Dictionary = {"log_color":_world.block_catalog.content_definition(StringName(spec["content"]))["color"],"leaf_color":_world.block_catalog.definition_for_id(&"leyforge:oak_leaves")["color"]}
 		var variant: int = String(entry["instance"]).substr(0,8).hex_to_int()%3
 		var height: int = 2+variant
 		var bark: Color = Color.from_string(visual["log_color"],color)

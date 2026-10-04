@@ -25,13 +25,17 @@ func _init(catalog: LfeBlockCatalog) -> void:
 			return
 		_source_definitions[spec["id"]] = spec.duplicate(true)
 
-func initialize_sources(seed: int) -> bool:
+func initialize_sources(seed: int, worldgen_version: int = 1) -> bool:
+	if worldgen_version not in [1,2]:return false
 	if _initialized:
 		return true
 	if not content_error.is_empty():
 		return false
 	var index: int = 0
 	for spec: Dictionary in _source_definitions.values():
+		if worldgen_version==2 and spec["id"]=="fallen_oak":
+			index+=int(spec["count"])
+			continue
 		for n: int in int(spec["count"]):
 			var x: int = 4 + (index % 6) * 3
 			var z: int = 4 + (index / 6) * 3
@@ -210,11 +214,11 @@ func _object_snapshot(entry: Dictionary) -> Dictionary:
 	return result
 
 
-func validate_source_layout(seed: int) -> bool:
+func validate_source_layout(seed: int, worldgen_version: int = 1) -> bool:
 	if not _initialized:
 		return _sources.is_empty()
 	var expected: LfeCreationState = LfeCreationState.new(_catalog)
-	if not expected.initialize_sources(seed) or expected._sources.size() != _sources.size():
+	if not expected.initialize_sources(seed,worldgen_version) or expected._sources.size() != _sources.size():
 		return false
 	for index: int in _sources.size():
 		var entry: Dictionary = _sources[index].duplicate(true)

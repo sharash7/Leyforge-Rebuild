@@ -2,7 +2,7 @@ class_name LfeWorldSave
 extends RefCounted
 
 const SAVE_VERSION: int = 3
-const WORLDGEN_VERSION: int = 1
+const WORLDGEN_VERSION: int = 2
 const CONTENT_VERSION: int = 1
 const SAVE_FILE: String = "world.json"
 const PREVIOUS_FILE: String = "world.json.previous"
@@ -11,6 +11,7 @@ const PENDING_FILE: String = "world.json.pending"
 var world_id: String = ""
 var display_name: String = ""
 var seed: int = 0
+var worldgen_version: int = WORLDGEN_VERSION
 var created_utc: String = ""
 var last_saved_utc: String = ""
 var player_state: Dictionary = {}
@@ -63,6 +64,7 @@ func open_world(
 	root_path: String = "user://worlds"
 ) -> Error:
 	_is_open = false
+	worldgen_version = WORLDGEN_VERSION
 	_last_error = ""
 	if not _valid_world_id(selected_id):
 		return _fail(ERR_INVALID_PARAMETER, "World ID must be 1-64 ASCII letters, digits, underscores or hyphens.")
@@ -104,6 +106,7 @@ func open_world(
 	if seed_was_explicit and LfeDeterministicSeed.normalize(requested_seed) != stored_seed:
 		return _fail(ERR_INVALID_DATA, "Explicit seed conflicts with saved world seed %d." % stored_seed)
 	seed = stored_seed
+	worldgen_version = int(metadata["worldgen_version"])
 	display_name = String(metadata["display_name"])
 	created_utc = String(metadata["created_utc"])
 	last_saved_utc = String(metadata["last_saved_utc"])
@@ -134,7 +137,7 @@ func save(current_player_state: Dictionary, current_resources: Variant = null, c
 	var creation_validator: LfeCreationState = LfeCreationState.new(_catalog)
 	if not creation_validator.restore(creation_state if current_creation == null else current_creation, resource_validator.snapshot()):
 		return _fail(ERR_INVALID_DATA, "Invalid survival/creation state; refusing save.")
-	if not creation_validator.initialize_sources(seed) or not creation_validator.validate_source_layout(seed) or not _valid_object_voxels(creation_validator.snapshot(), overrides):
+	if not creation_validator.initialize_sources(seed,worldgen_version) or not creation_validator.validate_source_layout(seed,worldgen_version) or not _valid_object_voxels(creation_validator.snapshot(), overrides):
 		return _fail(ERR_INVALID_DATA, "Functional object does not match its authoritative voxel.")
 	var proposed_saved_utc: String = Time.get_datetime_string_from_system(true)
 	var metadata: Dictionary = {
@@ -142,7 +145,7 @@ func save(current_player_state: Dictionary, current_resources: Variant = null, c
 		"display_name": display_name,
 		"seed": seed,
 		"save_version": SAVE_VERSION,
-		"worldgen_version": WORLDGEN_VERSION,
+		"worldgen_version": worldgen_version,
 		"content_version": CONTENT_VERSION,
 		"created_utc": created_utc,
 		"last_saved_utc": proposed_saved_utc,
@@ -269,7 +272,7 @@ func _decode_file(path: String) -> Dictionary:
 	if version == SAVE_VERSION and not creation.restore(payload.get("creation"), resources.snapshot()):
 		_fail(ERR_INVALID_DATA, "Malformed survival, workstation or item-instance state.")
 		return {}
-	if version == SAVE_VERSION and (not creation.snapshot()["initialized"] or not creation.validate_source_layout(int(metadata["seed"])) or not _valid_object_voxels(creation.snapshot(), parsed_overrides)):
+	if version == SAVE_VERSION and (not creation.snapshot()["initialized"] or not creation.validate_source_layout(int(metadata["seed"]),int(metadata["worldgen_version"])) or not _valid_object_voxels(creation.snapshot(), parsed_overrides)):
 		_fail(ERR_INVALID_DATA, "Functional world object/voxel mismatch.")
 		return {}
 	return {
@@ -299,7 +302,7 @@ func _valid_metadata(metadata: Dictionary, envelope_version: int) -> bool:
 	if int(metadata["save_version"]) != envelope_version:
 		_fail(ERR_INVALID_DATA, "Metadata save version does not match supported version.")
 		return false
-	if int(metadata["worldgen_version"]) != WORLDGEN_VERSION:
+	if int(metadata["worldgen_version"]) not in [1,2]:
 		_fail(ERR_INVALID_DATA, "Unsupported worldgen version %s." % metadata["worldgen_version"])
 		return false
 	if int(metadata["content_version"]) != CONTENT_VERSION:

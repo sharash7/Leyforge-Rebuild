@@ -84,7 +84,7 @@ func _test_worlds(catalog: LfeBlockCatalog) -> void:
 	var envelope: Dictionary = JSON.parse_string(save_text)
 	var payload: Dictionary = JSON.parse_string(String(envelope["payload_json"]))
 	_check((payload["voxel_overrides"] as Array).size() == 5, "Save did not contain exactly five sparse edits.")
-	_check(int((payload["metadata"] as Dictionary)["worldgen_version"]) == 1, "Worldgen identity was not saved.")
+	_check(int((payload["metadata"] as Dictionary)["worldgen_version"]) == world_a.worldgen_version, "Worldgen identity was not saved.")
 	var loaded_a: LfeWorldSave = LfeWorldSave.new()
 	_check(loaded_a.open_world("alpha", 999, false, catalog, _root) == OK, "World alpha did not reload.")
 	_check(loaded_a.seed == seed, "Saved seed did not win over default requested seed.")
@@ -195,7 +195,7 @@ func _test_bad_data(catalog: LfeBlockCatalog) -> void:
 	var generator_path: String = generator_world.get_primary_path()
 	var generator_envelope: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(generator_path))
 	var generator_payload: Dictionary = JSON.parse_string(String(generator_envelope["payload_json"]))
-	(generator_payload["metadata"] as Dictionary)["worldgen_version"] = 2
+	(generator_payload["metadata"] as Dictionary)["worldgen_version"] = 3
 	generator_envelope["payload_json"] = JSON.stringify(generator_payload)
 	generator_envelope["sha256"] = String(generator_envelope["payload_json"]).sha256_text()
 	_write_text(generator_path, JSON.stringify(generator_envelope))
