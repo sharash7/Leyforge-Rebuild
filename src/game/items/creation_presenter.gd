@@ -78,9 +78,8 @@ func _source(entry: Dictionary) -> Node3D:
 					_box(body,Vector3(x,height-0.5+level,z),Vector3.ONE,leaves.lightened((x+z+2)*0.025))
 		_box(body,Vector3(0,height+1.5,0),Vector3.ONE,leaves.lightened(0.12))
 	elif entry["source"]=="dense_stone":
-		size=Vector3(1.35,0.8,1.05);center=Vector3(0,0.4,0)
-		_box(body,Vector3(-0.32,0.3,0),Vector3(0.7,0.6,0.85),color)
-		_box(body,Vector3(0.34,0.4,0.12),Vector3(0.65,0.8,0.8),color.lightened(0.1))
+		size=Vector3.ONE;center=Vector3(0,0.5,0)
+		_box(body,center,size,color)
 	else:
 		_box(body,center,size,color)
 		_box(body,Vector3(0,0.57,0),Vector3(0.7,0.06,0.7),color.darkened(0.25))

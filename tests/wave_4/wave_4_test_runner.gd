@@ -34,6 +34,7 @@ func _run() -> void:
 	_persistence()
 	_voxel_trees()
 	_grounded_drops()
+	_dense_stone_presentation()
 	var report: Dictionary = {"passed":_failures.is_empty(),"checks":_checks,"failures":_failures,"runner":Engine.get_version_info()["string"],"property_seed":928143,"property_steps":300}
 	_write(_out.path_join("focused.json"),JSON.stringify(report,"\t",true,true))
 	for failure: String in _failures:
@@ -600,3 +601,34 @@ func _grounded_drops() -> void:
 	var tool_drop: String = r.drop_from_inventory(slot,1,Vector3(2,8,0))
 	r.ground_drop(tool_drop,flat)
 	_check(r.drop(tool_drop)["stack"]==tool,"Stateful item grounding preserves instance identity and durability")
+
+func _dense_stone_presentation() -> void:
+	# Construct actual production geometry for both stored worldgen source layouts.
+	for version: int in [1,2]:
+		var world: LeyforgeWave1Playground = LeyforgeWave1Playground.new()
+		world.block_catalog=_catalog;world.creation=LfeCreationState.new(_catalog)
+		_check(world.creation.initialize_sources(184552221,version),"Dense Stone presentation fixture initializes its historical source layout")
+		var before: Dictionary = world.creation.snapshot()
+		var presenter: LeyforgeCreationPresenter = LeyforgeCreationPresenter.new()
+		presenter._world=world;root.add_child(presenter)
+		var count: int = 0
+		for entry: Dictionary in world.creation.sources():
+			if entry["source"]!="dense_stone":continue
+			count+=1
+			var body: Node3D = presenter._source(entry)
+			var meshes: Array[Node] = body.get_children().filter(func(node:Node)->bool:return node is MeshInstance3D)
+			var collisions: Array[Node] = body.get_children().filter(func(node:Node)->bool:return node is CollisionShape3D)
+			_check(meshes.size()==1 and collisions.size()==1 and body.get_child_count()==2,"Dense Stone has exactly one visible mesh and one collision, with no sub-meshes")
+			if meshes.size()!=1 or collisions.size()!=1:continue
+			var mesh: MeshInstance3D = meshes[0] as MeshInstance3D
+			var collision: CollisionShape3D = collisions[0] as CollisionShape3D
+			var centre: Vector3 = Vector3(0,0.5,0)
+			_check(mesh.mesh is BoxMesh and mesh.mesh.size==Vector3.ONE and mesh.position==centre and mesh.visible and mesh.scale==Vector3.ONE,"Dense Stone visible BoxMesh is exactly one metre in every dimension")
+			_check(collision.shape is BoxShape3D and collision.shape.size==Vector3.ONE and collision.position==centre and not collision.disabled and collision.scale==Vector3.ONE,"Dense Stone collision is exactly the same unit cube")
+			_check(body.get_meta("highlight_center")==centre and body.get_meta("highlight_size")==Vector3.ONE,"Dense Stone highlight bounds exactly match mesh and collision")
+			var minimum: Vector3 = body.position+centre-Vector3.ONE*0.5
+			var saved: Array = entry["position"]
+			_check(minimum==minimum.round() and minimum.y==LfeWave1TerrainRules.height_at(184552221,int(minimum.x),int(minimum.z))+1 and body.position==Vector3(float(saved[0]),floorf(float(saved[1])),float(saved[2])) and body.scale==Vector3.ONE,"Unit outcrop rests on terrain and aligns to the voxel grid without moving saved source coordinates")
+			_check(body.get_meta("source")==entry["instance"] and body.collision_layer==8,"Existing source identity and targeting collision layer remain unchanged")
+		_check(count==4 and world.creation.snapshot()==before,"Both layouts retain exactly four Dense Stone sources and unchanged authoritative state")
+		presenter.free();world.free()

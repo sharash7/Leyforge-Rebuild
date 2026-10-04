@@ -60,8 +60,10 @@ nondestructive v1/v2 migration.
 
 See `docs/WAVE_4_SURVIVAL_AND_CREATION.md` for the connected loop, controls,
 architecture, verification and intentional limits. Wave 0-3 regression gates
-remain active. The `0.4.3-wave4` manual-acceptance repair awaits owner playtesting;
-see `docs/WAVE_4_MANUAL_ACCEPTANCE_REPAIR_3.md` for real generated voxel trees,
-placeable Heartwood and grounded drops. The unified 2x2 Inventory / 3x3
+remain active. The owner has accepted Wave 4 subject to the final Dense Stone
+presentation spot-check in `0.4.4-wave4`; see
+`docs/WAVE_4_DENSE_STONE_PRESENTATION_HOTFIX.md`. Repair 3's real generated voxel
+trees, placeable Heartwood and grounded drops remain documented in
+`docs/WAVE_4_MANUAL_ACCEPTANCE_REPAIR_3.md`. The unified 2x2 Inventory / 3x3
 Workbench crafting remains. New worlds use worldgen v2; existing v1 worlds
 retain their original generation. Wave 5 has not begun.

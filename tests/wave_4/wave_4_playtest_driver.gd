@@ -94,6 +94,7 @@ func _new_loop() -> void:
 	await _capture("01_gathering.png")
 	await _resource_view(15)
 	await _capture("14_resource_scale.png")
+	await _dense_stone_demonstration(15)
 	for n: int in 13:await _craft("saw_planks")
 	await _craft("split_oak_sticks")
 	await _craft("craft_wooden_shovel")
@@ -811,3 +812,21 @@ func _drop_view(position: Vector3) -> void:
 			camera.global_position=eye;camera.look_at(position,Vector3.UP);await _frames(12)
 			return
 	_check(false,"An unobstructed evidence view exists for the grounded drop")
+
+func _dense_stone_demonstration(index: int) -> void:
+	var entry: Dictionary = _world.creation.sources()[index-12 if _world.world_save.worldgen_version==2 else index]
+	var before: Dictionary = _world.creation.snapshot()
+	var resources: Dictionary = _world.resources.snapshot()
+	await _resource_view(index)
+	var body: Node3D = _world.creation_presenter._nodes[entry["instance"]]
+	var centre: Vector3 = body.global_position+Vector3(0,0.5,0)
+	await _drop_view(centre);_player._update_targeting()
+	var meshes: Array[Node] = body.get_children().filter(func(node:Node)->bool:return node is MeshInstance3D)
+	var collisions: Array[Node] = body.get_children().filter(func(node:Node)->bool:return node is CollisionShape3D)
+	_check(entry["source"]=="dense_stone" and _player.target_source()==entry["instance"],"Rendered crosshair targets the actual finite Dense Stone source")
+	_check(meshes.size()==1 and (meshes[0] as MeshInstance3D).mesh is BoxMesh and (meshes[0] as MeshInstance3D).mesh.size==Vector3.ONE,"Rendered Dense Stone contains exactly one unit BoxMesh")
+	_check(collisions.size()==1 and (collisions[0] as CollisionShape3D).shape is BoxShape3D and (collisions[0] as CollisionShape3D).shape.size==Vector3.ONE,"Rendered Dense Stone has one unit collision box")
+	_check(_player._target_highlight.visible and _player._target_highlight.global_position==centre and _player._target_highlight.scale==Vector3.ONE,"Actual highlighted bounds match the visible unit cube")
+	_check(_world.creation.snapshot()==before and _world.resources.snapshot()==resources,"Presentation inspection preserves source depletion, identities and conservation")
+	_report["dense_stone_presentation"]={"source":entry["source"],"instance":entry["instance"],"mesh_count":meshes.size(),"collision_count":collisions.size(),"size":[1,1,1],"remaining":entry["remaining"]}
+	await _capture("23_dense_stone_unit_cube.png")
