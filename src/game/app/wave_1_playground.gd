@@ -182,6 +182,8 @@ func is_runtime_ready() -> bool:
 func request_save() -> bool:
 	if not _runtime_is_ready or _save_in_progress:
 		return false
+	if inventory_panel!=null and not close_inventory():
+		return false
 	_save_in_progress = true
 	var result: Error = world_save.save(player.get_persistent_state(), resources.snapshot(), creation.snapshot())
 	_save_in_progress = false
@@ -411,10 +413,8 @@ func toggle_inventory() -> void:
 		inventory_panel.open()
 
 
-func close_inventory() -> void:
-	inventory_panel.close()
-	if creation_panel != null:
-		creation_panel.close()
+func close_inventory() -> bool:
+	return inventory_panel.close()
 
 
 func open_nearby_storage() -> bool:
@@ -612,7 +612,7 @@ func advance_harvest(seconds: float) -> bool:
 	return result
 
 func craft_recipe(id: String) -> bool:
-	var result: bool = creation.survival.alive() and LfeRecipeTransactions.craft(resources.inventory,creation.recipes,id)
+	var result: bool = creation.survival.alive() and inventory_panel.crafting!=null and inventory_panel.context_valid() and inventory_panel.crafting.take(resources.inventory,id)
 	player.show_status("Crafted" if result else "Craft rejected: ingredients, context or capacity")
 	return result
 
@@ -622,9 +622,7 @@ func consume_selected() -> bool:
 	return result
 
 func toggle_crafting() -> void:
-	if player.inventory_open:
-		close_inventory()
-	creation_panel.open()
+	inventory_panel.open_context("",true)
 
 func interact_creation() -> bool:
 	player._update_targeting()
@@ -635,9 +633,7 @@ func _interact_object(id: String, function: String) -> bool:
 		return begin_source_harvest(id)
 	if function == "rest":
 		return begin_rest(id)
-	close_inventory()
-	creation_panel.open(id)
-	return true
+	return inventory_panel.open_context(id)
 
 func begin_rest(id: String) -> bool:
 	for entry: Dictionary in creation.objects():
@@ -725,7 +721,7 @@ func targeted_interaction() -> bool:
 		if entry["instance"]!=id:
 			continue
 		var function: String = block_catalog.content_definition(StringName(entry["content"])).get("function","")
-		if function in ["kiln","storage","rest"]:
+		if function in ["kiln","storage","rest","workbench"]:
 			if not object_near(id):
 				player.show_status("Move closer to interact")
 				return true

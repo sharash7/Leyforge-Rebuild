@@ -2,17 +2,17 @@
 
 Wave 4 connects the conserved Wave 3 substrate to a small survival game:
 
-Enter a seeded world -> gather timber -> craft wooden tools -> obtain ordinary Stone -> craft Stone tools -> harvest Dense Stone -> craft construction and a kiln -> burn charcoal -> build a covered rest/work area -> manage survival -> save -> restart -> continue the same process and resource state.
+Enter a seeded world -> gather timber -> craft planks/sticks and a Workbench -> craft wooden tools -> obtain ordinary Stone -> craft Stone tools -> harvest Dense Stone -> craft construction and a kiln -> burn charcoal -> build a covered rest/work area -> manage survival -> save -> restart -> continue the same process and resource state.
 
-The production version is `0.4.1-wave4`. Automated certification is separate from owner manual acceptance. The repair candidate awaits a second owner playtest; Wave 5 is not authorized. See `WAVE_4_MANUAL_ACCEPTANCE_REPAIR.md` for the canon audit, repaired interaction contract and exact balance sources.
+The production version is `0.4.2-wave4`. Automated certification is separate from owner manual acceptance. The repair candidate awaits owner manual acceptance; Wave 5 is not authorized. See `WAVE_4_MANUAL_ACCEPTANCE_REPAIR_2.md` for the tree/crafting canon audit and this repair; `WAVE_4_MANUAL_ACCEPTANCE_REPAIR.md` retains the first repair and balance sources.
 
 ## Canonical content
 
-`content/blocks/wave_1_blocks.json` is still the single block/item namespace. The five original numeric mappings and deterministic terrain rules are unchanged. The catalog now adds Oak planks, a Stone kiln, Rest mat, Storage box and Charcoal lamp, plus Oak Heartwood, Charcoal, Trail provisions, Drinking water portions, Oak Sticks and three wooden plus three stone tools. The historical filename does not reserve a second registry: all of these are consumed through the existing catalog.
+`content/blocks/wave_1_blocks.json` is still the single block/item namespace. The five original numeric mappings and deterministic terrain rules are unchanged. The catalog now adds Oak planks, a Stone kiln, Rest mat, Storage box, Charcoal lamp and Workbench, plus Oak Heartwood, Charcoal, Trail provisions, Drinking water portions, Oak Sticks and three wooden plus three stone tools. The historical filename does not reserve a second registry: all of these are consumed through the existing catalog.
 
-Oak Heartwood uses the existing historical material name from FCC-01C, rather than importing its full timber portfolio. Provisions and drinking-water portions are representative supplied stock. This wave does not claim a complete food, liquid-container, plant or resource catalogue.
+Oak Heartwood retains canonical `leyforge:oak_heartwood` for existing-save compatibility. Its definition now includes the oak-log world visual used by tree trunks, following FCC-13B's single-definition Block/Object/Item projection rule. No duplicate Oak Log item/block was added. Provisions and drinking-water portions are representative supplied stock. This wave does not claim a complete food, liquid-container, plant or resource catalogue.
 
-`content/world_objects/wave_4_sources.json` defines twenty finite, persistent starter resource sites: twelve fallen Oak Heartwood sources, four dense-stone outcrops and two each of provisions and drinking-water caches. Each source has an exact remaining quantity, class, capability and action duration. The bounded source layout uses the stored seed and existing terrain heights; it does not replace the terrain generator or alter its voxel output. Depletion persists per world ID. Sites do not regenerate or duplicate on stream-out/restart. Supplied food/water caches deliberately avoid pretending that a generic berry is complete biome-aware wild-food ecology.
+`content/world_objects/wave_4_sources.json` defines twenty finite, persistent starter resource sites: twelve upright voxel-style oak trees, four dense-stone outcrops and two each of provisions and drinking-water caches. Each source has an exact remaining quantity, class, capability and action duration. The bounded source layout uses the stored seed and existing terrain heights; it does not replace the terrain generator or alter its voxel output. Depletion persists per world ID. The existing `fallen_oak` source kind, twelve identities/placements and six-unit stock remain compatible. Presentation builds terrain-aligned 1m log and foliage cubes, with three deterministic height/canopy variants (2-4 trunk cubes). Leaves are visual only and disappear with the entire tree when depleted. Sites do not regenerate or duplicate on stream-out/restart. Supplied food/water caches deliberately avoid pretending that a generic berry is complete biome-aware wild-food ecology.
 
 ## Gathering and tools
 
@@ -28,23 +28,28 @@ Ordinary stacks remain canonical `content` plus bounded integer `quantity`. Tool
 
 ## Recipes and exact transformations
 
-`content/recipes/wave_4_recipes.json` contains thirteen canonical recipes. The UI reads the same data as transactions; there is no separate Forge or presentation recipe table. Ingredients match exact canonical IDs, and all recipes are known by default.
+`content/recipes/wave_4_recipes.json` contains fourteen canonical recipes. Recipe data drives both grid matching and transactions; the UI contains no matching table. Ingredients use exact canonical IDs. All recipes are known by default, with a compact hint instead of a recipe-book system.
 
-| Recipe | Exact inputs | Exact outputs | Context |
+| Recipe | Exact inputs | Exact outputs | Context / form |
 | --- | --- | --- | --- |
-| Saw planks | 1 Oak Heartwood | 4 Oak planks | Hand |
-| Split Oak Sticks | 1 Oak plank | 4 Oak Sticks | Hand |
-| Each wooden tool | 3 Oak planks + 2 Oak Sticks | 1 wooden tool instance | Hand |
-| Stone pickaxe | 2 Oak planks + 2 Stone | 1 pickaxe instance | Hand |
-| Stone axe | 2 Oak planks + 2 Stone | 1 axe instance | Hand |
-| Stone shovel | 2 Oak planks + 2 Stone | 1 shovel instance | Hand |
-| Build kiln | 6 Stone + 2 Oak planks | 1 Stone kiln | Hand |
-| Weave rest mat | 2 Oak planks | 1 Rest mat | Hand |
-| Build storage box | 4 Oak planks | 1 Storage box | Hand |
-| Craft lamp | 1 Oak plank + 1 Charcoal | 1 Charcoal lamp | Hand |
+| Saw planks | 1 Oak Heartwood | 4 Oak planks | Personal 2x2, shapeless |
+| Split Oak Sticks | 1 Oak plank | 4 Oak Sticks | Personal 2x2, shapeless |
+| Build Workbench | 4 Oak planks | 1 Workbench | Personal 2x2, full square |
+| Wooden pickaxe / axe | 3 Oak planks + 2 Oak Sticks | 1 corresponding tool instance | Workbench 3x3, shaped |
+| Wooden shovel | 1 Oak plank + 2 Oak Sticks | 1 shovel instance | Workbench 3x3, shaped |
+| Stone pickaxe / axe | 3 Stone + 2 Oak Sticks | 1 corresponding tool instance | Workbench 3x3, shaped |
+| Stone shovel | 1 Stone + 2 Oak Sticks | 1 shovel instance | Workbench 3x3, shaped |
+| Build kiln | 6 Stone + 2 Oak planks | 1 Stone kiln | Workbench 3x3, shaped |
+| Weave rest mat | 2 Oak planks | 1 Rest mat | Personal 2x2, adjacent horizontal cells |
+| Build storage box | 4 Oak planks | 1 Storage box | Workbench 3x3, four corners |
+| Craft lamp | 1 Oak plank + 1 Charcoal | 1 Charcoal lamp | Personal 2x2, shapeless |
 | Charcoal burn | 2 Oak Heartwood + 1 Oak Heartwood fuel | 2 Charcoal | Kiln, 8 simulation seconds |
 
-Crafting prepares a detached inventory, checks ingredients and the post-consumption output capacity, and publishes only after the whole transformation validates. Unknown recipe, wrong context, missing inputs and insufficient output space leave the original inventory untouched. No partial craft or overflow deletion occurs.
+Tool silhouettes use H for working-head material (plank or Stone) and S for Oak Stick. Rows are `HHH / _S_ / _S_` for pickaxes, `HH / HS / _S` for axes, and `H / S / S` for shovels. Blank cells matter; translated patterns and explicitly allowed mirrored axes match. Kiln rows are `SSS / S_S / PSP` (S = Stone, P = plank); storage rows are `P_P / ___ / P_P`. Personal recipes also work at a Workbench; Workbench recipes never work in the personal grid. Quantities are representative owner-directed tuning, not claimed as locked final recipes. Shovel and Stone tool quantities change from the first repair to fit their actual silhouettes.
+
+Four or nine actual inventory staging slots hold moved ingredients. Taking the preview output re-matches the canonical recipe, validates the requested identity and output capacity, consumes exact quantities in detached grid/destination inventories, then publishes both together. Failure changes neither endpoint; previewing creates no material or tool instance. Shapeless matching requires every occupied cell to participate. Shaped matching rejects extra materials or wrong arrangements. The legacy recipe-ID transaction cannot bypass grid recipes.
+
+Closing attempts to return all staged items to player inventory atomically. If everything cannot fit, the menu and all staging remain accessible, with a capacity message; no partial return, deletion or overflow occurs. Invalidated Workbench context disables crafting and attempts the same safe close. Save and save-and-quit first require successful close, so transient staging cannot be omitted from a save.
 
 ## Workstations and time
 
@@ -56,11 +61,11 @@ A save records the active recipe and progress. Restart resumes stored progress. 
 
 ## Building, shelter and storage
 
-Placement continues to use the existing inventory-to-voxel transaction and validates empty editable space, range and player-body overlap. Failed placement consumes nothing. Functional construction also creates a persistent world-object identity attached to its authoritative voxel cell. Kiln, storage, rest and light state are validated against sparse voxel overrides in both directions.
+Placement continues to use the existing inventory-to-voxel transaction and validates empty editable space, range and player-body overlap. Failed placement consumes nothing. Functional construction also creates a persistent world-object identity attached to its authoritative voxel cell. Workbench, kiln, storage, rest and light state are validated against sparse voxel overrides in both directions.
 
 Functional objects record a bounded cardinal orientation (0-3). Current cube geometry is symmetric; this establishes durable orientation data without a shape/directional-art programme.
 
-A crafted Storage box has nine persistent slots and uses the same transfer transactions as inventory. The historical origin crate remains available for Wave 3 compatibility. Filled storage, nonempty stations and active processes cannot be broken; empty functional construction follows its declared one-object recovery drop rule. This prevents destruction from silently deleting contents or active reservations.
+A crafted Storage box has nine persistent slots and uses the same transfer transactions as inventory. The historical origin crate remains available for Wave 3 compatibility. Workbench stores only its normal persistent object identity/cell/orientation, with no persistent crafting inventory; its empty recovery returns one Workbench. Filled storage, nonempty stations and active processes cannot be broken; empty functional construction follows its declared one-object recovery drop rule. This prevents destruction from silently deleting contents or active reservations.
 
 The lamp creates a real local warm light. A rest mat permits rest when nearby and sufficiently enclosed. Shelter requires overhead solid cover within four cells and solid cover on at least three cardinal sides within three cells. The query uses bounded authoritative voxel samples and is cached for half a second. It does not scan the world, simulate structural integrity or implement weather/climate.
 
@@ -79,13 +84,13 @@ The authoritative survival state retains six finite bounded values in 0-100: hea
 
 The same parameter model exposes Peaceful, Relaxed and Harsh recovery/rate hooks for focused verification. It is not a complete world-settings/profile UI. Production uses Standard; verification's opt-in 3600x biology multiplier is guarded by explicit test flags, logged, never serialized and never applied to the rendered manual candidate or workstation time.
 
-Progression is capability driven: manual timber -> wooden tools -> ordinary Stone -> Stone tools -> Dense Stone -> kiln/charcoal -> light and a persistent enclosed work/rest area. There is no new level, perk, research or tech-tree framework.
+Progression is capability driven: manual timber -> personal planks/sticks/Workbench -> Workbench wooden tools -> ordinary Stone -> Stone tools -> Dense Stone -> kiln/charcoal -> light and a persistent enclosed work/rest area. There is no new level, perk, research or tech-tree framework.
 
 ## Persistence and migration
 
 Save schema is now `save_version = 3`; `worldgen_version = 1` and `content_version = 1` remain unchanged. The checksum envelope, pending-file validation, previous-copy recovery, external-change detection and world-ID isolation remain active.
 
-The payload keeps all Wave 2 player/voxel state and Wave 3 resources. Its new `creation` section records survival, constructed object identities/cells/orientation, storage slots, workstation input/fuel/output/active recipe/progress, source identities/depletion/layout and accumulated simulation time. Tool instances/durability stay with their stacks in the existing resources section. Optional `survival.timing` stores recovery delays and starvation/dehydration debt. Original six-field v3 survival objects load with zero timing defaults without changing their values. Transient targeting, unfinished gathering, rest intent, cached shelter and node references are not serialized.
+The payload keeps all Wave 2 player/voxel state and Wave 3 resources. Its new `creation` section records survival, constructed object identities/cells/orientation, storage slots, workstation input/fuel/output/active recipe/progress, source identities/depletion/layout and accumulated simulation time. Tool instances/durability stay with their stacks in the existing resources section. Optional `survival.timing` stores recovery delays and starvation/dehydration debt. Original six-field v3 survival objects load with zero timing defaults without changing their values. Transient targeting, unfinished gathering, rest intent, cached shelter and node references are not serialized. Crafting staging is returned before saving; Workbench does not add persistent container fields. Existing v3 worlds retain timber IDs, depletion, tool instances/durability, active kiln reservations and all previous state without a version migration.
 
 v1 loads with safe Wave 3 and Wave 4 defaults. v2 retains all historical resources/hotbar/equipment/drop/storage state and receives safe Wave 4 defaults. Migration happens in memory. Only a successful explicit save writes v3, retaining the old file as the previous copy. Fixtures use legitimate historical field sets, including ordinary two-field v2 stacks and no resource section in v1.
 
@@ -97,10 +102,10 @@ Existing movement, look, jumping, hotbar and inventory controls remain:
 
 - WASD move; Shift sprint; Space jump; mouse look.
 - LMB starts timed terrain/source gathering; RMB interacts with a highlighted functional object or otherwise places selected inventory content.
-- 1-9 / wheel select hotbar; I opens the existing inventory/equipment interface.
-- RMB opens/interacts with highlighted kiln/storage/rest/crate targets. Interaction takes priority over placement; E is an alternate targeted interaction.
-- C opens canonical hand recipes. F consumes the selected food/drink.
-- Kiln/storage panels use source/destination slots, half-stack splitting and shift-click quick transfers; they include player inventory and hotbar.
+- 1-9 / wheel select hotbar; I opens the unified backpack/hotbar/equipment interface with a 2x2 personal crafting grid.
+- RMB opens/interacts with highlighted Workbench/kiln/storage/rest/crate targets. Interaction takes priority over placement; E is an alternate targeted interaction.
+- C opens the same Inventory interface with its crafting section highlighted. F consumes the selected food/drink.
+- Workbench RMB opens that same shell with a 3x3 grid. Crafting and kiln/storage panels use source/destination slots, half-stack splitting and shift-click quick transfers; they include player inventory and hotbar.
 - RMB on a covered rest mat begins rest; movement ends it.
 - Q drops one selected unit; Shift-Q drops the stack. Escape closes panels/releases the mouse.
 - F5 saves; F10 saves and quits. Window close retains the controlled save path.
@@ -111,7 +116,7 @@ The HUD shows health, stamina, food and fatigue, with hydration only in enabled 
 
 Reusable instances, harvesting evaluation, recipes/transformations, survival values, persistent construction state and workstation timing live under `src/lfe/`. The existing world/player authority and the new presenters/panels under `src/game/` own Leyforge orchestration and presentation. Canonical definitions stay under `content/`; fixtures/drivers stay under `tests/`.
 
-No Forge or Forge-ENG implementation was added. Thirteen recipes and a representative source/tool catalog did not establish authoring friction that warranted a new tool. Runtime schema/reference validation already checks the actual canonical definitions. Reserved workspaces remain untouched.
+No Forge or Forge-ENG implementation was added. Fourteen recipes and a representative source/tool catalog did not establish authoring friction that warranted a new tool. Runtime schema/reference validation already checks the actual canonical definitions. Reserved workspaces remain untouched.
 
 ## Verification and evidence
 
@@ -127,7 +132,7 @@ The gate uses isolated profiles and disposable worlds outside the repository. It
 
 Eight rendered processes prove A: the full new survival loop with active processing at save; B: exact restoration and continued tool/process/craft/build work; C: a second exact restart; D: independent state for another world ID with the same seed; M1/N1 and M2/N2: legitimate historical v1/v2 migration and current-format fresh-process reload. Streaming checks explicitly confirm source terrain becomes uneditable, then rebuilds the same construction and preserves all resource/object state. Reports account for materials in inventories, drops, constructed voxels, station containers and active reservations, including explicit fuel and consumable transformations.
 
-The rendered driver uses production commands and UI handlers. It does not inject inventories, tools, survival or processing snapshots to manufacture the loop. Camera/player positioning and controlled environmental damage are identified test setup; fixed simulation durations use the production timing seam. Normal play advances that same seam through physics time. Fifteen screenshots accompany machine-readable reports, including natural source scale, slot-based processing/completion and drop motion before/after. Prior Wave 0-3 gates run before a full certification receipt is green. Skip switches produce a partial verification receipt, never full certification.
+The rendered driver uses production commands and UI handlers. It does not inject inventories, tools, survival or processing snapshots to manufacture the loop. Camera/player positioning and controlled environmental damage are identified test setup; fixed simulation durations use the production timing seam. Normal play advances that same seam through physics time. Eighteen screenshots accompany machine-readable reports, including upright tree variation, full personal 2x2 Workbench crafting, 3x3 wooden-tool crafting, slot-based processing/completion and drop motion before/after. Prior Wave 0-3 gates run before a full certification receipt is green. Skip switches produce a partial verification receipt, never full certification.
 
 Historical regression assertions now compare against the current save version and expanded catalog while retaining the original deterministic terrain, resource conservation, transaction and restart checks. Their standalone item fixture extends production content instead of replacing it. Wave 3's rendered driver waits for actual harvest completion.
 
@@ -143,6 +148,6 @@ Wave 5 host/join, RPCs, replication, prediction and server implementation have n
 
 The voxel runtime's `is_area_editable` region query gates source, drop, functional-light/object and origin-crate materialisation. Unloading removes Nodes; persistent records survive. Returning rebuilds exactly one relevant presentation per live identity. There is no far simulation or new entity database.
 
-Sources use terrain-aligned short timber segments, small stone clusters and sensible cache dimensions. Crosshair collision queries resolve the nearest visible source and reject terrain occlusion. Source stock/positions/identities are unchanged for existing saves.
+Timber sources use terrain-aligned upright log/canopy cubes with deterministic variation; other sources retain small stone clusters and sensible cache dimensions. Crosshair collision queries resolve the nearest visible source and reject terrain occlusion. Source stock/positions/identities are unchanged for existing saves.
 
 Drops visually hover, bob and rotate with instance-derived phase without modifying logical positions. Compatible ordinary stacks attract through clear local voxel space within 2m at 0.18m/sec, merge within 0.3m up to stack maximum, and persist actual resulting positions. Stateful instances never merge. A spatial bucket pass limits pair checks to 256 per tick. Rendered conservation tests advance this authority seam explicitly; normal physics advances it continuously.

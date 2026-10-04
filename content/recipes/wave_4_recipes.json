@@ -17,11 +17,15 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shapeless",
+        "size": 2
+      }
     },
     {
       "id": "leyforge:craft_wooden_pickaxe",
-      "context": "hand",
+      "context": "workbench",
       "inputs": [
         {
           "content": "leyforge:oak_planks",
@@ -39,11 +43,25 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 3,
+        "pattern": [
+          "HHH",
+          " S ",
+          " S "
+        ],
+        "keys": {
+          "H": "leyforge:oak_planks",
+          "S": "leyforge:oak_stick"
+        },
+        "mirror": false
+      }
     },
     {
       "id": "leyforge:craft_wooden_axe",
-      "context": "hand",
+      "context": "workbench",
       "inputs": [
         {
           "content": "leyforge:oak_planks",
@@ -61,15 +79,29 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 3,
+        "pattern": [
+          "HH",
+          "HS",
+          " S"
+        ],
+        "keys": {
+          "H": "leyforge:oak_planks",
+          "S": "leyforge:oak_stick"
+        },
+        "mirror": true
+      }
     },
     {
       "id": "leyforge:craft_wooden_shovel",
-      "context": "hand",
+      "context": "workbench",
       "inputs": [
         {
           "content": "leyforge:oak_planks",
-          "quantity": 3
+          "quantity": 1
         },
         {
           "content": "leyforge:oak_stick",
@@ -83,7 +115,21 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 3,
+        "pattern": [
+          "H",
+          "S",
+          "S"
+        ],
+        "keys": {
+          "H": "leyforge:oak_planks",
+          "S": "leyforge:oak_stick"
+        },
+        "mirror": false
+      }
     },
     {
       "id": "leyforge:saw_planks",
@@ -101,18 +147,22 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shapeless",
+        "size": 2
+      }
     },
     {
       "id": "leyforge:craft_stone_pickaxe",
-      "context": "hand",
+      "context": "workbench",
       "inputs": [
         {
-          "content": "leyforge:oak_planks",
-          "quantity": 2
+          "content": "leyforge:stone",
+          "quantity": 3
         },
         {
-          "content": "leyforge:stone",
+          "content": "leyforge:oak_stick",
           "quantity": 2
         }
       ],
@@ -123,18 +173,32 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 3,
+        "pattern": [
+          "HHH",
+          " S ",
+          " S "
+        ],
+        "keys": {
+          "H": "leyforge:stone",
+          "S": "leyforge:oak_stick"
+        },
+        "mirror": false
+      }
     },
     {
       "id": "leyforge:craft_stone_axe",
-      "context": "hand",
+      "context": "workbench",
       "inputs": [
         {
-          "content": "leyforge:oak_planks",
-          "quantity": 2
+          "content": "leyforge:stone",
+          "quantity": 3
         },
         {
-          "content": "leyforge:stone",
+          "content": "leyforge:oak_stick",
           "quantity": 2
         }
       ],
@@ -145,18 +209,32 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 3,
+        "pattern": [
+          "HH",
+          "HS",
+          " S"
+        ],
+        "keys": {
+          "H": "leyforge:stone",
+          "S": "leyforge:oak_stick"
+        },
+        "mirror": true
+      }
     },
     {
       "id": "leyforge:craft_stone_shovel",
-      "context": "hand",
+      "context": "workbench",
       "inputs": [
         {
-          "content": "leyforge:oak_planks",
-          "quantity": 2
+          "content": "leyforge:stone",
+          "quantity": 1
         },
         {
-          "content": "leyforge:stone",
+          "content": "leyforge:oak_stick",
           "quantity": 2
         }
       ],
@@ -167,11 +245,25 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 3,
+        "pattern": [
+          "H",
+          "S",
+          "S"
+        ],
+        "keys": {
+          "H": "leyforge:stone",
+          "S": "leyforge:oak_stick"
+        },
+        "mirror": false
+      }
     },
     {
       "id": "leyforge:build_kiln",
-      "context": "hand",
+      "context": "workbench",
       "inputs": [
         {
           "content": "leyforge:stone",
@@ -189,7 +281,21 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 3,
+        "pattern": [
+          "SSS",
+          "S S",
+          "PSP"
+        ],
+        "keys": {
+          "S": "leyforge:stone",
+          "P": "leyforge:oak_planks"
+        },
+        "mirror": false
+      }
     },
     {
       "id": "leyforge:weave_rest_mat",
@@ -207,11 +313,22 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 2,
+        "pattern": [
+          "PP"
+        ],
+        "keys": {
+          "P": "leyforge:oak_planks"
+        },
+        "mirror": false
+      }
     },
     {
       "id": "leyforge:build_storage_box",
-      "context": "hand",
+      "context": "workbench",
       "inputs": [
         {
           "content": "leyforge:oak_planks",
@@ -225,7 +342,20 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 3,
+        "pattern": [
+          "P P",
+          "   ",
+          "P P"
+        ],
+        "keys": {
+          "P": "leyforge:oak_planks"
+        },
+        "mirror": false
+      }
     },
     {
       "id": "leyforge:craft_lamp",
@@ -247,7 +377,11 @@
         }
       ],
       "seconds": 0,
-      "fuel": []
+      "fuel": [],
+      "grid": {
+        "type": "shapeless",
+        "size": 2
+      }
     },
     {
       "id": "leyforge:charcoal_burn",
@@ -271,6 +405,36 @@
           "quantity": 1
         }
       ]
+    },
+    {
+      "id": "leyforge:build_workbench",
+      "context": "hand",
+      "inputs": [
+        {
+          "content": "leyforge:oak_planks",
+          "quantity": 4
+        }
+      ],
+      "outputs": [
+        {
+          "content": "leyforge:workbench",
+          "quantity": 1
+        }
+      ],
+      "seconds": 0,
+      "fuel": [],
+      "grid": {
+        "type": "shaped",
+        "size": 2,
+        "pattern": [
+          "PP",
+          "PP"
+        ],
+        "keys": {
+          "P": "leyforge:oak_planks"
+        },
+        "mirror": false
+      }
     }
   ]
 }

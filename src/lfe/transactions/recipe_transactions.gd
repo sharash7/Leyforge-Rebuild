@@ -29,7 +29,7 @@ static func outputs(inventory: LfeInventory, entries: Array) -> bool:
 
 static func craft(inventory: LfeInventory, recipes: LfeRecipeCatalog, id: String) -> bool:
 	var recipe: Dictionary = recipes.definition(id)
-	if recipe.is_empty() or recipe["context"] != "hand":
+	if recipe.is_empty() or recipe["context"] != "hand" or recipe.has("grid"):
 		return false
 	var next: LfeInventory = LfeInventory.new(inventory._catalog, inventory.capacity())
 	next.restore(inventory.snapshot())

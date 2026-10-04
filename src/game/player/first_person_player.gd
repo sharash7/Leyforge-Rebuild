@@ -65,7 +65,7 @@ func _ready() -> void:
 	_instruction_label.text = (
 		"WASD move  |  Shift sprint  |  Space jump  |  1–9 / wheel hotbar\n"
 		+ "LMB gather/mine  |  RMB interact/place  |  F5 save  |  F10 save and quit\n"
-		+ "I inventory  |  E alternate interact  |  C craft  |  F consume\nQ drop one (Shift: stack)  |  Escape close/release"
+		+ "I inventory  |  E alternate interact  |  C inventory crafting  |  F consume\nQ drop one (Shift: stack)  |  Escape close/release"
 	)
 	if DisplayServer.get_name() != "headless" and not _playtest_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -432,7 +432,7 @@ func _update_targeting() -> void:
 	_target_highlight.visible=true
 	var definition: Dictionary = _catalog.definition_for_voxel_id(_voxel_tool.get_voxel(_target_cell))
 	_context_text=definition.get("display_name","")+" — LMB gather"
-	if definition.get("function","") in ["kiln","storage","rest"]:
+	if definition.get("function","") in ["kiln","storage","rest","workbench"]:
 		_context_text=definition["display_name"]+" — RMB interact"
 
 func _clear_target() -> void:

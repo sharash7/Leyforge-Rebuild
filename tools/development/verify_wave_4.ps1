@@ -75,7 +75,7 @@ try {
             if ($report.survival_profile -ne 'Standard' -or $report.survival_acceleration) { throw "Rendered manual candidate must use Standard production timing." }
             $gate.rendered_checks += $report.checks
         }
-        foreach ($frame in @('01_gathering.png','02_crafting.png','03_workstation.png','04_shelter.png','05_survival.png','06_saved.png','07_restart.png','08_completed.png','09_isolation.png','10_migration_v1.png','11_migration_v2.png','12_drop_before.png','12_drop_motion.png','13_furnace_completed.png','14_resource_scale.png')) {
+        foreach ($frame in @('01_gathering.png','02_crafting.png','03_workstation.png','04_shelter.png','05_survival.png','06_saved.png','07_restart.png','08_completed.png','09_isolation.png','10_migration_v1.png','11_migration_v2.png','12_drop_before.png','12_drop_motion.png','13_furnace_completed.png','14_resource_scale.png','15_personal_grid.png','16_workbench_grid.png','17_tree_variation.png')) {
             $path = Join-Path $evidenceRoot $frame
             if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) { throw "Missing rendered frame $frame" }
         }

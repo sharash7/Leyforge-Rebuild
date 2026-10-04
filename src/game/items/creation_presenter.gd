@@ -59,9 +59,24 @@ func _source(entry: Dictionary) -> Node3D:
 	var size: Vector3 = Vector3(0.65,0.55,0.65)
 	var center: Vector3 = Vector3(0,0.275,0)
 	if entry["source"]=="fallen_oak":
-		size=Vector3(1.8,0.5,0.5);center=Vector3(0,0.25,0)
-		_box(body,Vector3(-0.46,0.25,0),Vector3(0.88,0.5,0.5),color)
-		_box(body,Vector3(0.46,0.25,0),Vector3(0.88,0.5,0.5),color.lightened(0.08))
+		var visual: Dictionary = _world.block_catalog.content_definition(StringName(spec["content"]))["world_visual"]
+		var variant: int = String(entry["instance"]).substr(0,8).hex_to_int()%3
+		var height: int = 2+variant
+		var bark: Color = Color.from_string(visual["log_color"],color)
+		var leaves: Color = Color.from_string(visual["leaf_color"],Color.FOREST_GREEN)
+		body.set_meta("tree_variant",variant)
+		body.set_meta("trunk_height",height)
+		size=Vector3(1,height,1);center=Vector3(0,height/2.0,0)
+		for level: int in height:
+			_box(body,Vector3(0,level+0.5,0),Vector3.ONE,bark.lightened(level*0.025))
+		# Visual-only foliage owns no second timber identity or resource output.
+		for level: int in 2:
+			for x: int in range(-1,2):
+				for z: int in range(-1,2):
+					if level==0 and x==0 and z==0:continue
+					if variant==1 and abs(x)+abs(z)==2 and level==1:continue
+					_box(body,Vector3(x,height-0.5+level,z),Vector3.ONE,leaves.lightened((x+z+2)*0.025))
+		_box(body,Vector3(0,height+1.5,0),Vector3.ONE,leaves.lightened(0.12))
 	elif entry["source"]=="dense_stone":
 		size=Vector3(1.35,0.8,1.05);center=Vector3(0,0.4,0)
 		_box(body,Vector3(-0.32,0.3,0),Vector3(0.7,0.6,0.85),color)

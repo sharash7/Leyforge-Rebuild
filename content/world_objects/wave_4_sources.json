@@ -3,7 +3,7 @@
   "sources": [
     {
       "id": "fallen_oak",
-      "display_name": "Fallen Oak Heartwood",
+      "display_name": "Oak tree",
       "content": "leyforge:oak_heartwood",
       "quantity": 6,
       "count": 12,

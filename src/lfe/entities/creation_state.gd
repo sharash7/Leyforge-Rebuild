@@ -161,7 +161,7 @@ func restore(data: Variant, resources: Dictionary = {}) -> bool:
 			return false
 		cells[str(entry["cell"])] = true
 		var function: String = _catalog.content_definition(StringName(entry["content"])).get("function", "")
-		if function not in ["kiln", "rest", "storage", "light"] or entry.size() != (5 if function in ["kiln","storage"] else 4):
+		if function not in ["kiln", "rest", "storage", "light", "workbench"] or entry.size() != (5 if function in ["kiln","storage"] else 4):
 			return false
 		var object: Dictionary = entry.duplicate(true)
 		object["cell"] = [int(entry["cell"][0]),int(entry["cell"][1]),int(entry["cell"][2])]

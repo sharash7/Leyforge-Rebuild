@@ -253,6 +253,33 @@
         ]
       },
       "function": "light"
+    },
+    {
+      "id": "leyforge:workbench",
+      "voxel_id": 10,
+      "display_name": "Workbench",
+      "color": "#936342FF",
+      "solid": true,
+      "breakable": true,
+      "development_placeable": false,
+      "kind": "block",
+      "inventory_capable": true,
+      "stack_limit": 64,
+      "placeable": true,
+      "equipment_slots": [],
+      "drop_content": "leyforge:workbench",
+      "harvest": {
+        "class": "manual",
+        "capability": 0,
+        "seconds": 0.4,
+        "outputs": [
+          {
+            "content": "leyforge:workbench",
+            "quantity": 1
+          }
+        ]
+      },
+      "function": "workbench"
     }
   ],
   "items": [
@@ -264,7 +291,12 @@
       "inventory_capable": true,
       "stack_limit": 64,
       "placeable": false,
-      "equipment_slots": []
+      "equipment_slots": [],
+      "world_visual": {
+        "form": "oak_log",
+        "log_color": "#86552FFF",
+        "leaf_color": "#447C39FF"
+      }
     },
     {
       "id": "leyforge:charcoal",

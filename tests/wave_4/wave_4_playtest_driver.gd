@@ -15,6 +15,8 @@ var _built: Array = []
 var _edits: Array = []
 var _kiln: String = ""
 var _rest: String = ""
+var _bench: String = ""
+var _tree_times: Array[float] = []
 var _home: Vector3i
 
 func configure(world: LeyforgeWave1Playground, player: LeyforgeFirstPersonPlayer, terrain: VoxelTerrain, catalog: LfeBlockCatalog, _seed: int) -> void:
@@ -37,7 +39,7 @@ func _run() -> void:
 		"M1","M2":await _migration()
 		"N1","N2":await _migration_restart()
 		_:_check(false,"Unknown acceptance phase")
-	_report.merge({"phase":_phase,"checks":_checks,"passed":_failures.is_empty(),"failures":_failures,"world_id":_world.world_save.world_id,"seed":_world.active_seed,"runner":Engine.get_version_info()["string"],"setup_only":["Camera/viewer and player positioning at test interaction cells","Controlled environmental health damage command","Fixed-duration calls to the production simulation seam"],"state_injection":false,"survival_profile":_world.creation.survival.profile_name,"survival_acceleration":false})
+	_report.merge({"phase":_phase,"checks":_checks,"passed":_failures.is_empty(),"failures":_failures,"world_id":_world.world_save.world_id,"seed":_world.active_seed,"runner":Engine.get_version_info()["string"],"setup_only":["Camera/viewer and player positioning at test interaction cells","Controlled environmental health damage command","Fixed-duration calls to the production simulation seam"],"state_injection":false,"survival_profile":_world.creation.survival.profile_name,"survival_acceleration":false,"tree_work_seconds":_tree_times})
 	_write_report()
 	for failure: String in _failures:push_error("Wave 4 rendered %s: %s" % [_phase,failure])
 	print("WAVE_4_RENDERED_%s_%s checks=%d" % [_phase,"PASS" if _failures.is_empty() else "FAIL",_checks])
@@ -55,38 +57,50 @@ func _new_loop() -> void:
 	await _frames(4);_player.set_runtime_ready(false)
 	_check(_player.global_position.distance_to(origin)>0.5 and float(_world.creation.survival.snapshot()["stamina"])<100,"Production movement and stamina exertion")
 	await _gather(0)
-	_world.toggle_crafting()
+	_key(KEY_I)
+	_check(_world.inventory_panel.crafting!=null and _world.inventory_panel.crafting.size==2 and _world.inventory_panel._panel.visible,"I opens backpack/hotbar/equipment and personal grid in one shell")
 	await _capture("02_crafting.png")
 	_world.close_inventory()
-	_craft("saw_planks")
-	_craft("split_oak_sticks")
-	_craft("craft_wooden_pickaxe")
+	await _craft("saw_planks")
+	await _craft("build_workbench")
+	await _bootstrap_bench()
+	await _craft("saw_planks")
+	await _craft("saw_planks")
+	await _craft("split_oak_sticks")
+	await _personal_grid_checks()
+	await _craft("craft_wooden_pickaxe")
+	await _craft("split_oak_sticks")
+	await _craft("craft_wooden_axe")
+	_equip("wooden_axe")
+	await _gather(1)
 	_equip("wooden_pickaxe")
 	# Open a narrow real terrain shaft; all material enters conserved drops.
 	var height: int=LfeWave1TerrainRules.height_at(_world.active_seed,3,2)
-	for y: int in range(height,height-6,-1):await _mine(Vector3i(3,y,2))
-	_check(r.inventory.total(&"leyforge:stone")>=2,"Fresh wooden pickaxe obtains ordinary Stone without granted Stone")
-	_craft("saw_planks")
-	_craft("craft_stone_pickaxe")
+	for y: int in range(height,height-7,-1):await _mine(Vector3i(3,y,2))
+	_check(r.inventory.total(&"leyforge:stone")>=3,"Fresh wooden pickaxe obtains ordinary Stone without granted Stone")
+	await _craft("saw_planks")
+	await _craft("craft_stone_pickaxe")
 	_equip("stone_pickaxe")
 	var pick: Dictionary=r.equipment.stack_at(0)
 	await _gather(12)
 	await _gather(13)
 	_check(int(r.equipment.stack_at(0)["durability"])==int(pick["durability"])-2,"Mining capability and exact durability loss")
-	_craft("craft_stone_axe")
+	await _craft("craft_stone_axe")
 	_equip("stone_axe")
-	await _gather(1);await _gather(2);await _gather(3)
+	await _gather(2);await _gather(3)
+	_check(_tree_times.size()>=3 and _tree_times[0]>_tree_times[1] and _tree_times[1]>_tree_times[2],"Rendered tree work timing improves manual -> Wooden Axe -> Stone Axe")
 	await _resource_view(4)
 	await _capture("01_gathering.png")
 	await _resource_view(15)
 	await _capture("14_resource_scale.png")
-	for n: int in 14:_craft("saw_planks")
-	_craft("split_oak_sticks")
-	_craft("craft_wooden_axe");_craft("craft_wooden_shovel")
-	_craft("craft_stone_shovel")
+	for n: int in 13:await _craft("saw_planks")
+	await _craft("split_oak_sticks")
+	await _craft("craft_wooden_shovel")
+	await _craft("split_oak_sticks")
+	await _craft("craft_stone_shovel")
 	_equip("stone_shovel")
 	await _mine(Vector3i(4,LfeWave1TerrainRules.height_at(_world.active_seed,4,2),2))
-	_craft("build_kiln");_craft("weave_rest_mat");_craft("build_storage_box")
+	await _craft("build_kiln");await _craft("weave_rest_mat");await _craft("build_storage_box")
 	# A small built work area at the origin, using only gathered/crafted blocks.
 	var base: int=0
 	for x: int in range(-1,2):
@@ -115,11 +129,11 @@ func _new_loop() -> void:
 	_world.close_inventory()
 	_world.advance_creation(8.0)
 	_completed()
-	_world.creation_panel.open(_kiln)
+	_world.inventory_panel.open_context(_kiln)
 	await _capture("13_furnace_completed.png")
 	_world.close_inventory()
 	_check(_world.transfer_object(_kiln,"output",0,2,true)==2,"Withdraw completed charcoal through authority")
-	_craft("craft_lamp")
+	await _craft("craft_lamp")
 	await _place("lamp",_home+Vector3i(2,1,-1))
 	await _recover_function(_home+Vector3i(2,1,-1))
 	await _place("lamp",_home+Vector3i(2,1,-1))
@@ -181,9 +195,9 @@ func _resume() -> void:
 	var durability: int=int(_world.resources.equipment.stack_at(0)["durability"])
 	await _gather(14)
 	_check(int(_world.resources.equipment.stack_at(0)["durability"])==durability-1,"Restored tool works with exact retained durability")
-	_craft("saw_planks")
+	await _craft("saw_planks")
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
-	await _place("oak_planks",_home+Vector3i(0,0,-3))
+	await _place("oak_planks",_home+Vector3i(0,0,-4))
 	_verify_accounting()
 	await _stream()
 	_player.global_position=Vector3(_home)+Vector3(0.5,2.05,0.5)
@@ -234,12 +248,23 @@ func _gather(index: int) -> void:
 	_player.global_position=Vector3(float(p[0]),float(p[1])+0.65,float(p[2])-1.0)
 	var center: Vector3=Vector3(float(p[0]),floorf(float(p[1]))+0.3,float(p[2]))
 	await _aim_point(center)
+	if entry["source"]=="fallen_oak":
+		var node: Node3D = _world.creation_presenter._nodes[entry["instance"]]
+		var camera: Camera3D = _player.get_camera();camera.global_position=center+Vector3.UP*(int(node.get_meta("trunk_height"))+2)
+		camera.look_at(center,Vector3.FORWARD);await _frames(2)
 	_player._update_targeting()
 	_check(_player.target_source()==entry["instance"],"Crosshair/highlight resolves actual physical source")
 	var spec: Dictionary=_world.creation.source_definition(entry["source"])
 	var before: Dictionary=_world.creation.survival.snapshot()
 	_check(_player.try_break_target(),"LMB production path starts source gather: "+entry["source"])
+	if entry["source"]=="fallen_oak":
+		var seconds: float = float(_world._harvest.get("seconds",0))
+		_tree_times.append(seconds)
+		_check(not _world.advance_harvest(seconds/2) and _world.creation.source(entry["instance"])["remaining"]==entry["remaining"],"Tree remains before timed work completes")
 	_check(_world.advance_harvest(2.0),"Complete authorized timed source gathering")
+	if entry["source"]=="fallen_oak":
+		await _frames(2)
+		_check(not _world.creation_presenter._nodes.has(entry["instance"]),"Depleted tree removes trunk and canopy together; no ghost leaves")
 	_check(_world.creation.survival.snapshot()["stamina"]==before["stamina"],"Routine source gathering costs no Standard stamina")
 	_adjust(spec["content"],int(entry["remaining"]))
 
@@ -259,14 +284,55 @@ func _mine(cell: Vector3i) -> void:
 	_check(id!=&"leyforge:air","Gathered actual terrain resource")
 
 func _craft(name: String) -> void:
-	var recipe: Dictionary=_world.creation.recipes.definition("leyforge:"+name)
-	_world.toggle_crafting()
-	var before: Array=_world.resources.inventory.snapshot()
-	_world.creation_panel._recipes["leyforge:"+name].pressed.emit()
-	_check(_world.resources.inventory.snapshot()!=before,"Canonical hand-crafting UI: "+name)
-	_world.close_inventory()
+	var recipe: Dictionary = _world.creation.recipes.definition("leyforge:"+name)
+	if recipe["context"]=="workbench":
+		for entry: Dictionary in _world.creation.objects():
+			if entry["content"]=="leyforge:workbench":
+				_bench=entry["instance"]
+				var p: Array = entry["cell"];var cell: Vector3i = Vector3i(int(p[0]),int(p[1]),int(p[2]))
+				_world.close_inventory();_player.global_position=Vector3(cell)+Vector3(1.7,1.05,0.5)
+				await _aim(cell)
+				_check(_player.try_place_target() and _world.inventory_panel._object==_bench,"RMB opens same shell with Workbench context")
+				break
+	else:_key(KEY_C)
+	var panel: LeyforgeInventoryPanel = _world.inventory_panel
+	if panel.crafting==null:_check(false,"Real crafting grid exists for "+name);return
+	_check(panel.crafting.size==int(recipe["grid"]["size"]),"Recipe uses its required 2x2/3x3 context: "+name)
+	await _stage_recipe(recipe)
+	var match: Dictionary = panel.crafting.preview()
+	_check(match.get("recipe")==recipe["id"],"Real staged cells match canonical pattern: "+name)
+	if name=="craft_wooden_pickaxe":await _capture("16_workbench_grid.png")
+	if name=="build_workbench":await _capture("15_personal_grid.png")
+	var before: Dictionary = _world.resources.snapshot()
+	panel._output.pressed.emit()
+	_check(_world.resources.snapshot()!=before and panel.crafting.inventory.snapshot().all(func(v:Variant)->bool:return v==null),"Taking output consumes exact staged ingredients: "+name)
+	_check(_world.close_inventory(),"Close safely returns any remaining staging")
 	for entry: Dictionary in recipe["inputs"]:_adjust(entry["content"],-int(entry["quantity"]))
 	for entry: Dictionary in recipe["outputs"]:_adjust(entry["content"],int(entry["quantity"]))
+
+func _stage_recipe(recipe: Dictionary) -> void:
+	var panel: LeyforgeInventoryPanel = _world.inventory_panel
+	var placements: Array = []
+	if recipe["grid"]["type"]=="shaped":
+		for y: int in recipe["grid"]["pattern"].size():
+			var row: String = recipe["grid"]["pattern"][y]
+			for x: int in row.length():
+				if row[x]!=" ":placements.append({"slot":y*panel.crafting.size+x,"content":recipe["grid"]["keys"][row[x]],"quantity":1})
+	else:
+		for index: int in recipe["inputs"].size():
+			var entry: Dictionary = recipe["inputs"][index]
+			placements.append({"slot":index,"content":entry["content"],"quantity":int(entry["quantity"])})
+	for placement: Dictionary in placements:
+		var source: int = _slot(placement["content"])
+		if source<0:_check(false,"Gathered ingredients exist: "+placement["content"]);continue
+		var exact: int = source
+		if int(_world.resources.inventory.stack_at(source)["quantity"])!=int(placement["quantity"]):
+			for slot: int in _world.resources.inventory.capacity():
+				if _world.resources.inventory.stack_at(slot).is_empty():exact=slot;break
+			_check(LfeItemTransactions.transfer(_world.resources.inventory,source,_world.resources.inventory,int(placement["quantity"]),exact)==int(placement["quantity"]),"Conserved exact ingredient stack preparation")
+		_ui_slot(_world.resources.inventory,exact);_ui_slot(panel.crafting.inventory,int(placement["slot"]))
+		_check(panel.crafting.inventory.stack_at(int(placement["slot"])).get("content")==placement["content"],"Actual ingredient slot click stages content")
+	panel._refresh()
 
 func _equip(name: String) -> void:
 	var r: LfeResourceState=_world.resources
@@ -295,7 +361,7 @@ func _place(name: String,cell: Vector3i) -> void:
 	_built.append({"position":[cell.x,cell.y,cell.z],"block":"leyforge:"+name})
 
 func _start_process() -> void:
-	_world.creation_panel.open(_kiln)
+	_world.inventory_panel.open_context(_kiln)
 	var station: LfeWorkstation=_world.creation.station(_kiln)
 	for channel: String in ["input","fuel"]:
 		var count: int=2 if channel=="input" else 1
@@ -310,13 +376,13 @@ func _start_process() -> void:
 			_ui_slot(_world.resources.inventory,empty)
 			_ui_slot(station.input,0)
 		_check((station.input if channel=="input" else station.fuel).total(&"leyforge:oak_heartwood")==count,"Actual furnace slot interaction: "+channel)
-	_world.creation_panel._body.find_child("StartProcess",true,false).pressed.emit()
+	_world.inventory_panel._body.find_child("StartProcess",true,false).pressed.emit()
 	_check(station.snapshot()["active"]=="leyforge:charcoal_burn","Fire kiln UI starts authoritative reserved process")
 	_world.close_inventory()
 	_adjust("leyforge:oak_heartwood",-1)
 
 func _ui_slot(inventory: LfeInventory, slot: int, split: bool=false, shift: bool=false) -> void:
-	for entry: Dictionary in _world.creation_panel._buttons:
+	for entry: Dictionary in _world.inventory_panel._buttons:
 		if entry["inventory"]==inventory and entry["slot"]==slot:
 			var event: InputEventMouseButton=InputEventMouseButton.new()
 			event.button_index=MOUSE_BUTTON_RIGHT if split else MOUSE_BUTTON_LEFT
@@ -471,7 +537,7 @@ func _rmb_object(cell: Vector3i,id: String) -> void:
 	await _aim(cell)
 	var before: Dictionary=_world.resources.snapshot()
 	var overrides: int=_world.world_save.overrides.count()
-	_check(_player.try_place_target() and _world.creation_panel._object==id and _player.inventory_open,"RMB highlighted functional object opens slot UI")
+	_check(_player.try_place_target() and _world.inventory_panel._object==id and _player.inventory_open,"RMB highlighted functional object opens slot UI")
 	_check(_world.resources.snapshot()==before and _world.world_save.overrides.count()==overrides,"RMB interaction wins over selected block placement")
 	_world.close_inventory()
 	# Reopen for the next screenshot/action using the same player-facing path.
@@ -522,7 +588,39 @@ func _resource_view(index: int) -> void:
 	var point: Vector3=Vector3(float(p[0]),floorf(float(p[1]))+0.3,float(p[2]))
 	await _aim_point(point)
 	var camera: Camera3D=_player.get_camera()
-	camera.global_position=point+Vector3(2.5,2,-2.5)
-	camera.look_at(point,Vector3.UP)
+	camera.global_position=point+Vector3(5,4,-5) if index<12 else point+Vector3(2.5,2,-2.5)
+	camera.look_at(point+Vector3.UP*1.7 if index<12 else point,Vector3.UP)
 	_player._update_targeting()
 	await _frames(3)
+
+
+func _key(key: Key) -> void:
+	var event: InputEventKey = InputEventKey.new();event.keycode=key;event.pressed=true
+	_player._unhandled_input(event)
+
+func _bootstrap_bench() -> void:
+	var y: int = LfeWave1TerrainRules.height_at(_world.active_seed,0,-3)+1
+	var cell: Vector3i = Vector3i(0,y,-3)
+	_player.global_position=Vector3(cell)+Vector3(1.8,1.05,0.5)
+	_select("workbench");await _aim(cell-Vector3i.UP)
+	_player._update_targeting();var actual: Vector3i = _player.get_placement_cell()
+	_check(_player.try_place_target(),"Fresh Workbench uses normal RMB inventory-backed placement")
+	_bench=_world.creation.object_at(actual)
+	_check(not _bench.is_empty(),"Placed Workbench has persistent functional identity")
+	_built.append({"position":[actual.x,actual.y,actual.z],"block":"leyforge:workbench"})
+	await _rmb_object(actual,_bench)
+	_check(_world.inventory_panel.crafting.size==3,"Same inventory shell exposes nine Workbench staging slots")
+	_world.close_inventory()
+
+func _personal_grid_checks() -> void:
+	_key(KEY_I)
+	var panel: LeyforgeInventoryPanel = _world.inventory_panel
+	var before: Dictionary = _world.resources.snapshot()
+	# The exact tool's materials exist, but the personal context cannot provide it.
+	var source: int = _slot("leyforge:oak_planks")
+	_ui_slot(_world.resources.inventory,source);_ui_slot(panel.crafting.inventory,0)
+	_ui_slot(_world.resources.inventory,_slot("leyforge:oak_stick"));_ui_slot(panel.crafting.inventory,1)
+	_check(panel.crafting.preview().is_empty() and panel._output.disabled,"Invalid personal arrangement cannot preview a 3x3 tool")
+	_check(_world.close_inventory() and _world.resources.snapshot()==before,"Closing populated 2x2 restores exact resources/identities")
+	await _resource_view(4)
+	await _capture("17_tree_variation.png")

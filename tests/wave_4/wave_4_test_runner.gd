@@ -25,6 +25,7 @@ func _run() -> void:
 	_check(_recipes.load_default(_catalog),"Every canonical recipe/reference validates")
 	_tools()
 	_crafting()
+	_grid_matching()
 	_processing()
 	_starter_progression()
 	_drop_clustering()
@@ -88,24 +89,25 @@ func _crafting() -> void:
 	var i: LfeInventory = LfeInventory.new(_catalog,4)
 	LfeItemTransactions.add(i,&"leyforge:oak_heartwood",3)
 	var before: Array = i.snapshot()
-	_check(not LfeRecipeTransactions.craft(i,_recipes,"unknown:recipe") and i.snapshot()==before,"Unknown craft rollback")
-	_check(not LfeRecipeTransactions.craft(i,_recipes,"leyforge:craft_stone_pickaxe") and i.snapshot()==before,"Insufficient ingredients rollback")
-	_check(not LfeRecipeTransactions.craft(i,_recipes,"leyforge:charcoal_burn") and i.snapshot()==before,"Hand context rejects process recipe")
-	_check(LfeRecipeTransactions.craft(i,_recipes,"leyforge:saw_planks") and i.total(&"leyforge:oak_heartwood")==2 and i.total(&"leyforge:oak_planks")==4,"Exact hand transformation")
-	LfeItemTransactions.add(i,&"leyforge:stone",2)
-	_check(LfeRecipeTransactions.craft(i,_recipes,"leyforge:craft_stone_pickaxe") and i.total(&"leyforge:stone")==0 and i.total(&"leyforge:oak_planks")==2,"Real starter tool chain")
+	_check(not _craft_test(i,_recipes,"unknown:recipe") and i.snapshot()==before,"Unknown craft rollback")
+	_check(not _craft_test(i,_recipes,"leyforge:craft_stone_pickaxe") and i.snapshot()==before,"Insufficient ingredients rollback")
+	_check(not _craft_test(i,_recipes,"leyforge:charcoal_burn") and i.snapshot()==before,"Hand context rejects process recipe")
+	_check(_craft_test(i,_recipes,"leyforge:saw_planks") and i.total(&"leyforge:oak_heartwood")==2 and i.total(&"leyforge:oak_planks")==4,"Exact hand transformation")
+	_check(_craft_test(i,_recipes,"leyforge:split_oak_sticks"),"Early stick transformation in grid")
+	LfeItemTransactions.add(i,&"leyforge:stone",3)
+	_check(_craft_test(i,_recipes,"leyforge:craft_stone_pickaxe") and i.total(&"leyforge:stone")==0 and i.total(&"leyforge:oak_planks")==3 and i.total(&"leyforge:oak_stick")==2,"Real starter tool chain")
 	_check(i.stack_at(_slot(i,&"leyforge:stone_pickaxe")).has("instance"),"Craft creates stateful tool")
 	var full: LfeInventory = LfeInventory.new(_catalog,1)
 	LfeItemTransactions.add(full,&"leyforge:oak_heartwood",2)
 	before=full.snapshot()
-	_check(not LfeRecipeTransactions.craft(full,_recipes,"leyforge:saw_planks") and full.snapshot()==before,"Output-capacity craft rollback after detached consumption")
+	_check(not _craft_test(full,_recipes,"leyforge:saw_planks") and full.snapshot()==before,"Output-capacity craft rollback after detached consumption")
 	var random: RandomNumberGenerator = RandomNumberGenerator.new();random.seed=928143
 	var inventory: LfeInventory = LfeInventory.new(_catalog,27)
 	var storage: LfeInventory = LfeInventory.new(_catalog,9)
 	LfeItemTransactions.add(inventory,&"leyforge:oak_heartwood",50)
 	for n: int in 300:
 		match random.randi_range(0,3):
-			0:LfeRecipeTransactions.craft(inventory,_recipes,"leyforge:saw_planks")
+			0:_craft_test(inventory,_recipes,"leyforge:saw_planks")
 			1:LfeItemTransactions.transfer(inventory,random.randi_range(0,26),storage,1,-1,true)
 			2:LfeItemTransactions.transfer(storage,random.randi_range(0,8),inventory,1,-1,true)
 			3:LfeItemTransactions.transfer(inventory,random.randi_range(0,26),inventory,1,random.randi_range(0,26),true)
@@ -230,9 +232,9 @@ func _starter_progression() -> void:
 	var state: LfeCreationState = LfeCreationState.new(_catalog);state.initialize_sources(184552221)
 	_check(r.inventory.snapshot().all(func(v: Variant)->bool:return v==null),"Starter fixture has no granted stone or tools")
 	_check(state.harvest_source(state.sources()[0]["instance"],r),"Manual timber begins starter chain")
-	_check(LfeRecipeTransactions.craft(r.inventory,_recipes,"leyforge:saw_planks") and LfeRecipeTransactions.craft(r.inventory,_recipes,"leyforge:split_oak_sticks"),"Timber components from canonical recipes")
-	_check(LfeRecipeTransactions.craft(r.inventory,_recipes,"leyforge:saw_planks"),"Enough planks for wooden tool")
-	_check(LfeRecipeTransactions.craft(r.inventory,_recipes,"leyforge:craft_wooden_pickaxe"),"Wood-only mining tool")
+	_check(_craft_test(r.inventory,_recipes,"leyforge:saw_planks") and _craft_test(r.inventory,_recipes,"leyforge:split_oak_sticks"),"Timber components from canonical recipes")
+	_check(_craft_test(r.inventory,_recipes,"leyforge:saw_planks"),"Enough planks for wooden tool")
+	_check(_craft_test(r.inventory,_recipes,"leyforge:craft_wooden_pickaxe"),"Wood-only mining tool")
 	LfeItemTransactions.transfer(r.inventory,_slot(r.inventory,&"leyforge:wooden_pickaxe"),r.equipment,1,0)
 	var ordinary: Dictionary = _catalog.definition_for_id(&"leyforge:stone")["harvest"]
 	_check(LfeHarvestRules.evaluate(ordinary,{},_catalog).is_empty(),"Manual action cannot mine ordinary stone")
@@ -241,7 +243,8 @@ func _starter_progression() -> void:
 	_check(r.break_to_drop(&"leyforge:stone",Vector3.ZERO,func()->Error:return OK,ordinary["outputs"]),"Ordinary stone production conversion")
 	r.pickup(r.drops()[0]["instance"])
 	r.break_to_drop(&"leyforge:stone",Vector3.ZERO,func()->Error:return OK,ordinary["outputs"]);r.pickup(r.drops()[0]["instance"])
-	_check(LfeRecipeTransactions.craft(r.inventory,_recipes,"leyforge:craft_stone_pickaxe"),"Ordinary stone enables stone pickaxe")
+	r.break_to_drop(&"leyforge:stone",Vector3.ZERO,func()->Error:return OK,ordinary["outputs"]);r.pickup(r.drops()[0]["instance"])
+	_check(_craft_test(r.inventory,_recipes,"leyforge:craft_stone_pickaxe"),"Ordinary stone enables stone pickaxe")
 	LfeItemTransactions.transfer(r.equipment,0,r.inventory,1)
 	LfeItemTransactions.transfer(r.inventory,_slot(r.inventory,&"leyforge:stone_pickaxe"),r.equipment,1,0)
 	_check(state.harvest_source(state.sources()[12]["instance"],r),"Stone capability unlocks dense stone")
@@ -400,3 +403,87 @@ func _write_envelope(path: String,payload: Dictionary,version: int) -> void:
 func _check(condition: bool,message: String) -> void:
 	_checks += 1
 	if not condition:_failures.append(message)
+
+
+# Focused fixture staging uses the canonical pattern and production grid transaction.
+# It prepares a detached player inventory so failed fixture setup is atomic too.
+func _craft_test(inventory: LfeInventory, recipes: LfeRecipeCatalog, id: String) -> bool:
+	var recipe: Dictionary = recipes.definition(id)
+	if recipe.is_empty() or not recipe.has("grid"):return false
+	var next: LfeInventory = LfeInventory.new(inventory._catalog,inventory.capacity())
+	next.restore(inventory.snapshot())
+	var grid: LfeCraftingGrid = LfeCraftingGrid.new(inventory._catalog,recipes,int(recipe["grid"]["size"]))
+	if recipe["grid"]["type"]=="shaped":
+		for y: int in recipe["grid"]["pattern"].size():
+			var row: String = recipe["grid"]["pattern"][y]
+			for x: int in row.length():
+				if row[x]==" ":continue
+				var content: StringName = StringName(recipe["grid"]["keys"][row[x]])
+				if LfeItemTransactions.transfer(next,_slot(next,content),grid.inventory,1,y*grid.size+x)!=1:return false
+	else:
+		for index: int in recipe["inputs"].size():
+			var entry: Dictionary = recipe["inputs"][index]
+			if LfeItemTransactions.transfer(next,_slot(next,StringName(entry["content"])),grid.inventory,int(entry["quantity"]),index)!=int(entry["quantity"]):return false
+	if not grid.take(next,id) or not grid.release(next):return false
+	return inventory.restore(next.snapshot())
+
+func _grid_matching() -> void:
+	var output: LfeInventory = LfeInventory.new(_catalog,27)
+	var personal: LfeCraftingGrid = LfeCraftingGrid.new(_catalog,_recipes,2)
+	LfeItemTransactions.add(personal.inventory,&"leyforge:oak_planks",4)
+	_check(personal.preview().get("recipe")!="leyforge:build_workbench","A stacked pile is not the four-cell Workbench pattern")
+	for slot: int in range(1,4):LfeItemTransactions.transfer(personal.inventory,0,personal.inventory,1,slot)
+	_check(personal.preview().get("recipe")=="leyforge:build_workbench","Full 2x2 matches the Workbench")
+	_check(personal.take(output) and personal.preview().is_empty() and output.total(&"leyforge:workbench")==1,"Output takes exactly four cells, once")
+	_check(not personal.take(output),"Empty grid cannot double-create output")
+	LfeItemTransactions.add(personal.inventory,&"leyforge:oak_heartwood",2)
+	LfeItemTransactions.transfer(personal.inventory,0,personal.inventory,2,3)
+	_check(personal.preview().get("recipe")=="leyforge:saw_planks" and personal.take(output),"Shapeless recipe accepts translated stack and consumes one")
+	_check(personal.inventory.total(&"leyforge:oak_heartwood")==1,"Shapeless extra stack quantity retained")
+	_check(not personal.take(output,"leyforge:build_workbench") and personal.inventory.total(&"leyforge:oak_heartwood")==1,"Stale preview request rejects without consumption")
+	_check(personal.release(output) and personal.inventory.snapshot().all(func(v:Variant)->bool:return v==null),"Closing returns staged resources exactly")
+	LfeItemTransactions.add(personal.inventory,&"leyforge:oak_planks",3);LfeItemTransactions.add(personal.inventory,&"leyforge:oak_stick",2)
+	_check(personal.preview().is_empty(),"Workbench tool cannot match personal 2x2")
+	personal.release(output)
+	var bench: LfeCraftingGrid = LfeCraftingGrid.new(_catalog,_recipes,3)
+	var pick: Array = [{"content":"leyforge:oak_planks","quantity":1},{"content":"leyforge:oak_planks","quantity":1},{"content":"leyforge:oak_planks","quantity":1},null,{"content":"leyforge:oak_stick","quantity":1},null,null,{"content":"leyforge:oak_stick","quantity":1},null]
+	bench.inventory.restore(pick)
+	_check(bench.preview().get("recipe")=="leyforge:craft_wooden_pickaxe","Readable pickaxe silhouette matches")
+	var before: Array = bench.inventory.snapshot()
+	_check(not LfeRecipeTransactions.craft(output,_recipes,"leyforge:craft_wooden_pickaxe"),"Legacy recipe-ID API cannot bypass a grid")
+	var full: LfeInventory = LfeInventory.new(_catalog,1);LfeItemTransactions.add(full,&"leyforge:stone",64)
+	var full_before: Array = full.snapshot()
+	_check(not bench.take(full) and full.snapshot()==full_before and bench.inventory.snapshot()==before,"Blocked output capacity consumes zero grid inputs")
+	_check(not bench.release(full) and full.snapshot()==full_before and bench.inventory.snapshot()==before,"Full backpack close retains all staging atomically")
+	_check(bench.take(output) and output.stack_at(_slot(output,&"leyforge:wooden_pickaxe")).has("instance"),"Grid output creates a real durable instance")
+	bench.inventory.restore(pick);LfeItemTransactions.transfer(bench.inventory,1,bench.inventory,1,3)
+	_check(bench.preview().is_empty(),"Same ingredient totals in wrong shape do not craft")
+	bench.inventory.restore(pick);LfeItemTransactions.add(bench.inventory,&"leyforge:dirt",1)
+	_check(bench.preview().is_empty(),"Unrelated extra input invalidates shaped output")
+	bench.inventory.restore([null,{"content":"leyforge:oak_planks","quantity":1},{"content":"leyforge:oak_planks","quantity":1},null,{"content":"leyforge:oak_stick","quantity":1},{"content":"leyforge:oak_planks","quantity":1},null,{"content":"leyforge:oak_stick","quantity":1},null])
+	_check(bench.preview().get("recipe")=="leyforge:craft_wooden_axe","Explicitly allowed mirrored/translated axe matches")
+	var recipes: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://content/recipes/wave_4_recipes.json"))
+	for mutation: String in ["quantity","symbol","size","context","fuel"]:
+		var bad: Dictionary = recipes.duplicate(true)
+		var recipe: Dictionary = bad["recipes"][1]
+		match mutation:
+			"quantity":recipe["inputs"][0]["quantity"]=2
+			"symbol":recipe["grid"]["pattern"][0]="XXX"
+			"size":recipe["grid"]["size"]=2
+			"context":recipe["context"]="kiln"
+			"fuel":recipe["fuel"]=[{"content":"leyforge:stone","quantity":1}]
+		_write(_root.path_join("invalid_grid.json"),JSON.stringify(bad))
+		_check(not LfeRecipeCatalog.new().load_path(_root.path_join("invalid_grid.json"),_catalog),"Malformed pattern authoring rejects: "+mutation)
+	for recipe: Dictionary in recipes["recipes"]:recipe.erase("grid")
+	_write(_root.path_join("legacy_recipes.json"),JSON.stringify(recipes))
+	_check(LfeRecipeCatalog.new().load_path(_root.path_join("legacy_recipes.json"),_catalog),"Six-field canonical recipe schema remains readable")
+	var state: LfeCreationState = LfeCreationState.new(_catalog);state.initialize_sources(184552221)
+	var sources: Array = state.sources()
+	_check(state.validate_source_layout(184552221),"Tree source identities/layout remain unchanged")
+	var bare: Dictionary = LfeHarvestRules.evaluate(state.source_definition("fallen_oak"),{},_catalog)
+	var wooden: Dictionary = LfeHarvestRules.evaluate(state.source_definition("fallen_oak"),LfeItemInstance.create(&"leyforge:wooden_axe",_catalog),_catalog)
+	var stone: Dictionary = LfeHarvestRules.evaluate(state.source_definition("fallen_oak"),LfeItemInstance.create(&"leyforge:stone_axe",_catalog),_catalog)
+	_check(float(bare["seconds"])>float(wooden["seconds"]) and float(wooden["seconds"])>float(stone["seconds"]),"Tree timing: manual slower than Wooden Axe, slower than Stone Axe")
+	_check(state.add_object(&"leyforge:workbench",Vector3i(2,30,2),0) and state.can_remove(Vector3i(2,30,2)),"Workbench has no persistent hidden staging inventory")
+	var restored: LfeCreationState = LfeCreationState.new(_catalog)
+	_check(restored.restore(state.snapshot()) and restored.snapshot()==state.snapshot(),"Workbench persists identity/orientation without new save version")
