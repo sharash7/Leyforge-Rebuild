@@ -88,6 +88,33 @@ try {
     $gate.version = $version
     $gate.runner_sha256 = (Get-FileHash -LiteralPath $godotPath -Algorithm SHA256).Hash
     Write-Output "GODOT_VERSION=$version"
+    # Exercise the exact import-first owner launcher before any .godot cache exists.
+    $ownerInfo = New-Object Diagnostics.ProcessStartInfo
+    $ownerInfo.FileName = 'powershell.exe'
+    $ownerInfo.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $testProject 'tests\wave_5_part_1\owner_launch_test.ps1') + '" -ProjectPath "' + $testProject + '" -FixtureRoot "' + (Join-Path $tempRoot 'of') + '" -EvidenceRoot "' + $evidenceRoot + '"'
+    $ownerInfo.WorkingDirectory = $testProject
+    $ownerInfo.UseShellExecute = $false
+    $ownerInfo.CreateNoWindow = $true
+    $ownerInfo.RedirectStandardOutput = $true
+    $ownerInfo.RedirectStandardError = $true
+    $ownerProcess = New-Object Diagnostics.Process
+    $ownerProcess.StartInfo = $ownerInfo
+    [void] $ownerProcess.Start()
+    $ownerStdout = $ownerProcess.StandardOutput.ReadToEndAsync()
+    $ownerStderr = $ownerProcess.StandardError.ReadToEndAsync()
+    if (-not $ownerProcess.WaitForExit(180000)) {
+        $ownerProcess.Kill()
+        $ownerProcess.WaitForExit()
+        throw 'Owner-launch clean-cache test timed out; no passing receipt.'
+    }
+    $ownerText = $ownerStdout.Result + $ownerStderr.Result
+    [IO.File]::WriteAllText((Join-Path $evidenceRoot 'owner_launch_test.log'),$ownerText)
+    Write-Output $ownerText
+    if ($ownerProcess.ExitCode -ne 0 -or $ownerText -notmatch 'W5_1_OWNER_LAUNCH_TEST_PASS') { throw 'Owner-launch clean-cache test failed.' }
+    $ownerReport = Get-Content -LiteralPath (Join-Path $evidenceRoot 'owner_launch.json') -Raw | ConvertFrom-Json
+    if (-not $ownerReport.passed -or -not $ownerReport.clean_cache_start -or -not $ownerReport.normal_runtime) { throw 'Invalid owner-launch receipt.' }
+    $gate.owner_launch = $true
+    $gate.owner_launch_checks = $ownerReport.checks
     Invoke-Godot 'import' @('--headless','--editor','--path',$testProject,'--quit') ''
     $unit = "$tempRoot\unit"
     Invoke-Godot 'wave4_fixture_focused' @('--headless','--path',$testProject,'--script','res://tests/wave_4/wave_4_test_runner.gd','--','--wave4-focused','--wave4-test-survival',"--wave4-test-root=$unit","--wave4-test-out=$evidenceRoot") 'WAVE_4_TEST_PASS'
@@ -166,7 +193,7 @@ try {
     $gate.deleted_paths = $deletedPaths
     $gate.project_snapshot = $testProject
     $gate.snapshot_matches_source = $true
-    $gate.certified = $gate.rendered -and $gate.regressions
+    $gate.certified = $gate.rendered -and $gate.regressions -and $gate.owner_launch
     $gate.passed = $true
     Write-Output 'WAVE_5_PART_1_VALIDATION_PASS'
 } finally {

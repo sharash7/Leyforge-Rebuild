@@ -24,8 +24,10 @@ func _run() -> void:
 	_profile_id=profile.player_id
 	if OS.get_cmdline_user_args().has("--w51-restart"):
 		_restart()
+		_namespace_restart()
 	else:
 		_profiles()
+		_profile_namespaces()
 		_roster_commands()
 		_actor_crafting_and_conservation()
 		_roster_bound()
@@ -56,6 +58,89 @@ func _profiles() -> void:
 	_check(recovered.open_profile(p)==OK and recovered.player_id==C,"Interrupted first creation retains original identity")
 	p=_root.path_join("bad_pending_profile.json");_write(p+".pending","bad")
 	_check(LfeLocalProfile.new().open_profile(p)!=OK and not FileAccess.file_exists(p),"Malformed interrupted profile does not create another identity")
+
+
+func _profile_namespaces() -> void:
+	var expected: Array=[]
+	for kind: String in ["historical_settings","early_w51"]:
+		var root: String=_root.path_join("namespace_"+kind)
+		var generic: String=root.path_join("profile.json")
+		var canonical: String=root.path_join("identity/local_profile.json")
+		var raw: String
+		if kind=="historical_settings":
+			raw=JSON.stringify({"settings_version":1,"bindings":{"forward":"W","jump":"Space"},"accessibility":{"ui_scale":1.25},"quality":"high","sprint_mode":"hold","tutorial_mode":"normal"})
+			raw+=" ".repeat(1941-raw.to_utf8_buffer().size())
+		else:raw=JSON.stringify({"profile_version":1,"player_id":A})
+		_write(generic,raw)
+		var original_hash: String=FileAccess.get_sha256(generic)
+		_check(kind!="historical_settings" or raw.to_utf8_buffer().size()==1941,"Owner fixture is valid unrelated 1941-byte settings JSON")
+		_check(not FileAccess.file_exists(canonical),"Namespaced identity starts absent")
+		# A prior W5.1 world is owned by the old identity before migration.
+		var world_id: String="profile_"+kind
+		if kind=="early_w51":
+			var prior: LfeWorldSave=_new(world_id,A)
+			var state: LfeGameplayAuthority=_authority(prior)
+			var actor: LfePlayerCharacter=state.add_character(A,Vector3(0.5,20,0.5))
+			LfeItemTransactions.add(actor.resources.inventory,&"leyforge:stone",9)
+			actor.survival.damage(7)
+			_check(prior.save(state.players_snapshot(),state.world_resources.snapshot(),state.creation.snapshot())==OK,"Early W5.1 character exists before identity migration")
+		var identity: LfeLocalProfile=LfeLocalProfile.new()
+		_check(identity.open_profile(canonical,generic)==OK and LfeWorldResourceState._valid_identity(identity.player_id),"Namespaced identity opens alongside "+kind)
+		_check(kind!="early_w51" or identity.player_id==A,"Exact early-W5.1 schema migrates original ID")
+		_check(FileAccess.get_sha256(generic)==original_hash and FileAccess.get_file_as_string(generic)==raw,"Historical generic profile bytes/hash are unchanged: "+kind)
+		_check(FileAccess.file_exists(canonical) and not FileAccess.file_exists(canonical+".pending"),"Validated identity promoted inside new directory")
+		var bytes: String=FileAccess.get_file_as_string(canonical)
+		var again: LfeLocalProfile=LfeLocalProfile.new()
+		_check(again.open_profile(canonical,generic)==OK and again.player_id==identity.player_id and FileAccess.get_file_as_string(canonical)==bytes,"Repeated namespaced open retains exact identity")
+		var save: LfeWorldSave=_new(world_id,identity.player_id)
+		var world: LfeGameplayAuthority=_authority(save)
+		var record: LfePlayerCharacter=world.character(identity.player_id)
+		if kind=="historical_settings":record=world.add_character(identity.player_id,Vector3(0.5,20,0.5))
+		_check(record!=null and save.owner_player_id==identity.player_id,"World character/owner uses canonical identity")
+		if kind=="early_w51":_check(record.resources.inventory.total(&"leyforge:stone")==9 and record.survival.snapshot()["health"]==93,"Early world ownership, inventory and survival are not orphaned")
+		_check(save.save(world.players_snapshot(),world.world_resources.snapshot(),world.creation.snapshot())==OK,"Namespace fixture saves complete v4 world")
+		expected.append({"canonical":canonical,"generic":generic,"generic_hash":original_hash,"player_id":identity.player_id,"world_id":world_id})
+	# A generic almost-identity/settings record never passes the exact schema.
+	for data: Variant in [{"profile_version":1,"player_id":A,"bindings":{}},{"profile_version":2,"player_id":A},{"profile_version":1,"player_id":"owner"},"bad json"]:
+		var root: String=_root.path_join("nonidentity_"+str(expected.size()))
+		var generic: String=root.path_join("profile.json")
+		var canonical: String=root.path_join("identity/local_profile.json")
+		_write(generic,JSON.stringify(data))
+		var hash_before: String=FileAccess.get_sha256(generic)
+		var identity: LfeLocalProfile=LfeLocalProfile.new()
+		_check(identity.open_profile(canonical,generic)==OK and identity.player_id!=A,"Nonexact generic schema is unrelated, not a startup error")
+		_check(FileAccess.get_sha256(generic)==hash_before,"Nonidentity generic bytes retained")
+		expected.append({"nonworld":true})
+	var generic: String=_root.path_join("canonical_priority/profile.json")
+	_write(generic,JSON.stringify({"profile_version":1,"player_id":A}))
+	var canonical: String=_root.path_join("canonical_priority/identity/local_profile.json")
+	_write(canonical,JSON.stringify({"profile_version":1,"player_id":B}))
+	var identity: LfeLocalProfile=LfeLocalProfile.new()
+	_check(identity.open_profile(canonical,generic)==OK and identity.player_id==B,"Canonical identity takes priority over conflicting exact legacy identity")
+	for raw: String in ["bad","x".repeat(LfeLocalProfile.MAX_BYTES+1)]:
+		_write(canonical,raw)
+		var invalid: LfeLocalProfile=LfeLocalProfile.new()
+		_check(invalid.open_profile(canonical,generic)!=OK and invalid.player_id.is_empty() and not invalid.error.is_empty(),"Malformed/oversized canonical never falls back to legacy")
+		_check(FileAccess.get_file_as_string(canonical)==raw,"Canonical corruption bytes preserved")
+	var unreadable: String=_root.path_join("unreadable/identity/local_profile.json")
+	DirAccess.make_dir_recursive_absolute(unreadable)
+	_check(LfeLocalProfile.new().open_profile(unreadable,generic)!=OK and DirAccess.dir_exists_absolute(unreadable),"Unreadable canonical path fails without replacement")
+	var pending: String=_root.path_join("pending_namespace/identity/local_profile.json")
+	_write(pending+".pending",JSON.stringify({"profile_version":1,"player_id":C}))
+	var recovered: LfeLocalProfile=LfeLocalProfile.new()
+	_check(recovered.open_profile(pending,generic)==OK and recovered.player_id==C,"Canonical pending recovery takes priority and preserves ID")
+	_write(_out.path_join("expected_identity_namespace.json"),JSON.stringify(expected))
+
+func _namespace_restart() -> void:
+	var fixtures: Array=JSON.parse_string(FileAccess.get_file_as_string(_out.path_join("expected_identity_namespace.json")))
+	for fixture: Dictionary in fixtures:
+		if fixture.has("nonworld"):continue
+		var identity: LfeLocalProfile=LfeLocalProfile.new()
+		_check(identity.open_profile(fixture["canonical"],fixture["generic"])==OK and identity.player_id==fixture["player_id"],"Fresh process retains namespaced ID: "+fixture["world_id"])
+		_check(FileAccess.get_sha256(fixture["generic"])==fixture["generic_hash"],"Fresh process retains historical generic hash")
+		var save: LfeWorldSave=_new(fixture["world_id"],identity.player_id)
+		_check(save.owner_player_id==identity.player_id and save.players_state[0]["player_id"]==identity.player_id,"Fresh process associates correct world character")
+		if fixture["player_id"]==A:_check(save.players_state[0]["resources"]["inventory"][0]["quantity"]==9 and save.players_state[0]["survival"]["health"]==93,"Fresh process restores pre-repair world progress")
 
 func _new(id: String,actor: String=A) -> LfeWorldSave:
 	var save: LfeWorldSave=LfeWorldSave.new()
