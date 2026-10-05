@@ -2,7 +2,7 @@
 
 Build: 0.5.3-wave5-w5.2. W5.1 is AUTOMATED CERTIFIED + OWNER ACCEPTED
 at 0.5.2-wave5-w5.1 / acf1e5db0cec264b8abe1e491f025d05a922af70.
-W5.2 automated qualification is recorded below separately from owner acceptance.
+W5.2 is AUTOMATED CERTIFIED + OWNER ACCEPTED at 0.5.3-wave5-w5.2 / 39c7fed82e125d451ae443ceb8be1ff42ea5105d. The owner reports that manual testing succeeded.
 
 ## Topology and ownership
 
@@ -192,13 +192,13 @@ evidence/screenshots. Failed runs are preserved.
 
 No remote movement, remote avatar, voxel replication, inventory/resource
 replication, gameplay RPC/transaction routing, LAN certification, WAN, UPnP,
-relay, dedicated server or host migration. W5.3 has not begun.
+relay, dedicated server or host migration. This describes the accepted W5.2 build; current W5.3 movement is documented separately.
 Save/content/current worldgen remain 4/1/2; stored worldgen v1 remains supported.
 See adr/ADR-0001_WAVE_5_NETWORK_SESSION_FOUNDATION.md.
 
 ## Qualification
 
-AUTOMATED CERTIFIED on 2026-10-05. Owner manual acceptance: PENDING.
+AUTOMATED CERTIFIED + OWNER ACCEPTED on 2026-10-05. Accepted build: 0.5.3-wave5-w5.2. Accepted SHA: 39c7fed82e125d451ae443ceb8be1ff42ea5105d.
 Complete final-source receipt:
 .verification/wave5/w5_2/run-20261005T040503522/gate.json.
 It records passed=true, certified=true, snapshot_matches_source=true,
@@ -222,4 +222,4 @@ the enclosing W5.1 and W5.2 receipts are both certified.
 
 Earlier failed attempts and the intermediate uncertified network-only run remain
 retained. The final successful wrapper reads the enclosing W5.1 receipt rather
-than a nested regression receipt. W5.3 has not begun.
+than a nested regression receipt. This describes the accepted W5.2 build; current W5.3 movement is documented separately.

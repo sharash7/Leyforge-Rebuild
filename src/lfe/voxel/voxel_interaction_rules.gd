@@ -3,6 +3,7 @@ extends RefCounted
 
 # Bit masks: terrain stays separate from finite source targeting.
 const WORLD_PHYSICAL_LAYER: int = 1
+const PLAYER_BODY_LAYER: int = 16
 const FINITE_SOURCE_LAYER: int = 8
 const PLAYER_PHYSICAL_MASK: int = WORLD_PHYSICAL_LAYER | FINITE_SOURCE_LAYER
 const SOURCE_TARGET_MASK: int = FINITE_SOURCE_LAYER

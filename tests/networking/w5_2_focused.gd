@@ -22,7 +22,7 @@ func _run() -> void:
 	var world: Dictionary = LfeCompatibilityManifest.world(save,hash)
 	check(hash.length() == 64,"runtime hash")
 	check(LfeCompatibilityManifest.validate_hello(hello,hello,world) == "ok","compatible")
-	for pair: Array in [["network_protocol_version",2,"protocol_mismatch"],["build_version","other","build_mismatch"],["save_version",3,"save_schema_mismatch"],["content_version",2,"content_version_mismatch"],["content_hash","a".repeat(64),"content_hash_mismatch"],["player_id","bad","invalid_identity"]]:
+	for pair: Array in [["network_protocol_version",1,"protocol_mismatch"],["build_version","other","build_mismatch"],["save_version",3,"save_schema_mismatch"],["content_version",2,"content_version_mismatch"],["content_hash","a".repeat(64),"content_hash_mismatch"],["player_id","bad","invalid_identity"]]:
 		var bad: Dictionary = hello.duplicate(true)
 		bad[pair[0]] = pair[1]
 		check(LfeCompatibilityManifest.validate_hello(bad,hello,world) == pair[2],pair[2])

@@ -68,7 +68,7 @@ function Wait-State([string] $Name, [string] $State) {
     throw "$Name did not reach $State"
 }
 function Start-Probe([string] $Name, [string] $Mode, [string] $ProfileName, [string] $Fault = '', [double] $Hold = -1, [int] $Port = 25652) {
-    Start-Run $Name @('--headless','--path',$testProject,'--script','res://tests/networking/w5_2_process.gd','--',"--session=$Mode","--port=$Port","--world-id=proof-world",'--seed=184552221',"--proof-dir=$evidenceRoot","--proof-name=$Name","--proof-fault=$Fault","--proof-hold=$Hold") $ProfileName
+    Start-Run $Name @('--headless','--max-fps','60','--path',$testProject,'--script','res://tests/networking/w5_2_process.gd','--',"--session=$Mode","--port=$Port","--world-id=proof-world",'--seed=184552221',"--proof-dir=$evidenceRoot","--proof-name=$Name","--proof-fault=$Fault","--proof-hold=$Hold") $ProfileName
 }
 function Stop-Probe([string] $Name) {
     [IO.File]::WriteAllText((Join-Path $evidenceRoot "$Name.stop"),'stop')
@@ -84,11 +84,15 @@ function Wait-Bindings([int] $Count) {
     throw "Host did not reach $Count bindings."
 }
 try {
-    $paths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons)
-    Check ($LASTEXITCODE -eq 0) 'Snapshot inventory failed'
+    $inventoryPath = Join-Path $repositoryRoot '.verification_snapshot_inventory.json'
+    $usingSnapshot = Test-Path -LiteralPath $inventoryPath
+    if ($usingSnapshot) { $paths = Get-Content $inventoryPath -Raw | ConvertFrom-Json } else {
+        $paths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons)
+        Check ($LASTEXITCODE -eq 0) 'Snapshot inventory failed'
+    }
     $manifest = @{}
     foreach ($relative in $paths) {
-        if ($relative.StartsWith('addons/') -and @(& git -C $repositoryRoot ls-files -- $relative).Count -eq 0) { continue }
+        if (-not $usingSnapshot -and $relative.StartsWith('addons/') -and @(& git -C $repositoryRoot ls-files -- $relative).Count -eq 0) { continue }
         $source = Join-Path $repositoryRoot $relative
         $target = Join-Path $testProject $relative
         New-Item -ItemType Directory -Force ([IO.Path]::GetDirectoryName($target)) | Out-Null
@@ -263,7 +267,7 @@ try {
         $gate.regressions = 'Wave 0, 1, 2, 3, 4 and W5.1 PASS'
     }
     foreach ($relative in $manifest.Keys) { Check ((Get-FileHash (Join-Path $repositoryRoot $relative)).Hash -eq $manifest[$relative]) "Source changed during run: $relative" }
-    $finalPaths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons)
+    if ($usingSnapshot) { $finalPaths = Get-Content $inventoryPath -Raw | ConvertFrom-Json } else { $finalPaths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons) }
     Check (@(Compare-Object $paths $finalPaths).Count -eq 0) 'Source inventory changed during run'
     $gate.snapshot_matches_source = $true
     $gate.no_gameplay_replication = $true

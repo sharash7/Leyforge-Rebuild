@@ -4,12 +4,12 @@ extends CharacterBody3D
 signal block_broken(cell: Vector3i, previous_voxel_id: int)
 signal block_placed(cell: Vector3i, voxel_id: int)
 
-const WALK_SPEED: float = 5.0
-const SPRINT_SPEED: float = 8.5
-const GROUND_ACCELERATION: float = 24.0
-const AIR_ACCELERATION: float = 8.0
-const DECELERATION: float = 30.0
-const JUMP_VELOCITY: float = 6.25
+const WALK_SPEED: float = LeyforgeMovementRules.WALK_SPEED
+const SPRINT_SPEED: float = LeyforgeMovementRules.SPRINT_SPEED
+const GROUND_ACCELERATION: float = LeyforgeMovementRules.GROUND_ACCELERATION
+const AIR_ACCELERATION: float = LeyforgeMovementRules.AIR_ACCELERATION
+const DECELERATION: float = LeyforgeMovementRules.DECELERATION
+const JUMP_VELOCITY: float = LeyforgeMovementRules.JUMP_VELOCITY
 const MOUSE_SENSITIVITY: float = 0.0022
 const INTERACTION_RANGE: float = 6.0
 const MAX_LOOK_ANGLE: float = deg_to_rad(89.0)
@@ -21,6 +21,8 @@ const MAX_LOOK_ANGLE: float = deg_to_rad(89.0)
 @onready var _debug_label: Label = $Interface/DebugLabel
 @onready var _instruction_label: Label = $Interface/InstructionLabel
 
+var movement_only: bool = false
+var _movement_intent: Dictionary = {"move":Vector2.ZERO,"jump":false,"sprint":false,"yaw":0.0,"pitch":0.0}
 var character_record: LfePlayerCharacter
 var resource_state: LfePlayerResourceState
 var gameplay_authority: Node
@@ -54,6 +56,7 @@ var _save_status: String = "Never saved"
 
 
 func _ready() -> void:
+	collision_layer = LfeVoxelInteractionRules.PLAYER_BODY_LAYER
 	collision_mask = LfeVoxelInteractionRules.PLAYER_PHYSICAL_MASK
 	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
 	_playtest_mode = (
@@ -191,6 +194,7 @@ func show_status(message: String, duration_msec: int = 2500) -> void:
 
 # Release reaches authority even if a Control consumes the mouse event later.
 func _input(event: InputEvent) -> void:
+	if movement_only: return
 	if event.is_action_released("break_block") and gameplay_authority!=null:
 		gameplay_authority.set_primary_action(false)
 
@@ -199,6 +203,10 @@ func sync_primary_action_input() -> void:
 	gameplay_authority.set_primary_action(Input.is_action_pressed("break_block") and not inventory_open and (_playtest_mode or Input.mouse_mode==Input.MOUSE_MODE_CAPTURED))
 
 func _unhandled_input(event: InputEvent) -> void:
+	if movement_only and event is InputEventKey and event.pressed and event.keycode in [KEY_I,KEY_C,KEY_E,KEY_F,KEY_Q,KEY_F5]:
+		show_status("Multiplayer gameplay interactions begin in later Wave 5 parts.")
+		get_viewport().set_input_as_handled()
+		return
 	if not development_selector and gameplay_authority != null:
 		if event is InputEventKey and event.pressed and not event.echo:
 			if not inventory_open and event.keycode >= KEY_1 and event.keycode <= KEY_9:
@@ -267,7 +275,7 @@ func _physics_process(delta: float) -> void:
 	# Local UI owns control input; character physics still runs every step.
 	if inventory_open:
 		if gameplay_authority!=null:gameplay_authority.set_primary_action(false)
-	else:
+	elif not movement_only:
 		_update_targeting()
 		_handle_interaction_actions()
 	_apply_movement(delta)
@@ -275,38 +283,38 @@ func _physics_process(delta: float) -> void:
 
 
 func _apply_movement(delta: float) -> void:
-	if not is_on_floor():
-		velocity.y -= _gravity * delta
-	elif not inventory_open and Input.is_action_just_pressed("jump"):
-		velocity.y = JUMP_VELOCITY
-
-	var input_vector: Vector2 = Vector2.ZERO if inventory_open else Input.get_vector(
-		"move_left",
-		"move_right",
-		"move_forward",
-		"move_back"
-	)
-	var movement_direction: Vector3 = (
-		transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)
-	).normalized()
-	var sprint_allowed: bool = development_selector or (gameplay_authority != null and gameplay_authority.can_sprint())
-	var movement_speed: float = SPRINT_SPEED if not inventory_open and Input.is_action_pressed("sprint") and sprint_allowed else WALK_SPEED
-	if movement_direction != Vector3.ZERO and gameplay_authority != null:
+	var input_vector: Vector2 = Vector2.ZERO if inventory_open else Input.get_vector("move_left","move_right","move_forward","move_back")
+	var jump: bool = not inventory_open and Input.is_action_just_pressed("jump")
+	var sprint_allowed: bool = movement_only or development_selector or (gameplay_authority != null and gameplay_authority.can_sprint())
+	var sprint: bool = not inventory_open and Input.is_action_pressed("sprint") and sprint_allowed
+	_movement_intent["move"] = input_vector
+	_movement_intent["jump"] = bool(_movement_intent["jump"]) or jump
+	_movement_intent["sprint"] = sprint
+	_movement_intent["yaw"] = wrapf(rotation.y,-PI,PI)
+	_movement_intent["pitch"] = _head.rotation.x
+	if input_vector != Vector2.ZERO and gameplay_authority != null:
 		gameplay_authority._resting = false
-	var acceleration: float = GROUND_ACCELERATION if is_on_floor() else AIR_ACCELERATION
-
-	if movement_direction != Vector3.ZERO:
-		velocity.x = move_toward(velocity.x, movement_direction.x * movement_speed, acceleration * delta)
-		velocity.z = move_toward(velocity.z, movement_direction.z * movement_speed, acceleration * delta)
-	else:
-		velocity.x = move_toward(velocity.x, 0.0, DECELERATION * delta)
-		velocity.z = move_toward(velocity.z, 0.0, DECELERATION * delta)
-
-	var fall_speed: float = -velocity.y
-	var was_airborne: bool = not is_on_floor()
-	move_and_slide()
-	if was_airborne and is_on_floor() and fall_speed > 12 and gameplay_authority != null:
+	var fall_speed: float = LeyforgeMovementRules.step(self,input_vector,jump,sprint,_gravity,delta)
+	if fall_speed > 12 and gameplay_authority != null:
 		gameplay_authority.damage_player(minf(100,(fall_speed-12)*3))
+
+func consume_movement_intent() -> Dictionary:
+	var result: Dictionary = _movement_intent.duplicate()
+	_movement_intent["jump"] = false
+	return result
+
+func movement_pitch() -> float:
+	return _head.rotation.x
+
+func set_movement_look(yaw: float, pitch: float) -> void:
+	rotation.y = wrapf(yaw,-PI,PI)
+	_head.rotation.x = clampf(pitch,-MAX_LOOK_ANGLE,MAX_LOOK_ANGLE)
+
+func configure_movement_only() -> void:
+	movement_only = true
+	development_selector = false
+	_instruction_label.text = "WASD move  |  Shift sprint  |  Space jump  |  Escape release  |  F10 leave\nMovement predicted locally / host authoritative. Gameplay interactions arrive later."
+	_target_highlight.visible = false
 
 
 func _handle_interaction_actions() -> void:
@@ -342,7 +350,7 @@ func cycle_development_block() -> void:
 
 
 func try_break_target() -> bool:
-	if inventory_open:
+	if inventory_open or movement_only:
 		return false
 	_update_targeting()
 	if not development_selector and not _source_target.is_empty():
@@ -374,7 +382,7 @@ func try_break_target() -> bool:
 
 
 func try_place_target() -> bool:
-	if inventory_open:
+	if inventory_open or movement_only:
 		return false
 	_update_targeting()
 	if not development_selector and gameplay_authority!=null and gameplay_authority.targeted_interaction():
@@ -491,6 +499,9 @@ func _update_debug_overlay() -> void:
 			get_selected_canonical_id(),
 		]
 
+	if movement_only:
+		_debug_label.text = "Leyforge — Multiplayer movement\nPosition: (%.1f, %.1f, %.1f)\n%s" % [global_position.x,global_position.y,global_position.z,_status_message]
+		return
 	if not development_selector and not _playtest_mode:
 		_debug_label.text = "Leyforge — Survival & Creation\nWorld: %s  |  %s\n%s\n%s" % [
 			_world_id, "Unsaved changes" if _save_dirty else "Saved", selected_text, _status_message]

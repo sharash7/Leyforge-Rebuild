@@ -42,6 +42,7 @@ var _runtime_is_ready: bool = false
 var _playtest_mode: bool = false
 var _save_in_progress: bool = false
 var session_options: LfeSessionOptions
+var movement: LeyforgePlayerMovement
 var network_session: LfeNetworkSession
 
 
@@ -54,7 +55,15 @@ func _ready() -> void:
 	if session_options.mode == "JOIN":
 		var view: LeyforgeSessionView = LeyforgeSessionView.new()
 		add_child(view)
-		if not view.start_join(session_options): _fail_startup("JOIN startup failed")
+		if not view.start_join(session_options):
+			_fail_startup("JOIN startup failed")
+			return
+		network_session = view.session
+		local_player_id = view.local_player_id
+		movement = LeyforgePlayerMovement.new()
+		add_child(movement)
+		movement.configure(self,network_session)
+		get_tree().auto_accept_quit = false
 		return
 	if not ClassDB.class_exists(&"VoxelTerrain"):
 		_fail_startup("Voxel Tools is not registered: missing VoxelTerrain.")
@@ -181,6 +190,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key: InputEventKey = event
 	if not key.pressed or key.echo:
 		return
+	if session_options.mode == "JOIN":
+		if key.keycode == KEY_F10: get_tree().quit(0)
+		return
 	if key.keycode == KEY_F5:
 		request_save()
 		get_viewport().set_input_as_handled()
@@ -205,7 +217,7 @@ func is_runtime_ready() -> bool:
 
 
 func request_save() -> bool:
-	if not _runtime_is_ready or _save_in_progress:
+	if world_save == null or authority == null or not _runtime_is_ready or _save_in_progress:
 		return false
 	if inventory_panel!=null and not close_inventory():
 		return false
@@ -256,8 +268,8 @@ func _build_environment() -> void:
 
 func _build_terrain() -> void:
 	_generator = LfeWave1TerrainGenerator.new()
-	_generator.configure(active_seed, block_catalog,world_save.worldgen_version)
-	_generator.set_override_store(world_save.overrides)
+	_generator.configure(active_seed, block_catalog,int(network_session.world_manifest["worldgen_version"]) if world_save == null else world_save.worldgen_version)
+	if world_save != null: _generator.set_override_store(world_save.overrides)
 
 	var mesher: VoxelMesherBlocky = VoxelMesherBlocky.new()
 	mesher.library = LfeBlockyLibraryFactory.create(block_catalog)
@@ -351,7 +363,7 @@ func _find_safe_spawn() -> Vector3:
 
 
 func _voxel_id_at(cell: Vector3i) -> int:
-	return world_save.overrides.voxel_id_at(cell, _generator.sample_voxel_id(cell))
+	return world_save.overrides.voxel_id_at(cell, _generator.sample_voxel_id(cell)) if world_save != null else _generator.sample_voxel_id(cell)
 
 
 func _on_block_broken(cell: Vector3i, _previous_voxel_id: int) -> void:
@@ -390,9 +402,10 @@ func _finish_startup() -> void:
 				return
 			_runtime_is_ready = true
 			player.set_runtime_ready(true)
-			player.show_status(world_save.load_status, 3000)
+			player.show_status(world_save.load_status if world_save != null else "Connected: base world / predicted movement", 3000)
 			print("LEYFORGE_WAVE_1_RUNTIME_READY seed=%d" % active_seed)
 			runtime_ready.emit()
+			if session_options.mode == "JOIN": print("W5_3_CLIENT_WORLD_READY player=%s" % local_player_id.left(8))
 			if DisplayServer.get_name() == "headless" and not _playtest_mode and session_options.mode == "OFFLINE":
 				await get_tree().process_frame
 				get_tree().quit(0)
@@ -846,6 +859,7 @@ func begin_rest(id: String) -> bool:
 func _sync_active_transform() -> void:
 	if active_character!=null and player!=null:
 		active_character.transform=player.get_persistent_state()
+	if movement != null and session_options.mode == "HOST": movement.sync_records()
 
 # Single local controller submits directly. Future transport calls this same seam.
 func command(actor: String,operation: String,args: Dictionary={}) -> LfeCommandResult:
@@ -893,15 +907,89 @@ func _start_host_session() -> bool:
 	var view: LeyforgeSessionView = LeyforgeSessionView.new()
 	add_child(view)
 	view.build(network_session,local_player_id,true)
+	movement = LeyforgePlayerMovement.new()
+	add_child(movement)
+	movement.configure(self,network_session)
 	return true
 
 func _admit_remote_character(player_id: String) -> bool:
 	if authority.character(player_id) != null:
 		print("LFE_SESSION reconnect player=%s" % player_id.left(8))
 		return true
-	var safe_spawn: Vector3 = _find_safe_spawn()
+	var safe_spawn: Vector3 = find_network_spawn(player_id)
 	if not safe_spawn.is_finite(): return false
 	return authority.add_character(player_id,safe_spawn) != null
 
 func _can_admit_remote_character(player_id: String) -> bool:
-	return authority.character(player_id) != null or (authority.characters.size() < LfeWorldSave.MAX_PLAYERS and _find_safe_spawn().is_finite())
+	return authority.character(player_id) != null or (authority.characters.size() < LfeWorldSave.MAX_PLAYERS and find_network_spawn(player_id).is_finite())
+
+func build_client_world(state: Dictionary) -> bool:
+	if session_options.mode != "JOIN" or world_save != null or authority != null or player != null or state.is_empty(): return false
+	block_catalog = LfeBlockCatalog.new()
+	if block_catalog.load_default() != OK: return false
+	active_seed = int(network_session.world_manifest["seed"])
+	_build_environment()
+	_build_terrain()
+	spawn_position = LfeMovementProtocol.vec3(state["position"])
+	player = PLAYER_SCENE.instantiate() as LeyforgeFirstPersonPlayer
+	add_child(player)
+	player.configure_movement_only()
+	player.configure(terrain,block_catalog,active_seed,spawn_position)
+	player.set_movement_look(float(state["yaw"]),float(state["pitch"]))
+	player.set_runtime_ready(false)
+	call_deferred("_finish_startup")
+	return true
+
+func network_spawn_safe(position: Vector3, player_id: String) -> bool:
+	if not network_position_safe(position): return false
+	var body: AABB = LfeVoxelInteractionRules.player_body_aabb(position).grow(0.15)
+	if player != null and local_player_id != player_id and body.intersects(LfeVoxelInteractionRules.player_body_aabb(player.global_position)): return false
+	if movement != null:
+		for id: String in movement.bodies:
+			if id != player_id and body.intersects(LfeVoxelInteractionRules.player_body_aabb(movement.bodies[id].global_position)): return false
+	if _runtime_is_ready:
+		var query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+		var box: BoxShape3D = BoxShape3D.new()
+		box.size = body.size
+		query.shape = box
+		query.transform.origin = body.get_center()
+		query.collision_mask = LfeVoxelInteractionRules.FINITE_SOURCE_LAYER
+		if not get_world_3d().direct_space_state.intersect_shape(query,1).is_empty(): return false
+	return true
+
+func find_network_spawn(player_id: String) -> Vector3:
+	for radius: int in range(9):
+		for z: int in range(-radius,radius+1):
+			for x: int in range(-radius,radius+1):
+				if maxi(absi(x),absi(z)) != radius: continue
+				for y: int in range(TerrainRules.MAX_HEIGHT+4,TerrainRules.MIN_HEIGHT-8,-1):
+					var candidate: Vector3 = Vector3(float(x)+0.5,float(y)+1.05,float(z)+0.5)
+					if network_spawn_safe(candidate,player_id): return candidate
+	return Vector3(INF,INF,INF)
+
+func movement_area_ready(position: Vector3) -> bool:
+	var tool: VoxelTool = terrain.get_voxel_tool()
+	if not tool.is_area_editable(AABB(position-Vector3(2,3,2),Vector3(4,7,4))): return false
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(position+Vector3.UP*0.5,position+Vector3.DOWN*4,LfeVoxelInteractionRules.WORLD_PHYSICAL_LAYER)
+	return not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+# Match the physical capsule rather than treating its empty lower corners as solid.
+# CharacterBody's 3 cm safe margin permits small contact penetration at voxel edges.
+func network_position_safe(position: Vector3) -> bool:
+	if not position.is_finite() or absf(position.x) > 1000000 or absf(position.y) > 1000000 or absf(position.z) > 1000000: return false
+	var bounds: AABB = LfeVoxelInteractionRules.player_body_aabb(position)
+	var radius: float = LfeVoxelInteractionRules.PLAYER_RADIUS
+	var lower: float = position.y + radius
+	var upper: float = position.y + LfeVoxelInteractionRules.PLAYER_HEIGHT - radius
+	for y: int in range(floori(bounds.position.y),floori(bounds.end.y)+1):
+		for x: int in range(floori(bounds.position.x),floori(bounds.end.x)+1):
+			for z: int in range(floori(bounds.position.z),floori(bounds.end.z)+1):
+				if not block_catalog.is_solid_voxel(_voxel_id_at(Vector3i(x,y,z))): continue
+				var dx: float = position.x - clampf(position.x,float(x),float(x+1))
+				var dz: float = position.z - clampf(position.z,float(z),float(z+1))
+				var dy: float = maxf(0,maxf(float(y)-upper,lower-float(y+1)))
+				if dx*dx + dy*dy + dz*dz < pow(radius-0.035,2): return false
+	for offset: Vector2 in [Vector2.ZERO,Vector2(-0.3,-0.3),Vector2(0.3,0.3),Vector2(-0.3,0.3),Vector2(0.3,-0.3)]:
+		var cell: Vector3i = Vector3i(floori(position.x+offset.x),floori(position.y-0.1),floori(position.z+offset.y))
+		if block_catalog.is_solid_voxel(_voxel_id_at(cell)): return true
+	return false

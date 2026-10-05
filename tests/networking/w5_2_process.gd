@@ -35,6 +35,7 @@ func _run() -> void:
 		if session == null: quit(1); return
 		game.set_physics_process(false)
 		game.player.set_physics_process(false)
+		if game.movement != null: game.movement.set_physics_process(false)
 		game._sync_active_transform()
 		game.set_process(false)
 		baseline_shared = shared()
@@ -49,7 +50,7 @@ func _run() -> void:
 		if session == null: quit(1); return
 		# Test-only wire faults use the real session/auth transport, never a fake peer.
 		match fault:
-			"protocol_mismatch": session._hello["network_protocol_version"] = 2
+			"protocol_mismatch": session._hello["network_protocol_version"] = 1
 			"build_mismatch": session._hello["build_version"] = "incompatible"
 			"save_schema_mismatch": session._hello["save_version"] = 3
 			"content_version_mismatch": session._hello["content_version"] = 2
@@ -69,6 +70,7 @@ func _run() -> void:
 			# Avoid ticking gameplay while checking admission conservation.
 			game.set_physics_process(false)
 			game.player.set_physics_process(false)
+			if game.movement != null: game.movement.set_physics_process(false)
 			if FileAccess.file_exists(directory.path_join(label + ".save")):
 				if not game.request_save(): failures.append("normal host save failed")
 				DirAccess.remove_absolute(directory.path_join(label + ".save"))
@@ -123,7 +125,7 @@ func _write_report() -> void:
 		report["roster"] = game.authority.players_snapshot()
 	else:
 		report["player_id"] = session._hello.get("player_id","")
-		report["client_has_no_authority"] = game.authority == null and game.world_save == null and game.player == null
+		report["client_has_no_authority"] = game.authority == null and game.world_save == null and (game.player == null or (game.player.gameplay_authority == null and game.player.resource_state == null))
 		report["client_world_save_absent"] = not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://worlds"))
 	var target: String = directory.path_join(label + ".json")
 	var file: FileAccess = FileAccess.open(target + ".pending",FileAccess.WRITE)

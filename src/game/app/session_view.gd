@@ -10,10 +10,10 @@ func build(network: LfeNetworkSession, player_id: String, host: bool = false) ->
 	local_player_id = player_id
 	layer = 20
 	var panel: PanelContainer = PanelContainer.new()
-	panel.position = Vector2(16,16) if host else Vector2(80,80)
+	panel.position = Vector2(16,180)
 	add_child(panel)
 	_label = Label.new()
-	_label.add_theme_font_size_override("font_size",16 if host else 24)
+	_label.add_theme_font_size_override("font_size",16)
 	panel.add_child(_label)
 	_update()
 
@@ -27,7 +27,7 @@ func _update() -> void:
 		var world_id: String = session.world_manifest.get("world_id","—")
 		_label.text = "Leyforge session\n%s%s\nWorld: %s\nPlayer: %s\n" % [session.state.capitalize(),(" — " + session.reason_code) if session.reason_code != "ok" else "",world_id,local_player_id.left(8)]
 		if session.state == "CONNECTED":
-			_label.text += "Seed: %d | Worldgen: %d | Save: %d\nMovement replication begins in W5.3." % [session.world_manifest["seed"],session.world_manifest["worldgen_version"],session.world_manifest["save_version"]]
+			_label.text += "Seed: %d | Worldgen: %d | Save: %d\nProtocol: 2 | Movement: predicted / server authoritative" % [session.world_manifest["seed"],session.world_manifest["worldgen_version"],session.world_manifest["save_version"]]
 
 func start_join(options: LfeSessionOptions) -> bool:
 	var profile: LfeLocalProfile = LfeLocalProfile.new()
