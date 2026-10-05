@@ -59,11 +59,12 @@ function Close-Game($Game) {
 try {
     # Fresh snapshot import cache prerequisite is established by the first host launcher.
     $report.clean_cache = -not (Test-Path (Join-Path $ProjectPath '.godot'))
-    $hostGame = Launch 'owner_host' 'run_wave_5_part_3_host.ps1' 'host'
+    $hostGame = Launch 'owner_host' 'run_wave_5_part_4_host.ps1' 'host'
     Wait-Log 'owner_host' 'state=HOSTING'
     Wait-Log 'owner_host' 'LEYFORGE_WAVE_1_RUNTIME_READY'
-    $clientGame = Launch 'owner_client' 'run_wave_5_part_3_join.ps1' 'client'
+    $clientGame = Launch 'owner_client' 'run_wave_5_part_4_join.ps1' 'client'
     Wait-Log 'owner_client' 'state=CONNECTED'
+    Wait-Log 'owner_client' 'W5_4_WORLD_SYNCHRONIZED'
     Wait-Log 'owner_client' 'W5_3_CLIENT_WORLD_READY'
     Wait-Log 'owner_host' 'W5_3_BODY_SPAWN'
     $clientProfile = Join-Path $FixtureRoot 'client-app\Godot\app_userdata\Leyforge\identity\development\wave5-client-2.json'
@@ -75,13 +76,14 @@ try {
     Check (-not (Test-Path (Join-Path $FixtureRoot 'client-app\Godot\app_userdata\Leyforge\worlds'))) 'Normal JOIN no local world'
     Close-Game $clientGame
     Wait-Log 'owner_host' 'LFE_SESSION left'
-    $again = Launch 'owner_reconnect' 'run_wave_5_part_3_join.ps1' 'client'
+    $again = Launch 'owner_reconnect' 'run_wave_5_part_4_join.ps1' 'client'
     Wait-Log 'owner_reconnect' 'state=CONNECTED'
+    Wait-Log 'owner_reconnect' 'W5_4_WORLD_SYNCHRONIZED'
     Wait-Log 'owner_reconnect' 'W5_3_CLIENT_WORLD_READY'
     Check ((Get-FileHash $clientProfile).Hash -eq $hash) 'Exact JOIN launcher reuses identical profile bytes'
     Close-Game $again
     Close-Game $hostGame
-    $worldPath = Join-Path $FixtureRoot 'host-app\Godot\app_userdata\Leyforge\worlds\wave5-w53-owner-test\world.json'
+    $worldPath = Join-Path $FixtureRoot 'host-app\Godot\app_userdata\Leyforge\worlds\wave5-w54-owner-test\world.json'
     $envelope = Get-Content $worldPath -Raw | ConvertFrom-Json
     $world = $envelope.payload_json | ConvertFrom-Json
     Check ($envelope.save_version -eq 4 -and $world.metadata.seed -eq 184552221) 'Normal HOST defaults and save v4'
@@ -90,7 +92,7 @@ try {
     $report.passed = $true
     $report.client_identity_stable = $true
     $report.client_no_save = $true
-    Write-Output 'W5_3_OWNER_LAUNCH_PASS'
+    Write-Output 'W5_4_OWNER_LAUNCH_PASS'
 } catch { $report.failure = $_.Exception.Message; throw } finally {
     foreach ($game in $games) { if (-not $game.HasExited) { $game.Kill(); $game.WaitForExit() } }
     $report.checks = $checks

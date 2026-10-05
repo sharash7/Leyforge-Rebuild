@@ -51,11 +51,18 @@ function Finish-Run([string] $Name, [int] $ExpectedExit = 0, [int] $Timeout = 30
 }
 function Read-Report([string] $Name) {
     $file = Join-Path $evidenceRoot "$Name.json"
-    try {
-        $stream = [IO.File]::Open($file,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
-        $reader = New-Object IO.StreamReader($stream)
-        try { return $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
-    } catch { return $null }
+    # Atomic replacement can briefly expose no readable target on Windows.
+    # Retry current bytes boundedly; never substitute a cached or passing report.
+    foreach ($attempt in 1..6) {
+        try {
+            $stream = [IO.File]::Open($file,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+            $reader = New-Object IO.StreamReader($stream)
+            try { $report = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+            if ($null -ne $report) { return $report }
+        } catch {}
+        Start-Sleep -Milliseconds 50
+    }
+    return $null
 }
 function Wait-State([string] $Name, [string] $State) {
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
@@ -161,7 +168,7 @@ try {
     $id = $client.player_id
     $two = Wait-Bindings 2
     Assert ($client.pid -ne $two.pid -and $id -ne $two.player_id) 'Distinct real processes and identities'
-    Assert ($client.no_authority -and $client.no_world_save -and $client.world.network_protocol_version -eq 2) 'JOIN protocol 2 / no authority'
+    Assert ($client.no_authority -and $client.no_world_save -and $client.world.network_protocol_version -eq 3) 'JOIN current protocol / no authority'
     Assert (@($client.avatars).Count -eq 1) 'JOIN sees host presence'
     [void] (Command 'host' @{op='screenshot';player_id=$id})
     [void] (Command 'client' @{op='screenshot';player_id=$two.player_id})
@@ -305,7 +312,14 @@ try {
     $reconnect = Wait-Ready 'reconnect'
     $rejoined = Wait-Bindings 2
     Assert ($reconnect.player_id -eq $id -and @($rejoined.roster).Count -eq 3) 'Reconnect same character, no duplicate roster'
-    Assert ((Distance $retained.transform.position (Body $rejoined $id).state.position) -lt 0.15) 'Reconnect restores final authoritative position'
+    # Check the exact restored transform before legitimate post-spawn gravity.
+    # The natural walking route may disconnect while stepping off a one-cell ledge.
+    Assert ((Distance $retained.transform.position (Body $rejoined $id).spawn_transform.position) -lt 0.15) 'Reconnect restores final authoritative position'
+    $restoredBody = Body $rejoined $id
+    Assert ($restoredBody.ready -and $restoredBody.loaded) 'Restored body retains streamed collision support'
+    $retainedHorizontal = @($retained.transform.position[0],0,$retained.transform.position[2])
+    $restoredHorizontal = @($restoredBody.state.position[0],0,$restoredBody.state.position[2])
+    Assert ((Distance $retainedHorizontal $restoredHorizontal) -lt 0.15) 'Reconnect has no horizontal spawn relocation'
     $gate.reconnect = $true
     [void] (Command 'host' @{op='save'})
     $savedBody = (Body (Read-Report 'host') $id).state.position
@@ -394,7 +408,7 @@ try {
     if ($usingSnapshot) { $finalPaths = Get-Content $inventoryPath -Raw | ConvertFrom-Json } else { $finalPaths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons docs AGENTS.md) }
     Check (@(Compare-Object $paths $finalPaths).Count -eq 0) 'Source inventory changed during run'
     $gate.snapshot_matches_source = $true
-    $gate.no_gameplay_replication = $true
+    $gate.no_resource_replication = $true
     $gate.passed = $true
     $gate.certified = -not $SkipRegression
     Write-Output 'WAVE_5_PART_3_VALIDATION_PASS'

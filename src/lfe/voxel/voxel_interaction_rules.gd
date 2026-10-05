@@ -10,6 +10,7 @@ const SOURCE_TARGET_MASK: int = FINITE_SOURCE_LAYER
 
 const PLAYER_RADIUS: float = 0.35
 const PLAYER_HEIGHT: float = 1.8
+const PLAYER_EYE_HEIGHT: float = 1.62
 const CELL_SHRINK_EPSILON: float = 0.01
 
 

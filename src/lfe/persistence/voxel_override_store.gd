@@ -23,6 +23,7 @@ func count() -> int:
 
 
 func record_edit(cell: Vector3i, voxel_id: int, base_voxel_id: int, catalog: LfeBlockCatalog) -> Error:
+	if not valid_cell(cell): return ERR_INVALID_DATA
 	var canonical_id: StringName = catalog.canonical_id_for_voxel_id(voxel_id)
 	if canonical_id == &"":
 		_last_error = "Edited voxel has no canonical block ID: %d." % voxel_id
@@ -173,8 +174,63 @@ static func _is_valid_coordinate(value: Variant) -> bool:
 
 
 static func _bucket_for(cell: Vector3i) -> Vector3i:
+	return bucket_for(cell)
+
+
+static func bucket_for(cell: Vector3i) -> Vector3i:
 	return Vector3i(
 		floori(float(cell.x) / float(BUCKET_SIZE)),
 		floori(float(cell.y) / float(BUCKET_SIZE)),
 		floori(float(cell.z) / float(BUCKET_SIZE))
 	)
+
+static func valid_cell(cell: Vector3i) -> bool:
+	return absi(cell.x) <= MAX_COORDINATE and absi(cell.y) <= MAX_COORDINATE and absi(cell.z) <= MAX_COORDINATE
+
+static func bucket_origin(bucket: Vector3i) -> Vector3i:
+	return bucket * BUCKET_SIZE
+
+static func bucket_aabb(bucket: Vector3i) -> AABB:
+	return AABB(Vector3(bucket_origin(bucket)), Vector3.ONE * BUCKET_SIZE)
+
+func bucket_keys() -> Array:
+	_mutex.lock()
+	var result: Array = _buckets.keys()
+	_mutex.unlock()
+	return result
+
+func bucket_snapshot(bucket: Vector3i) -> Array:
+	var result: Array = []
+	_mutex.lock()
+	for cell: Vector3i in _buckets.get(bucket, {}):
+		result.append({"position": [cell.x,cell.y,cell.z], "block": _entries[cell]["block"]})
+	_mutex.unlock()
+	result.sort_custom(entry_less)
+	return result
+
+static func entry_less(a: Dictionary, b: Dictionary) -> bool:
+	for axis: int in range(3):
+		if a["position"][axis] != b["position"][axis]:
+			return int(a["position"][axis]) < int(b["position"][axis])
+	return false
+
+# Validate off-lock; publish one complete bucket under the generator lock.
+# Omitted old cells are returned too, so loaded terrain can restore base.
+func replace_bucket(bucket: Vector3i, entries: Array, catalog: LfeBlockCatalog) -> Dictionary:
+	if entries.size() > BUCKET_SIZE * BUCKET_SIZE * BUCKET_SIZE: return {"ok":false}
+	var staged: LfeVoxelOverrideStore = LfeVoxelOverrideStore.new()
+	if staged.load_entries(entries,catalog) != OK: return {"ok":false}
+	for cell: Vector3i in staged._entries:
+		if bucket_for(cell) != bucket: return {"ok":false}
+	var changed: Dictionary = {}
+	_mutex.lock()
+	for cell: Vector3i in _buckets.get(bucket,{}):
+		changed[cell] = true
+		_entries.erase(cell)
+	_buckets.erase(bucket)
+	for cell: Vector3i in staged._entries:
+		changed[cell] = true
+		_entries[cell] = staged._entries[cell]
+	if not staged._entries.is_empty(): _buckets[bucket] = staged._entries
+	_mutex.unlock()
+	return {"ok":true,"cells":changed.keys()}

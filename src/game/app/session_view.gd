@@ -27,7 +27,7 @@ func _update() -> void:
 		var world_id: String = session.world_manifest.get("world_id","—")
 		_label.text = "Leyforge session\n%s%s\nWorld: %s\nPlayer: %s\n" % [session.state.capitalize(),(" — " + session.reason_code) if session.reason_code != "ok" else "",world_id,local_player_id.left(8)]
 		if session.state == "CONNECTED":
-			_label.text += "Seed: %d | Worldgen: %d | Save: %d\nProtocol: 2 | Movement: predicted / server authoritative" % [session.world_manifest["seed"],session.world_manifest["worldgen_version"],session.world_manifest["save_version"]]
+			_label.text += "Seed: %d | Worldgen: %d | Save: %d\nProtocol: %d | Movement: predicted / server authoritative\nVoxels: HOST authoritative" % [session.world_manifest["seed"],session.world_manifest["worldgen_version"],session.world_manifest["save_version"],session.world_manifest["network_protocol_version"]]
 
 func start_join(options: LfeSessionOptions) -> bool:
 	var profile: LfeLocalProfile = LfeLocalProfile.new()

@@ -18,6 +18,8 @@ var reliable_queue: Array[Dictionary] = []
 var pending_snapshot: Dictionary = {}
 var tick: int = 0
 var sequence: int = 0
+var sent_yaw: float = 0.0
+var sent_pitch: float = 0.0
 var last_snapshot_tick: int = -1
 var client_epoch: int = 0
 var bootstrap_received: bool = false
@@ -27,6 +29,8 @@ var snapshot_clock: float = 0.0
 var latest_self: Dictionary = {}
 var maximum_error: float = 0.0
 var corrections: int = 0
+var smooth_corrections: int = 0
+var correction_distance: float = 0.0
 var rejected_packets: int = 0
 var presence_events: Array[Dictionary] = []
 var host_visible: Dictionary = {}
@@ -51,6 +55,7 @@ func _session_state(state: String, _reason: String) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _packet(peer: int, bytes: PackedByteArray) -> void:
+	if LeyforgeVoxelNetwork.is_voxel_packet(bytes): return
 	var packet: Dictionary = LfeMovementProtocol.decode(bytes)
 	if packet.is_empty():
 		rejected_packets += 1
@@ -59,6 +64,9 @@ func _packet(peer: int, bytes: PackedByteArray) -> void:
 		# Actor resolution happens ONLY through the authenticated transport binding.
 		var id: String = session.peer_to_player.get(peer,"")
 		if peer == 1 or id.is_empty() or packet["kind"] != "movement_input" or not bodies.has(id):
+			rejected_packets += 1
+			return
+		if game != null and game.voxel_network != null and game.voxel_network.initial_ack.get(peer,-1) != 0:
 			rejected_packets += 1
 			return
 		var body: LeyforgeAuthoritativePlayerBody = bodies[id]
@@ -108,13 +116,16 @@ func _physics_process(delta: float) -> void:
 		if send_enabled and input_clock >= 1.0 / LfeMovementProtocol.INPUT_HZ:
 			input_clock = fmod(input_clock,1.0 / LfeMovementProtocol.INPUT_HZ)
 			sequence += 1
-			_send(1,LfeMovementProtocol.input(sequence,game.player.consume_movement_intent()))
+			var intent: Dictionary = game.player.consume_movement_intent()
+			sent_yaw = float(intent["yaw"])
+			sent_pitch = float(intent["pitch"])
+			_send(1,LfeMovementProtocol.input(sequence,intent))
 
 func _spawn(id: String) -> void:
 	if bodies.has(id) or not session.player_to_peer.has(id): return
 	var record: LfePlayerCharacter = game.authority.character(id)
 	var saved: Vector3 = LfeMovementProtocol.vec3(record.transform["position"])
-	if not game.network_spawn_safe(saved,id):
+	if not game.network_spawn_safe(saved,id,4.0):
 		saved = game.find_network_spawn(id)
 		if not saved.is_finite():
 			session.disconnect_player(id)
@@ -277,10 +288,12 @@ func _reconcile() -> void:
 			corrections += 1
 			print("W5_3_RECONCILE error=%.3f tick=%d ack=%d" % [error,last_snapshot_tick,int(state["ack"])])
 		elif error > CORRECTION_EPSILON:
+			smooth_corrections += 1
+			correction_distance += error * SMOOTH_CORRECTION
 			game.player.global_position = game.player.global_position.lerp(target,SMOOTH_CORRECTION)
 			game.player.velocity = game.player.velocity.lerp(LfeMovementProtocol.vec3(state["velocity"]),SMOOTH_CORRECTION)
 		elif game.player.velocity.length_squared() < 0.01 and LfeMovementProtocol.vec3(state["velocity"]).length_squared() < 0.01:
 			game.player.global_position = target
 		# Do not rewind newer look intent while moving the mouse.
-		if int(state["ack"]) >= sequence:
+		if int(state["ack"]) >= sequence and is_equal_approx(wrapf(game.player.rotation.y,-PI,PI),sent_yaw) and is_equal_approx(game.player.movement_pitch(),sent_pitch):
 			game.player.set_movement_look(float(state["yaw"]),float(state["pitch"]))

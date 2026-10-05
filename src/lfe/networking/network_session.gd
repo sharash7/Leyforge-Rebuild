@@ -77,7 +77,7 @@ func start_host(port: int, local: Dictionary, hosted: Dictionary, admission: Cal
 	_can_admit = admission_check
 	# Seven admitted remotes + one bounded pre-admission slot, allowing a useful
 	# server_full response at capacity rather than an opaque socket timeout.
-	if _transport.create_server(port, MAX_PLAYERS, 4) != OK:
+	if _transport.create_server(port, MAX_PLAYERS, 6) != OK:
 		transition("CONNECTION_FAILED","connection_failed")
 		_close_transport()
 		return false
@@ -96,7 +96,7 @@ func start_join(address: String, port: int, local: Dictionary) -> bool:
 	if not transition("CONNECTING"): return false
 	_setup()
 	_hello = local.duplicate(true)
-	if _transport.create_client(address, port, 4) != OK:
+	if _transport.create_client(address, port, 6) != OK:
 		transition("CONNECTION_FAILED","connection_failed")
 		_close_transport()
 		return false
@@ -239,7 +239,7 @@ func _exit_tree() -> void:
 
 # Generic authenticated application seam; transport objects stay in this class.
 func send_packet(peer_id: int, bytes: PackedByteArray, transfer_mode: int, channel: int) -> Error:
-	if _api == null or bytes.is_empty() or bytes.size() > 8192 or channel < 1 or channel > 3 or transfer_mode not in [MultiplayerPeer.TRANSFER_MODE_RELIABLE,MultiplayerPeer.TRANSFER_MODE_UNRELIABLE_ORDERED]: return ERR_INVALID_PARAMETER
+	if _api == null or bytes.is_empty() or bytes.size() > 8192 or channel < 1 or channel > 5 or transfer_mode not in [MultiplayerPeer.TRANSFER_MODE_RELIABLE,MultiplayerPeer.TRANSFER_MODE_UNRELIABLE_ORDERED]: return ERR_INVALID_PARAMETER
 	if mode == "HOST":
 		if state != "HOSTING" or peer_id == local_peer_id or not peer_to_player.has(peer_id): return ERR_UNAUTHORIZED
 	elif mode == "JOIN":

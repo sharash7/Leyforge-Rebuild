@@ -128,7 +128,7 @@ func _run() -> void:
 	check(not body_b.accept_input(input) and body_b.accepted_sequence == 2,"stale cannot rewind")
 	check(network.send_packet(20,encoded,MultiplayerPeer.TRANSFER_MODE_RELIABLE,3) == ERR_INVALID_PARAMETER,"no transport fails safely")
 	check((LfeVoxelInteractionRules.PLAYER_PHYSICAL_MASK & LfeVoxelInteractionRules.PLAYER_BODY_LAYER) == 0,"players never block players")
-	check(LfeCompatibilityManifest.PROTOCOL == 2 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1,"version boundary")
+	check(LfeCompatibilityManifest.PROTOCOL == 3 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1,"version boundary")
 	body_b.free()
 	body_c.free()
 	movement.free()

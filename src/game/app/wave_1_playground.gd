@@ -16,7 +16,10 @@ const SPAWN_Z: int = 0
 var creation: LfeCreationState
 var creation_presenter: LeyforgeCreationPresenter
 var creation_panel: LeyforgeCreationPanel
-var _harvest: Dictionary = {}
+var _actor_harvests: Dictionary = {}
+var _harvest: Dictionary:
+	get: return _actor_harvests.get(local_player_id,{})
+	set(value): _actor_harvests[local_player_id] = value
 var _primary_action_active: bool = false
 var _sheltered: bool = false
 var _shelter_timer: float = 0.0
@@ -44,6 +47,8 @@ var _save_in_progress: bool = false
 var session_options: LfeSessionOptions
 var movement: LeyforgePlayerMovement
 var network_session: LfeNetworkSession
+var voxel_network: LeyforgeVoxelNetwork
+var client_voxel_overrides: LfeVoxelOverrideStore
 
 
 func _ready() -> void:
@@ -63,6 +68,7 @@ func _ready() -> void:
 		movement = LeyforgePlayerMovement.new()
 		add_child(movement)
 		movement.configure(self,network_session)
+		_build_voxel_network()
 		get_tree().auto_accept_quit = false
 		return
 	if not ClassDB.class_exists(&"VoxelTerrain"):
@@ -270,6 +276,7 @@ func _build_terrain() -> void:
 	_generator = LfeWave1TerrainGenerator.new()
 	_generator.configure(active_seed, block_catalog,int(network_session.world_manifest["worldgen_version"]) if world_save == null else world_save.worldgen_version)
 	if world_save != null: _generator.set_override_store(world_save.overrides)
+	else: _generator.set_override_store(client_voxel_overrides)
 
 	var mesher: VoxelMesherBlocky = VoxelMesherBlocky.new()
 	mesher.library = LfeBlockyLibraryFactory.create(block_catalog)
@@ -363,7 +370,7 @@ func _find_safe_spawn() -> Vector3:
 
 
 func _voxel_id_at(cell: Vector3i) -> int:
-	return world_save.overrides.voxel_id_at(cell, _generator.sample_voxel_id(cell)) if world_save != null else _generator.sample_voxel_id(cell)
+	return world_save.overrides.voxel_id_at(cell, _generator.sample_voxel_id(cell)) if world_save != null else client_voxel_overrides.voxel_id_at(cell,_generator.sample_voxel_id(cell)) if client_voxel_overrides != null else _generator.sample_voxel_id(cell)
 
 
 func _on_block_broken(cell: Vector3i, _previous_voxel_id: int) -> void:
@@ -375,13 +382,12 @@ func _on_block_placed(cell: Vector3i, voxel_id: int) -> void:
 
 
 func _record_edit(cell: Vector3i, voxel_id: int) -> void:
-	var result: Error = world_save.record_voxel_edit(cell, voxel_id, _generator.sample_voxel_id(cell))
-	if result != OK:
-		push_error("WAVE_2_EDIT_FAIL %s" % world_save.get_last_error())
-	else:
-		print("WAVE_2_EDIT_RECORDED cell=%s block=%s" % [
-			cell, block_catalog.canonical_id_for_voxel_id(voxel_id)
-		])
+	var tool: VoxelTool = terrain.get_voxel_tool()
+	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	var result: Error = _commit_voxel(cell,voxel_id,tool)
+	if result != OK: push_error("WAVE_2_EDIT_FAIL %s" % world_save.get_last_error())
+	else: print("WAVE_2_EDIT_RECORDED cell=%s block=%s" % [cell,block_catalog.canonical_id_for_voxel_id(voxel_id)])
+
 
 
 func _finish_startup() -> void:
@@ -392,9 +398,9 @@ func _finish_startup() -> void:
 		Vector3(spawn_position.x - 2.5, float(floor_y - 2), spawn_position.z - 2.5),
 		Vector3(5.0, 7.0, 5.0)
 	)
-	for _frame_index: int in range(STARTUP_TIMEOUT_FRAMES):
+	for _frame_index: int in range(3600 if session_options.mode == "JOIN" else STARTUP_TIMEOUT_FRAMES):
 		await get_tree().physics_frame
-		if voxel_tool.is_area_editable(spawn_area) and _spawn_floor_has_collision():
+		if (session_options.mode != "JOIN" or voxel_network.spawn_applied()) and voxel_tool.is_area_editable(spawn_area) and _spawn_floor_has_collision():
 			for _settle_frame: int in range(4):
 				await get_tree().physics_frame
 			if session_options.mode == "HOST" and not _start_host_session():
@@ -402,7 +408,7 @@ func _finish_startup() -> void:
 				return
 			_runtime_is_ready = true
 			player.set_runtime_ready(true)
-			player.show_status(world_save.load_status if world_save != null else "Connected: base world / predicted movement", 3000)
+			player.show_status(world_save.load_status if world_save != null else "World synchronized / host authoritative voxels", 3000)
 			print("LEYFORGE_WAVE_1_RUNTIME_READY seed=%d" % active_seed)
 			runtime_ready.emit()
 			if session_options.mode == "JOIN": print("W5_3_CLIENT_WORLD_READY player=%s" % local_player_id.left(8))
@@ -502,36 +508,7 @@ func _apply_drop_selected(whole_stack: bool = false) -> bool:
 
 
 func _apply_break_cell(cell: Vector3i) -> bool:
-	if _harvest.is_empty() or not _harvest_target_valid():return false
-	var tool: VoxelTool = terrain.get_voxel_tool()
-	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
-	if not _cell_interaction_valid(cell, tool):
-		return false
-	var previous: int = tool.get_voxel(cell)
-	if _harvest.get("cell") != cell or float(_harvest.get("work",0)) < float(_harvest.get("seconds",1)) or _harvest.get("block") != previous:
-		return false
-	if not creation.can_remove(cell) or not block_catalog.is_breakable_voxel(previous):
-		return false
-	var air: int = block_catalog.get_voxel_id(&"leyforge:air")
-	var position: Vector3 = Vector3(cell) + Vector3.ONE * 0.5
-	var prior_drops: Array = world_resources.drops().map(func(entry: Dictionary)->String:return entry["instance"])
-	var success: bool = world_resources.break_to_drop(block_catalog.canonical_id_for_voxel_id(previous), position,
-		func() -> Error: return _commit_voxel(cell, air, tool), block_catalog.definition_for_voxel_id(previous)["harvest"]["outputs"])
-	if success:
-		creation.remove_object(cell)
-		creation_presenter.sync()
-		if _harvest.get("wear",false):
-			LfeHarvestRules.wear(personal_resources, _harvest["instance"])
-		_harvest.clear()
-		for entry: Dictionary in world_resources.drops():
-			if entry["instance"] not in prior_drops:
-				world_resources.ground_drop(entry["instance"],drop_rest_position)
-				resource_presenter.delay_pickup(entry["instance"])
-		resource_presenter.sync()
-		player.show_status("Broke %s" % block_catalog.display_name_for_voxel_id(previous))
-	else:
-		player.show_status("Break rejected")
-	return success
+	return not _harvest.is_empty() and _harvest.get("cell") == cell and _complete_actor_voxel(local_player_id)
 
 
 func _apply_place_cell(cell: Vector3i) -> bool:
@@ -562,10 +539,12 @@ func _cell_interaction_valid(cell: Vector3i, tool: VoxelTool) -> bool:
 
 
 func _commit_voxel(cell: Vector3i, voxel: int, tool: VoxelTool) -> Error:
+	if world_save == null or not block_catalog.has_id(block_catalog.canonical_id_for_voxel_id(voxel)) or not LfeVoxelOverrideStore.valid_cell(cell) or not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)): return ERR_UNAUTHORIZED
 	var result: Error = world_save.record_voxel_edit(cell, voxel, _generator.sample_voxel_id(cell))
 	if result != OK:
 		return result
 	tool.set_voxel(cell, voxel)
+	if voxel_network != null: voxel_network.committed(cell,voxel)
 	return OK
 
 
@@ -619,24 +598,12 @@ func _harvest_input_valid() -> bool:
 	return _primary_action_active and _runtime_is_ready and player!=null and not player.inventory_open and active_character.survival.alive()
 
 func _apply_begin_harvest(cell: Vector3i) -> bool:
-	if not _harvest_input_valid() or has_active_harvest():return false
-	player._update_targeting()
+	if not _harvest_input_valid() or has_active_harvest(): return false
 	var tool: VoxelTool = terrain.get_voxel_tool()
 	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
-	if not player.target_source().is_empty() or not player.has_voxel_target() or player.get_target_cell()!=cell or not _cell_interaction_valid(cell,tool) or not creation.can_remove(cell):
-		player.show_status("Harvest blocked; keep targeting a valid block")
-		return false
-	var block: int = tool.get_voxel(cell)
-	var rule: Dictionary = block_catalog.definition_for_voxel_id(block).get("harvest",{})
-	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(personal_resources),block_catalog)
-	if effect.is_empty():
-		player.show_status("Needs matching %s capability %d" % [rule.get("class","tool"),int(rule.get("capability",0))])
-		return false
-	_harvest = effect
-	_harvest.merge({"actor":local_player_id,"cell":cell,"block":block,"work":0.0})
-	player.show_status("Gathering... hold LMB (%.2f s)" % float(effect["seconds"]))
-	_resting = false
-	return true
+	var reason: String = _begin_actor_voxel(local_player_id,cell,tool.get_voxel(cell),0.0)
+	player.show_status("Gathering... hold LMB" if reason == "accepted" else "Harvest: " + reason)
+	return reason == "accepted"
 
 func _apply_begin_source_harvest(id: String) -> bool:
 	if not _harvest_input_valid() or has_active_harvest():return false
@@ -653,19 +620,13 @@ func _apply_begin_source_harvest(id: String) -> bool:
 	return true
 
 func _harvest_target_valid() -> bool:
-	if not _harvest_input_valid() or _harvest.get("actor")!=local_player_id:return false
-	var rule: Dictionary
-	if _harvest.has("source"):
-		var source: Dictionary = creation.source(_harvest["source"])
-		if source!=_harvest["source_snapshot"] or not source_target_valid(_harvest["source"]):return false
-		rule=creation.source_definition(source["source"])
-	else:
-		player._update_targeting()
-		var tool: VoxelTool = terrain.get_voxel_tool();tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
-		if not player.target_source().is_empty() or not player.has_voxel_target() or player.get_target_cell()!=_harvest["cell"] or not _cell_interaction_valid(_harvest["cell"],tool) or tool.get_voxel(_harvest["cell"])!=_harvest["block"] or not creation.can_remove(_harvest["cell"]):return false
-		rule=block_catalog.definition_for_voxel_id(_harvest["block"])["harvest"]
-	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(personal_resources),block_catalog)
-	return not effect.is_empty() and effect["instance"]==_harvest["instance"] and effect["wear"]==_harvest["wear"] and is_equal_approx(float(effect["seconds"]),float(_harvest["seconds"]))
+	if _harvest.is_empty(): return false
+	if not _harvest.has("source"): return _actor_voxel_valid(local_player_id) == "accepted"
+	if not _harvest_input_valid() or _harvest.get("actor") != local_player_id: return false
+	var source: Dictionary = creation.source(_harvest["source"])
+	if source != _harvest["source_snapshot"] or not source_target_valid(_harvest["source"]): return false
+	var effect: Dictionary = LfeHarvestRules.evaluate(creation.source_definition(source["source"]),LfeHarvestRules.tool(personal_resources),block_catalog)
+	return not effect.is_empty() and effect["instance"] == _harvest["instance"] and effect["wear"] == _harvest["wear"] and is_equal_approx(float(effect["seconds"]),float(_harvest["seconds"]))
 
 func _apply_advance_harvest(seconds: float) -> bool:
 	if _harvest.is_empty() or not LfeWorldSave._finite_in_range(seconds,60) or seconds < 0:return false
@@ -910,6 +871,7 @@ func _start_host_session() -> bool:
 	movement = LeyforgePlayerMovement.new()
 	add_child(movement)
 	movement.configure(self,network_session)
+	_build_voxel_network()
 	return true
 
 func _admit_remote_character(player_id: String) -> bool:
@@ -925,8 +887,8 @@ func _can_admit_remote_character(player_id: String) -> bool:
 
 func build_client_world(state: Dictionary) -> bool:
 	if session_options.mode != "JOIN" or world_save != null or authority != null or player != null or state.is_empty(): return false
-	block_catalog = LfeBlockCatalog.new()
-	if block_catalog.load_default() != OK: return false
+	if block_catalog == null: return false
+	client_voxel_overrides = voxel_network.replica.store
 	active_seed = int(network_session.world_manifest["seed"])
 	_build_environment()
 	_build_terrain()
@@ -934,14 +896,15 @@ func build_client_world(state: Dictionary) -> bool:
 	player = PLAYER_SCENE.instantiate() as LeyforgeFirstPersonPlayer
 	add_child(player)
 	player.configure_movement_only()
+	player.configure_remote_voxels()
 	player.configure(terrain,block_catalog,active_seed,spawn_position)
 	player.set_movement_look(float(state["yaw"]),float(state["pitch"]))
 	player.set_runtime_ready(false)
 	call_deferred("_finish_startup")
 	return true
 
-func network_spawn_safe(position: Vector3, player_id: String) -> bool:
-	if not network_position_safe(position): return false
+func network_spawn_safe(position: Vector3, player_id: String, support_depth: float = 0.1) -> bool:
+	if not network_position_safe(position,support_depth): return false
 	var body: AABB = LfeVoxelInteractionRules.player_body_aabb(position).grow(0.15)
 	if player != null and local_player_id != player_id and body.intersects(LfeVoxelInteractionRules.player_body_aabb(player.global_position)): return false
 	if movement != null:
@@ -975,7 +938,7 @@ func movement_area_ready(position: Vector3) -> bool:
 
 # Match the physical capsule rather than treating its empty lower corners as solid.
 # CharacterBody's 3 cm safe margin permits small contact penetration at voxel edges.
-func network_position_safe(position: Vector3) -> bool:
+func network_position_safe(position: Vector3, support_depth: float = 0.1) -> bool:
 	if not position.is_finite() or absf(position.x) > 1000000 or absf(position.y) > 1000000 or absf(position.z) > 1000000: return false
 	var bounds: AABB = LfeVoxelInteractionRules.player_body_aabb(position)
 	var radius: float = LfeVoxelInteractionRules.PLAYER_RADIUS
@@ -989,7 +952,130 @@ func network_position_safe(position: Vector3) -> bool:
 				var dz: float = position.z - clampf(position.z,float(z),float(z+1))
 				var dy: float = maxf(0,maxf(float(y)-upper,lower-float(y+1)))
 				if dx*dx + dy*dy + dz*dz < pow(radius-0.035,2): return false
+	# Saved authoritative bodies can be airborne over a nearby landing surface.
+	# New-character spawn searches retain the strict immediate-support default.
 	for offset: Vector2 in [Vector2.ZERO,Vector2(-0.3,-0.3),Vector2(0.3,0.3),Vector2(-0.3,0.3),Vector2(0.3,-0.3)]:
-		var cell: Vector3i = Vector3i(floori(position.x+offset.x),floori(position.y-0.1),floori(position.z+offset.y))
-		if block_catalog.is_solid_voxel(_voxel_id_at(cell)): return true
+		for y: int in range(floori(position.y-0.1),floori(position.y-support_depth)-1,-1):
+			var cell: Vector3i = Vector3i(floori(position.x+offset.x),y,floori(position.z+offset.y))
+			if block_catalog.is_solid_voxel(_voxel_id_at(cell)): return true
 	return false
+
+func _build_voxel_network() -> void:
+	voxel_network = LeyforgeVoxelNetwork.new()
+	add_child(voxel_network)
+	voxel_network.configure(self,network_session)
+
+func cancel_actor_harvest(actor: String) -> void:
+	_actor_harvests.erase(actor)
+
+func actor_harvest_progress(actor: String) -> float:
+	var state: Dictionary = _actor_harvests.get(actor,{})
+	return clampf(float(state.get("work",0.0)) / float(state.get("seconds",1.0)),0,1)
+
+func actor_harvest_state(actor: String, packet: Dictionary, now: float) -> String:
+	if not packet["active"]:
+		cancel_actor_harvest(actor)
+		return "cancelled"
+	var cell: Vector3i = LfeVoxelProtocol.cell(packet["target_cell"])
+	var expected_block: int = block_catalog.get_voxel_id(StringName(packet["expected_block"]))
+	var previous: Dictionary = _actor_harvests.get(actor,{})
+	if not previous.is_empty() and (previous.get("cell") != cell or previous.get("block") != expected_block):
+		cancel_actor_harvest(actor)
+	if not _actor_harvests.get(actor,{}).is_empty():
+		var reason: String = _actor_voxel_valid(actor)
+		if reason != "accepted":
+			cancel_actor_harvest(actor)
+			return reason
+		_actor_harvests[actor]["lease"] = now + LfeVoxelProtocol.HOLD_SECONDS
+		return "accepted"
+	return _begin_actor_voxel(actor,cell,expected_block,now)
+
+func _actor_target_reason(actor: String, cell: Vector3i, expected_block: int) -> String:
+	if not _runtime_is_ready or authority == null or authority.character(actor) == null or not authority.character(actor).survival.alive(): return "not_ready"
+	var origin: Vector3
+	var direction: Vector3
+	if actor == local_player_id:
+		if not _harvest_input_valid(): return "not_ready"
+		player._update_targeting()
+		if not player.target_source().is_empty() or not player.has_voxel_target() or player.get_target_cell() != cell: return "blocked"
+		origin = player.get_camera().global_position
+		direction = -player.get_camera().global_basis.z
+	else:
+		if movement == null or not movement.bodies.has(actor): return "not_ready"
+		var body: LeyforgeAuthoritativePlayerBody = movement.bodies[actor]
+		if not body.ready_for_movement: return "not_ready"
+		origin = body.global_position + Vector3.UP * LfeVoxelInteractionRules.PLAYER_EYE_HEIGHT
+		direction = -(Basis(Vector3.UP,body.rotation.y) * Basis(Vector3.RIGHT,body.pitch)).z
+	if not LfeVoxelInteractionRules.cell_is_within_range(origin,cell,LeyforgeFirstPersonPlayer.INTERACTION_RANGE): return "out_of_range"
+	var tool: VoxelTool = terrain.get_voxel_tool()
+	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	if not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)): return "not_ready"
+	if tool.get_voxel(cell) != expected_block: return "stale_state"
+	if not block_catalog.is_breakable_voxel(expected_block) or not creation.can_remove(cell): return "blocked"
+	var ray: VoxelRaycastResult = tool.raycast(origin,direction,LeyforgeFirstPersonPlayer.INTERACTION_RANGE)
+	if ray == null or ray.position != cell: return "blocked"
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin,origin+direction*ray.distance,LfeVoxelInteractionRules.SOURCE_TARGET_MASK)
+	if not get_world_3d().direct_space_state.intersect_ray(query).is_empty(): return "blocked"
+	var rule: Dictionary = block_catalog.definition_for_voxel_id(expected_block).get("harvest",{})
+	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(authority.character(actor).resources),block_catalog)
+	if effect.is_empty(): return "tool_required"
+	return "accepted"
+
+func _begin_actor_voxel(actor: String, cell: Vector3i, block: int, now: float) -> String:
+	var reason: String = _actor_target_reason(actor,cell,block)
+	if reason != "accepted": return reason
+	var rule: Dictionary = block_catalog.definition_for_voxel_id(block)["harvest"]
+	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(authority.character(actor).resources),block_catalog)
+	effect.merge({"actor":actor,"cell":cell,"block":block,"work":0.0,"lease":now+LfeVoxelProtocol.HOLD_SECONDS})
+	_actor_harvests[actor] = effect
+	if actor == local_player_id: _resting = false
+	return "accepted"
+
+func _actor_voxel_valid(actor: String) -> String:
+	var state: Dictionary = _actor_harvests.get(actor,{})
+	if state.is_empty() or state.get("actor") != actor or not state.has("cell"): return "stale_state"
+	if actor != local_player_id and Time.get_ticks_msec()/1000.0 > float(state["lease"]): return "cancelled"
+	var reason: String = _actor_target_reason(actor,state["cell"],state["block"])
+	if reason != "accepted": return reason
+	var effect: Dictionary = LfeHarvestRules.evaluate(block_catalog.definition_for_voxel_id(state["block"])["harvest"],LfeHarvestRules.tool(authority.character(actor).resources),block_catalog)
+	if effect.is_empty() or effect["instance"] != state["instance"] or effect["wear"] != state["wear"] or not is_equal_approx(float(effect["seconds"]),float(state["seconds"])): return "tool_required"
+	return "accepted"
+
+func advance_remote_harvests(seconds: float, _now: float) -> void:
+	for actor: String in _actor_harvests.keys():
+		if actor == local_player_id or _actor_harvests[actor].is_empty(): continue
+		var reason: String = _actor_voxel_valid(actor)
+		if reason != "accepted":
+			cancel_actor_harvest(actor)
+			voxel_network.harvest_finished(actor,reason)
+			continue
+		var state: Dictionary = _actor_harvests[actor]
+		state["work"] = float(state["work"]) + seconds
+		if float(state["work"]) >= float(state["seconds"]):
+			var result: bool = _complete_actor_voxel(actor)
+			cancel_actor_harvest(actor)
+			voxel_network.harvest_finished(actor,"completed" if result else "stale_state")
+
+func _complete_actor_voxel(actor: String) -> bool:
+	var state: Dictionary = _actor_harvests.get(actor,{})
+	if state.is_empty() or _actor_voxel_valid(actor) != "accepted" or float(state["work"]) < float(state["seconds"]): return false
+	var cell: Vector3i = state["cell"]
+	var previous: int = int(state["block"])
+	var tool: VoxelTool = terrain.get_voxel_tool()
+	tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	var position: Vector3 = Vector3(cell) + Vector3.ONE * 0.5
+	var prior_drops: Array = world_resources.drops().map(func(entry: Dictionary)->String:return entry["instance"])
+	var success: bool = world_resources.break_to_drop(block_catalog.canonical_id_for_voxel_id(previous),position,
+		func() -> Error: return _commit_voxel(cell,block_catalog.get_voxel_id(&"leyforge:air"),tool),block_catalog.definition_for_voxel_id(previous)["harvest"]["outputs"])
+	if not success: return false
+	creation.remove_object(cell)
+	creation_presenter.sync()
+	if state.get("wear",false): LfeHarvestRules.wear(authority.character(actor).resources,state["instance"])
+	cancel_actor_harvest(actor)
+	for entry: Dictionary in world_resources.drops():
+		if entry["instance"] not in prior_drops:
+			world_resources.ground_drop(entry["instance"],drop_rest_position)
+			resource_presenter.delay_pickup(entry["instance"])
+	resource_presenter.sync()
+	if actor == local_player_id: player.show_status("Broke %s" % block_catalog.display_name_for_voxel_id(previous))
+	return true

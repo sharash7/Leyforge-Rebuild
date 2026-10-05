@@ -1,6 +1,7 @@
 class_name LeyforgeAuthoritativePlayerBody
 extends CharacterBody3D
 
+var spawn_transform: Dictionary = {}
 var record: LfePlayerCharacter
 var viewer: VoxelViewer
 var avatar: LeyforgeRemoteAvatar
@@ -15,6 +16,7 @@ var gravity: float = 9.8
 
 func build(character: LfePlayerCharacter) -> void:
 	record = character
+	spawn_transform = record.transform.duplicate(true)
 	collision_layer = LfeVoxelInteractionRules.PLAYER_BODY_LAYER
 	collision_mask = LfeVoxelInteractionRules.PLAYER_PHYSICAL_MASK
 	floor_snap_length = 0.25
@@ -33,7 +35,7 @@ func build(character: LfePlayerCharacter) -> void:
 	viewer.view_distance = 80
 	viewer.view_distance_vertical_ratio = 0.5
 	viewer.requires_collisions = true
-	viewer.position.y = 1.62
+	viewer.position.y = LfeVoxelInteractionRules.PLAYER_EYE_HEIGHT
 	add_child(viewer)
 	avatar = LeyforgeRemoteAvatar.new()
 	avatar.set_process(false)

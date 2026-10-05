@@ -51,11 +51,18 @@ function Finish-Run([string] $Name, [int] $ExpectedExit = 0, [int] $Timeout = 30
 }
 function Read-Report([string] $Name) {
     $file = Join-Path $evidenceRoot "$Name.json"
-    try {
-        $stream = [IO.File]::Open($file,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
-        $reader = New-Object IO.StreamReader($stream)
-        try { return $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
-    } catch { return $null }
+    # Atomic replacement can briefly expose no readable target on Windows.
+    # Retry current bytes boundedly; never substitute a cached or passing report.
+    foreach ($attempt in 1..6) {
+        try {
+            $stream = [IO.File]::Open($file,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+            $reader = New-Object IO.StreamReader($stream)
+            try { $report = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+            if ($null -ne $report) { return $report }
+        } catch {}
+        Start-Sleep -Milliseconds 50
+    }
+    return $null
 }
 function Wait-State([string] $Name, [string] $State) {
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
@@ -270,7 +277,7 @@ try {
     if ($usingSnapshot) { $finalPaths = Get-Content $inventoryPath -Raw | ConvertFrom-Json } else { $finalPaths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons) }
     Check (@(Compare-Object $paths $finalPaths).Count -eq 0) 'Source inventory changed during run'
     $gate.snapshot_matches_source = $true
-    $gate.no_gameplay_replication = $true
+    $gate.no_resource_replication = $true
     $gate.passed = $true
     $gate.certified = -not $SkipRegression
     Write-Output 'WAVE_5_PART_2_VALIDATION_PASS'

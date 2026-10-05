@@ -188,7 +188,7 @@ func _write_report() -> void:
 		report["relevant"] = game.movement.relevant.duplicate(true)
 		for id: String in game.movement.bodies:
 			var body: LeyforgeAuthoritativePlayerBody = game.movement.bodies[id]
-			report["bodies"][id] = {"state":body.state(),"viewer":LfeMovementProtocol.array3(body.viewer.global_position),"viewer_exists":is_instance_valid(body.viewer),"ready":body.ready_for_movement,"loaded":game.terrain.get_voxel_tool().is_area_editable(AABB(body.global_position-Vector3(1,2,1),Vector3(2,4,2))),"visible":body.avatar.visible,"input_age":body.input_age,"accepted":body.accepted_sequence}
+			report["bodies"][id] = {"spawn_transform":body.spawn_transform,"state":body.state(),"viewer":LfeMovementProtocol.array3(body.viewer.global_position),"viewer_exists":is_instance_valid(body.viewer),"ready":body.ready_for_movement,"loaded":game.terrain.get_voxel_tool().is_area_editable(AABB(body.global_position-Vector3(1,2,1),Vector3(2,4,2))),"visible":body.avatar.visible,"input_age":body.input_age,"accepted":body.accepted_sequence}
 		report["tick"] = game.movement.tick
 		report["paused"] = paused
 	else:
@@ -203,6 +203,7 @@ func _write_report() -> void:
 		report["prediction"] = prediction
 		if game.player != null and not game.movement.latest_self.is_empty():
 			report["error"] = game.player.global_position.distance_to(LfeMovementProtocol.vec3(game.movement.latest_self["position"]))
+	_extend_report(report)
 	trace.append({"msec":Time.get_ticks_msec(),"state":report["state"],"position":report.get("position",[]),"sequence":report.get("sequence",0),"tick":report.get("tick",report.get("server_tick",0)),"error":report.get("error",0),"bodies":report.get("bodies",{})})
 	if trace.size() > 1800: trace.pop_front()
 	var target: String = directory.path_join(label+".json")
@@ -211,5 +212,11 @@ func _write_report() -> void:
 	file.flush()
 	file = null
 	DirAccess.rename_absolute(target+".pending",target)
-	var trace_file: FileAccess = FileAccess.open(directory.path_join(label+"-trace.json"),FileAccess.WRITE)
+	var trace_path: String = directory.path_join(label+"-trace.json")
+	var trace_file: FileAccess = FileAccess.open(trace_path+".pending",FileAccess.WRITE)
 	trace_file.store_string(JSON.stringify(trace,"\t"))
+	trace_file.flush()
+	trace_file = null
+	DirAccess.rename_absolute(trace_path+".pending",trace_path)
+func _extend_report(_report: Dictionary) -> void:
+	pass

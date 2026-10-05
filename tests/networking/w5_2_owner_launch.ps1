@@ -38,7 +38,14 @@ function Launch([string] $Name, [string] $Script, [string] $Profile) {
 function Wait-Log([string] $Name, [string] $Marker) {
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
-        $text = if (Test-Path (Join-Path $EvidenceRoot "$Name-runtime.log")) { Get-Content (Join-Path $EvidenceRoot "$Name-runtime.log") -Raw } else { '' }
+        # Read a scalar snapshot of the live log under explicit sharing.
+        # Get-Content -Raw can return multiple chunks during concurrent appends.
+        [string] $text = ''
+        try {
+            $stream = [IO.File]::Open((Join-Path $EvidenceRoot "$Name-runtime.log"),[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+            $reader = New-Object IO.StreamReader($stream)
+            try { $text = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        } catch {}
         if ($text -match [regex]::Escape($Marker)) { Check ($text -notmatch '(?m)^\s*(SCRIPT ERROR|ERROR:)') "$Name runtime errors"; return }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $deadline)

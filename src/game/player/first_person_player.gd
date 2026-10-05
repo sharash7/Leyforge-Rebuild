@@ -22,6 +22,8 @@ const MAX_LOOK_ANGLE: float = deg_to_rad(89.0)
 @onready var _instruction_label: Label = $Interface/InstructionLabel
 
 var movement_only: bool = false
+var remote_voxels: bool = false
+var voxel_region_ready: bool = true
 var _movement_intent: Dictionary = {"move":Vector2.ZERO,"jump":false,"sprint":false,"yaw":0.0,"pitch":0.0}
 var character_record: LfePlayerCharacter
 var resource_state: LfePlayerResourceState
@@ -275,6 +277,8 @@ func _physics_process(delta: float) -> void:
 	# Local UI owns control input; character physics still runs every step.
 	if inventory_open:
 		if gameplay_authority!=null:gameplay_authority.set_primary_action(false)
+	elif remote_voxels:
+		_update_targeting()
 	elif not movement_only:
 		_update_targeting()
 		_handle_interaction_actions()
@@ -283,12 +287,13 @@ func _physics_process(delta: float) -> void:
 
 
 func _apply_movement(delta: float) -> void:
-	var input_vector: Vector2 = Vector2.ZERO if inventory_open else Input.get_vector("move_left","move_right","move_forward","move_back")
-	var jump: bool = not inventory_open and Input.is_action_just_pressed("jump")
+	var controls_ready: bool = not inventory_open and (not remote_voxels or voxel_region_ready)
+	var input_vector: Vector2 = Input.get_vector("move_left","move_right","move_forward","move_back") if controls_ready else Vector2.ZERO
+	var jump: bool = controls_ready and Input.is_action_just_pressed("jump")
 	var sprint_allowed: bool = movement_only or development_selector or (gameplay_authority != null and gameplay_authority.can_sprint())
-	var sprint: bool = not inventory_open and Input.is_action_pressed("sprint") and sprint_allowed
+	var sprint: bool = controls_ready and Input.is_action_pressed("sprint") and sprint_allowed
 	_movement_intent["move"] = input_vector
-	_movement_intent["jump"] = bool(_movement_intent["jump"]) or jump
+	_movement_intent["jump"] = (bool(_movement_intent["jump"]) or jump) if controls_ready else false
 	_movement_intent["sprint"] = sprint
 	_movement_intent["yaw"] = wrapf(rotation.y,-PI,PI)
 	_movement_intent["pitch"] = _head.rotation.x
@@ -315,6 +320,11 @@ func configure_movement_only() -> void:
 	development_selector = false
 	_instruction_label.text = "WASD move  |  Shift sprint  |  Space jump  |  Escape release  |  F10 leave\nMovement predicted locally / host authoritative. Gameplay interactions arrive later."
 	_target_highlight.visible = false
+
+
+func configure_remote_voxels() -> void:
+	remote_voxels = true
+	_instruction_label.text = "WASD move | Shift sprint | Space jump | Hold LMB gather | F10 leave\nHOST owns voxels. Placement, drops, inventory and survival arrive later."
 
 
 func _handle_interaction_actions() -> void:
@@ -369,7 +379,6 @@ func try_break_target() -> bool:
 
 	if not development_selector:
 		return gameplay_authority != null and gameplay_authority.begin_harvest(_target_cell)
-	_voxel_tool.set_voxel(_target_cell, _catalog.get_voxel_id(&"leyforge:air"))
 	block_broken.emit(_target_cell, current_voxel_id)
 	print(
 		"WAVE_1_BLOCK_BROKEN cell=%s block=%s"
@@ -409,7 +418,6 @@ func try_place_target() -> bool:
 	if not development_selector:
 		return gameplay_authority != null and gameplay_authority.place_cell(_placement_cell)
 	var selected_voxel_id: int = get_selected_voxel_id()
-	_voxel_tool.set_voxel(_placement_cell, selected_voxel_id)
 	block_placed.emit(_placement_cell, selected_voxel_id)
 	print(
 		"WAVE_1_BLOCK_PLACED cell=%s block=%s"
@@ -500,7 +508,7 @@ func _update_debug_overlay() -> void:
 		]
 
 	if movement_only:
-		_debug_label.text = "Leyforge — Multiplayer movement\nPosition: (%.1f, %.1f, %.1f)\n%s" % [global_position.x,global_position.y,global_position.z,_status_message]
+		_debug_label.text = "Leyforge — Multiplayer world\nPosition: (%.1f, %.1f, %.1f)\n%s" % [global_position.x,global_position.y,global_position.z,_status_message]
 		return
 	if not development_selector and not _playtest_mode:
 		_debug_label.text = "Leyforge — Survival & Creation\nWorld: %s  |  %s\n%s\n%s" % [

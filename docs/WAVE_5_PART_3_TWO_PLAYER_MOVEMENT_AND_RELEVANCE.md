@@ -2,7 +2,9 @@
 
 Build: **0.5.4-wave5-w5.3**, network protocol **2**. Save/content/current worldgen remain **4/1/2**; stored worldgen v1 remains supported.
 W5.1 and W5.2 are AUTOMATED CERTIFIED + OWNER ACCEPTED at their recorded accepted SHAs.
-W5.3 owner manual acceptance is pending. Wave 5 remains in progress; W5.4 is outside this implementation.
+W5.3 is AUTOMATED CERTIFIED + OWNER ACCEPTED at 0.5.4-wave5-w5.3 / 753c72d834cb06133ec42b6d1c5f40ddf529411b. Owner manual testing succeeded. Wave 5 remains in progress; this document describes the accepted W5.3 build.
+
+The owner observed prediction/collision disagreement around HOST voxel edits: JOIN intentionally had no synchronized overrides in W5.3. This was an expected scope limitation, not a W5.3 defect. W5.4 addresses it.
 
 ## Authority and transport
 
