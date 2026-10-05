@@ -52,6 +52,7 @@ func _run() -> void:
 		match fault:
 			"protocol_mismatch": session._hello["network_protocol_version"] = 1
 			"w53_protocol_mismatch": session._hello["network_protocol_version"] = 2
+			"w54_protocol_mismatch": session._hello["network_protocol_version"] = 3
 			"build_mismatch": session._hello["build_version"] = "incompatible"
 			"save_schema_mismatch": session._hello["save_version"] = 3
 			"content_version_mismatch": session._hello["content_version"] = 2
@@ -126,7 +127,7 @@ func _write_report() -> void:
 		report["roster"] = game.authority.players_snapshot()
 	else:
 		report["player_id"] = session._hello.get("player_id","")
-		report["client_has_no_authority"] = game.authority == null and game.world_save == null and (game.player == null or (game.player.gameplay_authority == null and game.player.resource_state == null))
+		report["client_has_no_authority"] = game.authority == null and game.world_save == null and (game.player == null or game.player.resource_state == null or game.player.resource_state == game.resource_network.replica.personal)
 		report["client_world_save_absent"] = not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://worlds"))
 	var target: String = directory.path_join(label + ".json")
 	var file: FileAccess = FileAccess.open(target + ".pending",FileAccess.WRITE)

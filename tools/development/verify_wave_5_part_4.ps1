@@ -150,7 +150,7 @@ function Read-GitBytes([string] $Relative) {
     return ,$buffer.ToArray()
 }
 function Snapshot-Paths {
-    if ($usingSnapshot) { return @(Get-Content $inventoryPath -Raw | ConvertFrom-Json) }
+    if ($usingSnapshot) { $values = Get-Content $inventoryPath -Raw | ConvertFrom-Json; return $values }
     $tracked = @(& git -C $repositoryRoot ls-files -- project.godot src content scenes tests tools addons docs AGENTS.md)
     Check ($LASTEXITCODE -eq 0) 'Tracked snapshot inventory failed'
     $others = @(& git -C $repositoryRoot ls-files --others --exclude-standard -- project.godot src content scenes tests tools addons docs AGENTS.md)
@@ -582,7 +582,7 @@ try {
     $finalPaths = @(Snapshot-Paths)
     Check (@(Compare-Object $paths $finalPaths).Count -eq 0) 'Source inventory changed during run'
     $gate.snapshot_matches_source = $true
-    $gate.no_resource_replication = $true
+    $gate.client_authority_separation = $true
     $gate.passed = $true
     $gate.certified = -not $SkipRegression
     Write-Output 'WAVE_5_PART_4_VALIDATION_PASS'

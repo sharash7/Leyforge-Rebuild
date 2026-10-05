@@ -205,14 +205,14 @@ func sync_primary_action_input() -> void:
 	gameplay_authority.set_primary_action(Input.is_action_pressed("break_block") and not inventory_open and (_playtest_mode or Input.mouse_mode==Input.MOUSE_MODE_CAPTURED))
 
 func _unhandled_input(event: InputEvent) -> void:
-	if movement_only and event is InputEventKey and event.pressed and event.keycode in [KEY_I,KEY_C,KEY_E,KEY_F,KEY_Q,KEY_F5]:
+	if movement_only and resource_state == null and event is InputEventKey and event.pressed and event.keycode in [KEY_I,KEY_C,KEY_E,KEY_F,KEY_Q,KEY_F5]:
 		show_status("Multiplayer gameplay interactions begin in later Wave 5 parts.")
 		get_viewport().set_input_as_handled()
 		return
 	if not development_selector and gameplay_authority != null:
 		if event is InputEventKey and event.pressed and not event.echo:
 			if not inventory_open and event.keycode >= KEY_1 and event.keycode <= KEY_9:
-				gameplay_authority.command(character_record.player_id,"select",{"slot":event.keycode-KEY_1})
+				gameplay_authority.command(gameplay_authority.local_player_id,"select",{"slot":event.keycode-KEY_1})
 				get_viewport().set_input_as_handled()
 				return
 			if event.keycode == KEY_C:
@@ -238,7 +238,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if inventory_open:
 			return
 		if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
-			gameplay_authority.command(character_record.player_id,"select",{"slot":posmod(resource_state.selected_slot()+(-1 if event.button_index==MOUSE_BUTTON_WHEEL_UP else 1),9)})
+			gameplay_authority.command(gameplay_authority.local_player_id,"select",{"slot":posmod(resource_state.selected_slot()+(-1 if event.button_index==MOUSE_BUTTON_WHEEL_UP else 1),9)})
 			get_viewport().set_input_as_handled()
 			return
 	if inventory_open:
@@ -279,6 +279,9 @@ func _physics_process(delta: float) -> void:
 		if gameplay_authority!=null:gameplay_authority.set_primary_action(false)
 	elif remote_voxels:
 		_update_targeting()
+		if gameplay_authority != null and resource_state != null:
+			if Input.is_action_just_pressed("cycle_block"): gameplay_authority.drop_selected(Input.is_key_pressed(KEY_SHIFT))
+			if Input.is_action_just_pressed("place_block"): try_place_target()
 	elif not movement_only:
 		_update_targeting()
 		_handle_interaction_actions()
@@ -360,7 +363,7 @@ func cycle_development_block() -> void:
 
 
 func try_break_target() -> bool:
-	if inventory_open or movement_only:
+	if inventory_open or (movement_only and resource_state == null):
 		return false
 	_update_targeting()
 	if not development_selector and not _source_target.is_empty():
@@ -391,7 +394,7 @@ func try_break_target() -> bool:
 
 
 func try_place_target() -> bool:
-	if inventory_open or movement_only:
+	if inventory_open or (movement_only and resource_state == null):
 		return false
 	_update_targeting()
 	if not development_selector and gameplay_authority!=null and gameplay_authority.targeted_interaction():

@@ -24,7 +24,7 @@ func _run() -> void:
 	started = Time.get_ticks_msec()
 	game = load("res://scenes/main/wave_1_playground.tscn").instantiate()
 	root.add_child(game)
-	while Time.get_ticks_msec() - started < 180000 and not stop_requested:
+	while Time.get_ticks_msec() - started < (600000 if OS.get_cmdline_user_args().has("--w55-proof") else 180000) and not stop_requested:
 		await physics_frame
 		if game.network_session == null: continue
 		var path: String = directory.path_join(label+".command.json")
@@ -40,8 +40,9 @@ func _run() -> void:
 		if game.is_runtime_ready() and ready_at == 0:
 			ready_at = Time.get_ticks_msec()
 			if game.session_options.mode == "JOIN":
-				if game.authority != null or game.world_save != null or game.player.resource_state != null or game.player.gameplay_authority != null: failures.append("JOIN gained authority")
-				if game.player.try_break_target() or game.player.try_place_target() or game.request_save(): failures.append("JOIN interaction mutation")
+				if game.authority != null or game.world_save != null or game.active_character != null or (game.player.resource_state != null and game.player.resource_state != game.resource_network.replica.personal): failures.append("JOIN gained authority")
+				if game.request_save(): failures.append("JOIN gained save permission")
+				if game.player.resource_state == null and (game.player.try_break_target() or game.player.try_place_target()): failures.append("JOIN interaction before resource readiness")
 		if jumping and game.player != null and game.player.is_runtime_ready():
 			jump_clock += 1.0 / 60.0
 			Input.action_release("jump")
@@ -192,7 +193,7 @@ func _write_report() -> void:
 		report["tick"] = game.movement.tick
 		report["paused"] = paused
 	else:
-		report["no_authority"] = game.authority == null and game.world_save == null and game.active_character == null and (game.player == null or game.player.resource_state == null)
+		report["no_authority"] = game.authority == null and game.world_save == null and game.active_character == null and (game.player == null or game.player.resource_state == null or game.player.resource_state == game.resource_network.replica.personal)
 		report["no_world_save"] = not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://worlds"))
 		report["sequence"] = game.movement.sequence
 		report["server_tick"] = game.movement.last_snapshot_tick

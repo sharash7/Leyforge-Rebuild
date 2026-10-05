@@ -277,7 +277,7 @@ try {
     if ($usingSnapshot) { $finalPaths = Get-Content $inventoryPath -Raw | ConvertFrom-Json } else { $finalPaths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons) }
     Check (@(Compare-Object $paths $finalPaths).Count -eq 0) 'Source inventory changed during run'
     $gate.snapshot_matches_source = $true
-    $gate.no_resource_replication = $true
+    $gate.client_authority_separation = $true
     $gate.passed = $true
     $gate.certified = -not $SkipRegression
     Write-Output 'WAVE_5_PART_2_VALIDATION_PASS'

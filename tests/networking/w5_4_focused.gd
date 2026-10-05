@@ -136,10 +136,10 @@ func _run() -> void:
 	check(bounded_result.get("fatal",false) and bounded.store.count() == 0,"receiver cache limit closes without publishing partial state")
 	network.free()
 	var hello: Dictionary = LfeCompatibilityManifest.hello("1".repeat(32),LfeCompatibilityManifest.fingerprint())
-	var world: Dictionary = {"world_id":"fixture","seed":184552221,"worldgen_version":2,"save_version":4,"content_version":1,"content_hash":hello["content_hash"],"network_protocol_version":3}
+	var world: Dictionary = {"world_id":"fixture","seed":184552221,"worldgen_version":2,"save_version":4,"content_version":1,"content_hash":hello["content_hash"],"network_protocol_version":LfeCompatibilityManifest.PROTOCOL}
 	var old: Dictionary = hello.duplicate(true); old["network_protocol_version"] = 2
 	check(LfeCompatibilityManifest.validate_hello(old,hello,world) == "protocol_mismatch","W5.3 rejects as protocol_mismatch")
-	check(LfeCompatibilityManifest.PROTOCOL == 3 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1 and LfeWorldSave.WORLDGEN_VERSION == 2,"version boundary")
+	check(LfeCompatibilityManifest.PROTOCOL == 4 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1 and LfeWorldSave.WORLDGEN_VERSION == 2,"version boundary")
 	var file: FileAccess = FileAccess.open(output,FileAccess.WRITE)
 	file.store_string(JSON.stringify({"passed":failures.is_empty(),"checks":checks,"failures":failures,"largest_snapshot_part":maximum},"\t"))
 	print("W5_4_FOCUSED_%s checks=%d" % ["PASS" if failures.is_empty() else "FAIL",checks])

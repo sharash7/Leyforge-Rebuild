@@ -348,10 +348,12 @@ func spawn_applied() -> bool:
 func _client_action(delta: float) -> void:
 	action_clock += delta
 	var player: LeyforgeFirstPersonPlayer = game.player
-	var held: bool = Input.is_action_pressed("break_block") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and player.voxel_region_ready
+	var held: bool = not player.inventory_open and Input.is_action_pressed("break_block") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and player.voxel_region_ready
 	player._update_targeting()
 	var target: Dictionary = {}
-	if held and player.has_voxel_target():
+	if held and not player.target_source().is_empty():
+		target = {"source":player.target_source()}
+	elif held and player.has_voxel_target():
 		var cell: Vector3i = player.get_target_cell()
 		var tool: VoxelTool = game.terrain.get_voxel_tool()
 		tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
@@ -366,6 +368,9 @@ func _client_action(delta: float) -> void:
 		action_clock = 0
 
 func _action_send(active: bool, target: Dictionary) -> void:
+	if target.has("source"):
+		game.resource_network.submit("source_hold",{"target":target["source"],"active":active})
+		return
 	action_sequence += 1
 	_send(1,{"kind":"voxel_harvest_state","action_sequence":action_sequence,"active":active,"target_cell":LfeVoxelProtocol.array3(target["cell"]),"expected_block":target["block"]})
 

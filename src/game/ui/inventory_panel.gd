@@ -51,8 +51,10 @@ func open(storage: bool = false) -> bool:
 	if storage and not _world.world_resources.snapshot()["storage"].is_empty():id=_world.world_resources.snapshot()["storage"][0]["instance"]
 	return open_context(id)
 
-func open_context(id: String = "", focus_crafting: bool = false) -> bool:
-	if _panel.visible and not close():return false
+func open_context(id: String = "", focus_crafting: bool = false, authorized: bool = false) -> bool:
+	if _world.session_options.mode == "JOIN" and not authorized:
+		return _world.command(_world.local_player_id,"open_context",{"target":id}).success
+	if _panel.visible and not close(authorized):return false
 	_object=id;_storage_id="";_picked_inventory=null;_picked_slot=-1
 	_buttons.clear();_progress=null;_output=null;_craft_title=null;crafting=null
 	for child: Node in _body.get_children():_body.remove_child(child);child.queue_free()
@@ -77,7 +79,7 @@ func open_context(id: String = "", focus_crafting: bool = false) -> bool:
 		_label(process,_entries(recipe["inputs"])+"\nFuel: "+_entries(recipe["fuel"])+"\n→ "+_entries(recipe["outputs"]),12)
 		_progress=ProgressBar.new();_progress.custom_minimum_size=Vector2(180,24);process.add_child(_progress)
 		var fire: Button = Button.new();fire.name="StartProcess";fire.text="Fire kiln"
-		fire.pressed.connect(func() -> void: _world.player.show_status("Process started" if _world.start_process(_object,"leyforge:charcoal_burn") else station.start_reason("leyforge:charcoal_burn")))
+		fire.pressed.connect(func() -> void: _world.player.show_status("Process requested" if _world.start_process(_object,"leyforge:charcoal_burn") else station.start_reason("leyforge:charcoal_burn")))
 		process.add_child(fire)
 		_grid(_column(top,"OUTPUT"),station.output,3,0,3)
 	elif stored!=null:
@@ -86,7 +88,7 @@ func open_context(id: String = "", focus_crafting: bool = false) -> bool:
 		_grid(_storage_group,stored,3 if not _storage_id.is_empty() else 9,0,stored.capacity())
 	else:
 		_world._sync_active_transform()
-		crafting=_world.authority.open_grid(_world.local_player_id,id if workbench else "")
+		crafting=_world.resource_grid(id if workbench else "")
 		if crafting==null:
 			_world.player.show_status("Crafting context is unavailable")
 			return false
@@ -115,8 +117,11 @@ func open_context(id: String = "", focus_crafting: bool = false) -> bool:
 	_refresh()
 	return true
 
-func close() -> bool:
-	if crafting!=null and not _world.command(_world.local_player_id,"close_grid").success:
+func close(authorized: bool = false) -> bool:
+	if _world.session_options.mode == "JOIN" and not authorized:
+		_world.command(_world.local_player_id,"close_grid")
+		return false
+	if not authorized and crafting!=null and not _world.command(_world.local_player_id,"close_grid").success:
 		_world.player.show_status("Backpack full — return crafting items to free slots before closing or saving",5000)
 		return false
 	crafting=null;_picked_inventory=null;_picked_slot=-1
@@ -202,15 +207,17 @@ func _click_slot(inventory: LfeInventory, slot: int, split: bool, shift: bool) -
 		var source: Dictionary = _picked_inventory.stack_at(_picked_slot)
 		if not source.is_empty() and _allowed(_picked_inventory) and _allowed(inventory,true):
 			var count: int = maxi(1,int(source["quantity"])/2) if split else int(source["quantity"])
-			var moved: int = _transfer(_picked_inventory,_picked_slot,inventory,count,slot)
-			if moved==0 and not split and not stack.is_empty() and stack["content"]!=source["content"]:
-				if _world.command(_world.local_player_id,"swap",{"source":_world.authority.endpoint_name(_world.local_player_id,_picked_inventory),"destination":_world.authority.endpoint_name(_world.local_player_id,inventory),"source_slot":_picked_slot,"destination_slot":slot}).success:moved=count
-			_world.player.show_status("Moved %d" % moved if moved>0 else "Transfer rejected — slot/context/full output")
+			var moved: int = 0
+			if not split and not stack.is_empty() and stack["content"] != source["content"]:
+				var response: LfeCommandResult = _world.command(_world.local_player_id,"swap",{"source":_world.resource_endpoint_name(_picked_inventory),"destination":_world.resource_endpoint_name(inventory),"source_slot":_picked_slot,"destination_slot":slot,"expected":source})
+				if response.success: moved=count
+			else: moved = _transfer(_picked_inventory,_picked_slot,inventory,count,slot)
+			_world.player.show_status("Transfer pending" if _world.session_options.mode == "JOIN" else "Moved %d" % moved if moved>0 else "Transfer rejected — slot/context/full output")
 		_picked_inventory=null;_picked_slot=-1
 	_refresh()
 
 func _process(_delta: float) -> void:
-	if _world==null:return
+	if _world==null or _world.personal_resources==null:return
 	for slot: int in 9:
 		var button: Button = _hotbar.get_child(slot)
 		button.text="%d\n%s" % [slot+1,_stack_text(_world.personal_resources.inventory,slot)]
@@ -254,5 +261,5 @@ Empty"
 	return "%s\n×%d" % [name,int(stack["quantity"])]
 
 func _transfer(source: LfeInventory,slot: int,destination: LfeInventory,count: int,target_slot: int) -> int:
-	var result: LfeCommandResult=_world.command(_world.local_player_id,"transfer",{"source":_world.authority.endpoint_name(_world.local_player_id,source),"destination":_world.authority.endpoint_name(_world.local_player_id,destination),"source_slot":slot,"destination_slot":target_slot,"quantity":count,"expected":source.stack_at(slot)})
-	return int(result.data.get("quantity",0))
+	var result: LfeCommandResult=_world.command(_world.local_player_id,"transfer",{"source":_world.resource_endpoint_name(source),"destination":_world.resource_endpoint_name(destination),"source_slot":slot,"destination_slot":target_slot,"quantity":count,"expected":source.stack_at(slot)})
+	return count if result.data.get("pending",false) else int(result.data.get("quantity",0))

@@ -168,7 +168,7 @@ try {
     $id = $client.player_id
     $two = Wait-Bindings 2
     Assert ($client.pid -ne $two.pid -and $id -ne $two.player_id) 'Distinct real processes and identities'
-    Assert ($client.no_authority -and $client.no_world_save -and $client.world.network_protocol_version -eq 3) 'JOIN current protocol / no authority'
+    Assert ($client.no_authority -and $client.no_world_save -and $client.world.network_protocol_version -eq 4) 'JOIN current protocol / no authority'
     Assert (@($client.avatars).Count -eq 1) 'JOIN sees host presence'
     [void] (Command 'host' @{op='screenshot';player_id=$id})
     [void] (Command 'client' @{op='screenshot';player_id=$two.player_id})
@@ -408,7 +408,7 @@ try {
     if ($usingSnapshot) { $finalPaths = Get-Content $inventoryPath -Raw | ConvertFrom-Json } else { $finalPaths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons docs AGENTS.md) }
     Check (@(Compare-Object $paths $finalPaths).Count -eq 0) 'Source inventory changed during run'
     $gate.snapshot_matches_source = $true
-    $gate.no_resource_replication = $true
+    $gate.client_authority_separation = $true
     $gate.passed = $true
     $gate.certified = -not $SkipRegression
     Write-Output 'WAVE_5_PART_3_VALIDATION_PASS'

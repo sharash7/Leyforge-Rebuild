@@ -61,7 +61,7 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if _world==null or not _world.is_runtime_ready():
 		return
-	if not OS.get_cmdline_user_args().has("--wave4-playtest") and not OS.get_cmdline_user_args().has("--wave3-playtest"):
+	if _world.authority != null and not OS.get_cmdline_user_args().has("--wave4-playtest") and not OS.get_cmdline_user_args().has("--wave3-playtest"):
 		# Rendered conservation drivers advance clustering explicitly for exact restart assertions.
 		_world.world_resources.advance_drop_clusters(minf(delta,1),_world.region_relevant,_world.drop_path_clear,_world.drop_rest_position)
 	if _world.player.is_runtime_ready():
@@ -70,6 +70,7 @@ func _physics_process(delta: float) -> void:
 			if not _nodes.has(id) or Time.get_ticks_msec()<int(_cooldowns.get(id,0)):
 				continue
 			if (_world.player.global_position+Vector3.UP*0.8).distance_to(_position(entry))<=1.65:
+				if _world.resource_network != null and _world.resource_network.replica != null and not _world.resource_network.pending.is_empty(): continue
 				var accepted: int = int(_world.command(_world.local_player_id,"pickup",{"target":id}).data.get("quantity",0))
 				if accepted>0:
 					_world.player.show_status("Picked up %d" % accepted)

@@ -1,6 +1,6 @@
 # Wave 5, Part 4 â€” Authoritative voxel world
 
-Build: **0.5.5-wave5-w5.4**, network protocol **3**. Save/content/current worldgen remain **4/1/2**; stored worldgen v1 is supported. W5.1â€“W5.3 are AUTOMATED CERTIFIED + OWNER ACCEPTED at their recorded versions/SHAs. W5.4 owner acceptance remains pending; Wave 5 remains in progress.
+Build: **0.5.5-wave5-w5.4**, network protocol **3**. Save/content/current worldgen remain **4/1/2**; stored worldgen v1 is supported. W5.1â€“W5.3 are AUTOMATED CERTIFIED + OWNER ACCEPTED at their recorded versions/SHAs. W5.4 is **AUTOMATED CERTIFIED + OWNER ACCEPTED** at SHA **275615fb9a7032d56f868fe7853fb7e82470c937**. Owner testing confirmed shared edits, client harvesting and the edited-block collision/jitter fix. Physical drops and inventory remained W5.5 work; survival remained W5.6 work. Wave 5 remains in progress.
 
 ## Authority and sparse terrain
 

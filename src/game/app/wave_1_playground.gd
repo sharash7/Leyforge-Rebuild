@@ -13,7 +13,7 @@ const DEFAULT_WORLD_ID: String = "development"
 const SPAWN_X: int = 0
 const SPAWN_Z: int = 0
 
-var creation: LfeCreationState
+var creation: Variant
 var creation_presenter: LeyforgeCreationPresenter
 var creation_panel: LeyforgeCreationPanel
 var _actor_harvests: Dictionary = {}
@@ -28,9 +28,9 @@ var authority: LfeGameplayAuthority
 var active_character: LfePlayerCharacter
 var local_player_id: String = ""
 var personal_resources: LfePlayerResourceState:
-	get:return active_character.resources if active_character!=null else null
-var world_resources: LfeWorldResourceState:
-	get:return authority.world_resources if authority!=null else null
+	get:return active_character.resources if active_character!=null else resource_network.replica.personal if resource_network!=null and resource_network.replica!=null else null
+var world_resources: Variant:
+	get:return authority.world_resources if authority!=null else resource_network.replica if resource_network!=null else null
 var resource_presenter: LeyforgeResourcePresenter
 var inventory_panel: LeyforgeInventoryPanel
 
@@ -47,6 +47,7 @@ var _save_in_progress: bool = false
 var session_options: LfeSessionOptions
 var movement: LeyforgePlayerMovement
 var network_session: LfeNetworkSession
+var resource_network: LeyforgeResourceNetwork
 var voxel_network: LeyforgeVoxelNetwork
 var client_voxel_overrides: LfeVoxelOverrideStore
 
@@ -225,6 +226,10 @@ func is_runtime_ready() -> bool:
 func request_save() -> bool:
 	if world_save == null or authority == null or not _runtime_is_ready or _save_in_progress:
 		return false
+	for actor: String in authority._grids.keys():
+		if not authority.execute(actor,"close_grid").success:
+			player.show_status("Save blocked: crafting staging must be returned",5000)
+			return false
 	if inventory_panel!=null and not close_inventory():
 		return false
 	_save_in_progress = true
@@ -462,6 +467,7 @@ func _build_resources() -> void:
 
 
 func toggle_inventory() -> void:
+	if inventory_panel == null: player.show_status("Synchronizing personal resources"); return
 	if player.inventory_open:
 		close_inventory()
 	else:
@@ -469,7 +475,7 @@ func toggle_inventory() -> void:
 
 
 func close_inventory() -> bool:
-	return inventory_panel.close()
+	return inventory_panel.close() if inventory_panel != null else true
 
 
 func open_nearby_storage() -> bool:
@@ -549,6 +555,7 @@ func _commit_voxel(cell: Vector3i, voxel: int, tool: VoxelTool) -> Error:
 
 
 func _physics_process(delta: float) -> void:
+	if session_options.mode == "JOIN": return
 	if not _runtime_is_ready or player == null or creation == null:
 		return
 	# Rendered drivers advance this same simulation seam with fixed durations,
@@ -581,6 +588,7 @@ func advance_creation(seconds: float) -> bool:
 	return true
 
 func can_sprint() -> bool:
+	if session_options.mode == "JOIN": return true
 	return creation != null and active_character.survival.alive() and float(active_character.survival.snapshot()["stamina"]) >= 1 and float(active_character.survival.snapshot()["fatigue"]) < 100
 
 # Explicit input/authority seam: begin, held continuation and immediate cancel.
@@ -651,10 +659,11 @@ func _apply_advance_harvest(seconds: float) -> bool:
 
 func craft_recipe(id: String) -> bool:
 	var result: LfeCommandResult=command(local_player_id,"craft",{"recipe":id})
-	player.show_status("Crafted" if result.success else "Craft rejected: ingredients, context or capacity")
+	player.show_status("Craft requested" if result.data.get("pending",false) else "Crafted" if result.success else "Craft rejected: ingredients, context or capacity")
 	return result.success
 
 func consume_selected() -> bool:
+	if session_options.mode == "JOIN": player.show_status("Survival consumption arrives in W5.6"); return false
 	var result: LfeCommandResult=command(local_player_id,"consume")
 	player.show_status("Consumed" if result.success else "Cannot use selected item now")
 	return result.success
@@ -669,6 +678,9 @@ func interact_creation() -> bool:
 func _interact_object(id: String, function: String) -> bool:
 	if function == "source":
 		return begin_source_harvest(id)
+	if function == "rest" and session_options.mode == "JOIN":
+		player.show_status("Rest survival arrives in W5.6")
+		return false
 	if function == "rest":
 		return begin_rest(id)
 	return inventory_panel.open_context(id)
@@ -743,6 +755,7 @@ func source_target_valid(id: String) -> bool:
 	return region_relevant(position) and _near_position(p,6) and player.target_source()==id
 
 func targeted_interaction() -> bool:
+	if creation == null or inventory_panel == null: return false
 	var id: String = creation.object_at(player.get_target_cell()) if player.has_voxel_target() else ""
 	for entry: Dictionary in creation.objects():
 		if entry["instance"]!=id:
@@ -793,6 +806,7 @@ func drop_rest_position(position: Vector3) -> Variant:
 	return null
 
 func set_primary_action(active: bool) -> void:
+	if session_options.mode == "JOIN": return
 	command(local_player_id,"primary",{"active":active})
 
 func drop_selected(whole_stack: bool = false) -> bool:
@@ -824,6 +838,7 @@ func _sync_active_transform() -> void:
 
 # Single local controller submits directly. Future transport calls this same seam.
 func command(actor: String,operation: String,args: Dictionary={}) -> LfeCommandResult:
+	if session_options.mode == "JOIN": return client_resource_command(operation,args)
 	if authority==null or authority.character(actor)==null:return LfeCommandResult.rejected("invalid_actor")
 	_sync_active_transform()
 	var local_ops: Array=["primary","drop_selected","break_cell","place_cell","begin_harvest","begin_source_harvest","advance_harvest","rest"]
@@ -964,6 +979,9 @@ func _build_voxel_network() -> void:
 	voxel_network = LeyforgeVoxelNetwork.new()
 	add_child(voxel_network)
 	voxel_network.configure(self,network_session)
+	resource_network = LeyforgeResourceNetwork.new()
+	add_child(resource_network)
+	resource_network.configure(self,network_session)
 
 func cancel_actor_harvest(actor: String) -> void:
 	_actor_harvests.erase(actor)
@@ -1044,6 +1062,9 @@ func _actor_voxel_valid(actor: String) -> String:
 func advance_remote_harvests(seconds: float, _now: float) -> void:
 	for actor: String in _actor_harvests.keys():
 		if actor == local_player_id or _actor_harvests[actor].is_empty(): continue
+		if _actor_harvests[actor].has("source"):
+			_advance_actor_source(actor,seconds,_now)
+			continue
 		var reason: String = _actor_voxel_valid(actor)
 		if reason != "accepted":
 			cancel_actor_harvest(actor)
@@ -1079,3 +1100,129 @@ func _complete_actor_voxel(actor: String) -> bool:
 	resource_presenter.sync()
 	if actor == local_player_id: player.show_status("Broke %s" % block_catalog.display_name_for_voxel_id(previous))
 	return true
+
+# Shared resource read/command seam. JOIN views never allocate authority or saves.
+func resource_endpoint_name(inventory: LfeInventory) -> String:
+	return authority.endpoint_name(local_player_id,inventory) if authority != null else resource_network.replica.endpoint_name(inventory)
+
+func resource_grid(object_id: String) -> LfeCraftingGrid:
+	return authority.open_grid(local_player_id,object_id) if authority != null else resource_network.replica.grid
+
+func build_client_resources() -> void:
+	creation = resource_network.replica
+	player.resource_state = personal_resources
+	player.gameplay_authority = self
+	player._instruction_label.text = "WASD move | Hold LMB gather | RMB interact/place | I inventory | C craft | Q drop | F10 leave"
+	resource_presenter = LeyforgeResourcePresenter.new()
+	add_child(resource_presenter); resource_presenter.configure(self)
+	creation_presenter = LeyforgeCreationPresenter.new()
+	add_child(creation_presenter); creation_presenter.configure(self)
+	inventory_panel = LeyforgeInventoryPanel.new()
+	add_child(inventory_panel); inventory_panel.configure(self)
+	print("W5_5_PERSONAL_RESOURCES_READY")
+
+func client_resource_command(operation: String, args: Dictionary) -> LfeCommandResult:
+	if resource_network == null or resource_network.replica == null: return LfeCommandResult.rejected("not_ready")
+	if operation == "primary": return LfeCommandResult.accepted()
+	if operation in ["consume","rest"]: return LfeCommandResult.rejected("not_ready")
+	if operation == "drop_selected":
+		var slot: int = personal_resources.selected_slot()
+		var stack: Dictionary = personal_resources.inventory.stack_at(slot)
+		if stack.is_empty(): return LfeCommandResult.rejected("insufficient_resources")
+		return resource_network.submit("drop",{"slot":slot,"quantity":int(stack["quantity"]) if args.get("whole_stack",false) else 1,"expected":stack})
+	if operation == "place_cell":
+		var cell: Vector3i = args["cell"]
+		var slot: int = personal_resources.selected_slot()
+		return resource_network.submit("place",{"cell":LfeVoxelProtocol.array3(cell),"expected_block":String(block_catalog.canonical_id_for_voxel_id(_voxel_id_at(cell))),"slot":slot,"expected":personal_resources.inventory.stack_at(slot)})
+	if operation in LfeResourceProtocol.OPERATIONS: return resource_network.submit(operation,args)
+	return LfeCommandResult.rejected("invalid_target")
+
+func resource_world_command(actor: String, operation: String, args: Dictionary, now: float) -> LfeCommandResult:
+	var personal: LfePlayerResourceState = authority.character(actor).resources
+	var body: Node3D = player if actor == local_player_id else movement.bodies.get(actor)
+	if body == null: return LfeCommandResult.rejected("not_ready")
+	if operation == "pickup":
+		if Time.get_ticks_msec() < int(resource_presenter._cooldowns.get(args["target"],0)): return LfeCommandResult.rejected("not_ready")
+		return authority.execute(actor,"pickup",args)
+	if operation == "drop":
+		var position: Vector3 = body.global_position+Vector3.UP-body.global_basis.z*2.0
+		var cell: Vector3i = Vector3i(position.floor())
+		var tool: VoxelTool = terrain.get_voxel_tool(); tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+		if not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)) or block_catalog.is_solid_voxel(tool.get_voxel(cell)): return LfeCommandResult.rejected("blocked")
+		var r: LfeCommandResult = authority.execute(actor,"drop",{"slot":args["slot"],"quantity":args["quantity"],"position":position})
+		if r.success:
+			var id: String = r.data["drop_id"]
+			world_resources.ground_drop(id,drop_rest_position); resource_presenter.delay_pickup(id)
+		return r
+	if operation == "place":
+		var cell: Vector3i = LfeVoxelProtocol.cell(args["cell"])
+		if int(args["slot"]) != personal.selected_slot(): return LfeCommandResult.rejected("stale_state")
+		var voxel: int = block_catalog.placeable_voxel(StringName(args["expected"]["content"]))
+		if voxel < 0: return LfeCommandResult.rejected("invalid_target")
+		var tool: VoxelTool = terrain.get_voxel_tool(); tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+		if not tool.is_area_editable(LfeVoxelInteractionRules.cell_aabb(cell)): return LfeCommandResult.rejected("not_ready")
+		if tool.get_voxel(cell) != block_catalog.get_voxel_id(StringName(args["expected_block"])): return LfeCommandResult.rejected("stale_state")
+		var origin: Vector3 = body.global_position+Vector3.UP*LfeVoxelInteractionRules.PLAYER_EYE_HEIGHT
+		var pitch: float = player.get_camera().rotation.x if actor == local_player_id else movement.bodies[actor].pitch
+		var direction: Vector3 = -(Basis(Vector3.UP,body.rotation.y)*Basis(Vector3.RIGHT,pitch)).z
+		var ray: VoxelRaycastResult = tool.raycast(origin,direction,LeyforgeFirstPersonPlayer.INTERACTION_RANGE)
+		if ray == null or ray.previous_position != cell: return LfeCommandResult.rejected("blocked")
+		var obstruction: Dictionary = get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(origin,origin+direction*ray.distance,LfeVoxelInteractionRules.SOURCE_TARGET_MASK))
+		if not obstruction.is_empty(): return LfeCommandResult.rejected("blocked")
+		if not LfeVoxelInteractionRules.can_place(tool.get_voxel(cell),block_catalog.get_voxel_id(&"leyforge:air"),cell,LfeVoxelInteractionRules.player_body_aabb(player.global_position)): return LfeCommandResult.rejected("blocked")
+		for remote: Node3D in movement.bodies.values():
+			if not LfeVoxelInteractionRules.can_place(tool.get_voxel(cell),block_catalog.get_voxel_id(&"leyforge:air"),cell,LfeVoxelInteractionRules.player_body_aabb(remote.global_position)): return LfeCommandResult.rejected("blocked")
+		if not creation.object_at(cell).is_empty() or creation.objects().size() >= 10000: return LfeCommandResult.rejected("blocked")
+		var success: bool = world_resources.place_from_inventory(personal,int(args["slot"]),func()->Error:
+			if not creation.add_object(block_catalog.canonical_id_for_voxel_id(voxel),cell,posmod(roundi(body.rotation.y/(PI/2)),4)): return ERR_CANT_CREATE
+			var error: Error = _commit_voxel(cell,voxel,tool)
+			if error != OK: creation.remove_object(cell)
+			return error)
+		return LfeCommandResult.accepted() if success else LfeCommandResult.rejected("blocked")
+	if operation == "source_hold":
+		if not args["active"]: cancel_actor_harvest(actor); return LfeCommandResult.accepted()
+		var id: String = args["target"]
+		var reason: String = _actor_source_reason(actor,id)
+		if reason != "ok": cancel_actor_harvest(actor); return LfeCommandResult.rejected(reason)
+		var previous: Dictionary = _actor_harvests.get(actor,{})
+		if previous.get("source") != id: cancel_actor_harvest(actor)
+		if _actor_harvests.get(actor,{}).is_empty():
+			var s: Dictionary = creation.source(id)
+			var effect: Dictionary = LfeHarvestRules.evaluate(creation.source_definition(s["source"]),LfeHarvestRules.tool(personal),block_catalog)
+			effect.merge({"actor":actor,"source":id,"source_snapshot":s,"work":0.0,"lease":now+LfeVoxelProtocol.HOLD_SECONDS})
+			_actor_harvests[actor] = effect
+		else: _actor_harvests[actor]["lease"] = now+LfeVoxelProtocol.HOLD_SECONDS
+		return LfeCommandResult.accepted()
+	return LfeCommandResult.rejected("invalid_target")
+
+func _actor_source_reason(actor: String, id: String) -> String:
+	var s: Dictionary = creation.source(id)
+	if s.is_empty() or int(s["remaining"]) == 0: return "stale_state"
+	var body: Node3D = movement.bodies.get(actor)
+	if body == null or not movement.bodies[actor].ready_for_movement: return "not_ready"
+	if not authority.near(actor,s["position"],6): return "out_of_range"
+	var origin: Vector3 = body.global_position+Vector3.UP*LfeVoxelInteractionRules.PLAYER_EYE_HEIGHT
+	var direction: Vector3 = -(Basis(Vector3.UP,body.rotation.y)*Basis(Vector3.RIGHT,movement.bodies[actor].pitch)).z
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(origin,origin+direction*6,LfeVoxelInteractionRules.SOURCE_TARGET_MASK))
+	if hit.is_empty() or hit["collider"].get_meta("source","") != id: return "blocked"
+	var tool: VoxelTool = terrain.get_voxel_tool(); tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
+	var ray: VoxelRaycastResult = tool.raycast(origin,direction,6)
+	if ray != null and ray.distance < origin.distance_to(hit["position"])-0.05: return "blocked"
+	if not authority.character(actor).survival.alive(): return "not_ready"
+	var effect: Dictionary = LfeHarvestRules.evaluate(creation.source_definition(s["source"]),LfeHarvestRules.tool(authority.character(actor).resources),block_catalog)
+	return "tool_required" if effect.is_empty() else "ok"
+
+func _advance_actor_source(actor: String, seconds: float, now: float) -> void:
+	var state: Dictionary = _actor_harvests[actor]
+	var reason: String = _actor_source_reason(actor,state["source"])
+	if now > float(state["lease"]): reason = "not_ready"
+	var s: Dictionary = creation.source(state["source"])
+	var effect: Dictionary = LfeHarvestRules.evaluate(creation.source_definition(s.get("source","")),LfeHarvestRules.tool(authority.character(actor).resources),block_catalog) if not s.is_empty() else {}
+	if s != state["source_snapshot"] or effect.is_empty() or effect["instance"] != state["instance"]: reason = "stale_state"
+	if reason != "ok":
+		cancel_actor_harvest(actor); voxel_network.harvest_finished(actor,reason); return
+	state["work"] = float(state["work"])+seconds
+	if float(state["work"]) >= float(state["seconds"]):
+		var success: bool = creation.harvest_source(state["source"],authority.character(actor).resources,authority.character(actor).survival)
+		cancel_actor_harvest(actor); creation_presenter.sync()
+		voxel_network.harvest_finished(actor,"completed" if success else "stale_state")
