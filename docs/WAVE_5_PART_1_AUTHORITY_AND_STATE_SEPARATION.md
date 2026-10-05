@@ -1,6 +1,6 @@
 # Wave 5, Part 1 — Authority and state separation
 
-Production version: 0.5.1-wave5-w5.1. W5.1 preserves the normal Wave 4 single-player loop while separating installation identity, world-local characters and shared world state. Automated qualification and owner manual acceptance are separate; owner acceptance remains pending. W5.2 has not begun.
+Accepted W5.1 version: 0.5.2-wave5-w5.1 (acf1e5db0cec264b8abe1e491f025d05a922af70). W5.1 preserves the normal Wave 4 single-player loop while separating installation identity, world-local characters and shared world state. Automated qualification and owner manual acceptance are separate; owner acceptance is recorded. W5.2 proceeds separately.
 
 ## Installation identity
 
@@ -134,11 +134,11 @@ launch cancellation. The actual owner's historical settings file was only
 read for size/hash preservation verification; runtime fixtures were isolated.
 
 The prior qualification and failed repair-attempt evidence remain retained.
-Owner manual acceptance remains pending; W5.2 has not begun.
+W5.1 is AUTOMATED CERTIFIED + OWNER ACCEPTED at 0.5.2-wave5-w5.1 / acf1e5db0cec264b8abe1e491f025d05a922af70; W5.2 proceeds separately.
 
 ## Physical source and UI physics repair
 
-Version 0.5.2-wave5-w5.1 remains a W5.1 manual acceptance candidate. W5.2 has not begun.
+Version 0.5.2-wave5-w5.1 is AUTOMATED CERTIFIED + OWNER ACCEPTED at acf1e5db0cec264b8abe1e491f025d05a922af70.
 
 Collision bit masks are named in LfeVoxelInteractionRules:
 
@@ -161,7 +161,7 @@ The complete gate adds rendered phases P/Q in a separate isolated world. It exer
 
 The kiln test records progress and world elapsed time before and after one second of production simulation, asserting panel visibility during every measured slice. It also records Standard hunger progression and unpaused engine/tree state. Real inventory, crafting, Workbench, kiln and storage panels each exercise blocked look and physical interactions. Prior assertions, owner import-first launch tests and all Wave 0–4 gates remain mandatory.
 
-Owner manual checks: walk into and around Dense Stone, provisions and water caches; hold LMB to gather; jump and open I before landing; confirm controls are blocked while UI remains usable; start a kiln and leave its UI open; save, close and restart the same world. Manual acceptance remains pending.
+Owner manual checks: walk into and around Dense Stone, provisions and water caches; hold LMB to gather; jump and open I before landing; confirm controls are blocked while UI remains usable; start a kiln and leave its UI open; save, close and restart the same world. Owner manual acceptance is recorded for the accepted W5.1 SHA.
 
 ## Physical/UI repair qualification
 
@@ -197,7 +197,7 @@ All original unrelated editor changes and 54 live identity/profile/save files
 were verified byte-for-byte unchanged. Save/content/worldgen versions remain
 4/1/2, with legacy generator version 1 retained where stored. Evidence,
 userdata, saves, cache and vendor files are excluded from the repair package.
-Owner manual acceptance remains pending; W5.2 has not begun.
+W5.1 is AUTOMATED CERTIFIED + OWNER ACCEPTED at 0.5.2-wave5-w5.1 / acf1e5db0cec264b8abe1e491f025d05a922af70; W5.2 proceeds separately.
 
 ## Owner manual launch and limits
 
@@ -213,4 +213,4 @@ WorldId and Seed are optional and default to the values above. RuntimeLogPath op
 
 The verification gate exercises this exact launcher against a fresh project without .godot, a 1941-byte unrelated settings profile, and a separate early-W5.1 identity fixture. It checks class registration, graphical startup and normal close/save, repeats both cases in fresh game processes, compares generic and canonical file hashes, and checks that canonical corruption and import errors fail safely. Fixtures live only under external disposable profiles; the owner's real userdata is not modified.
 
-There is no ENet, RPC, host/join UI, LAN, WAN, remote player controller or dedicated server. This establishes durable owners and actor commands only. It adds no network authentication, transport/session protocol, account system or new gameplay subsystem. Owner manual acceptance is pending and W5.2 remains outside this implementation.
+There is no ENet, RPC, host/join UI, LAN, WAN, remote player controller or dedicated server. This establishes durable owners and actor commands only. It adds no network authentication, transport/session protocol, account system or new gameplay subsystem. W5.1 is AUTOMATED CERTIFIED + OWNER ACCEPTED. W5.2 networking is documented separately in WAVE_5_PART_2_SESSION_AND_PLAYER_IDENTITY.md.

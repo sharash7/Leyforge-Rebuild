@@ -41,10 +41,21 @@ var _generator: LfeWave1TerrainGenerator
 var _runtime_is_ready: bool = false
 var _playtest_mode: bool = false
 var _save_in_progress: bool = false
+var session_options: LfeSessionOptions
+var network_session: LfeNetworkSession
 
 
 func _ready() -> void:
 	print("LEYFORGE_WAVE_0_BOOTSTRAP_READY")
+	session_options = LfeSessionOptions.new()
+	if not session_options.parse(OS.get_cmdline_user_args()):
+		_fail_startup(session_options.error)
+		return
+	if session_options.mode == "JOIN":
+		var view: LeyforgeSessionView = LeyforgeSessionView.new()
+		add_child(view)
+		if not view.start_join(session_options): _fail_startup("JOIN startup failed")
+		return
 	if not ClassDB.class_exists(&"VoxelTerrain"):
 		_fail_startup("Voxel Tools is not registered: missing VoxelTerrain.")
 		return
@@ -86,9 +97,13 @@ func _ready() -> void:
 			_fail_startup("World saves cannot be stored inside the project repository.")
 			return
 	var requested_seed: int = LfeDeterministicSeed.from_user_args(arguments)
+	var profile: LfeLocalProfile = LfeLocalProfile.new()
+	if profile.open_profile(session_options.profile_path) != OK:
+		_fail_startup(profile.error)
+		return
 	world_save = LfeWorldSave.new()
 	var open_error: Error = world_save.open_world(
-		selected_id, requested_seed, seed_was_explicit, block_catalog, save_root
+		selected_id, requested_seed, seed_was_explicit, block_catalog, save_root, profile.player_id
 	)
 	if open_error != OK:
 		_fail_startup(world_save.get_last_error())
@@ -176,6 +191,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if session_options != null and session_options.mode == "JOIN":
+			get_tree().quit(0)
+			return
 		if _runtime_is_ready:
 			request_save_and_quit()
 		else:
@@ -367,12 +385,15 @@ func _finish_startup() -> void:
 		if voxel_tool.is_area_editable(spawn_area) and _spawn_floor_has_collision():
 			for _settle_frame: int in range(4):
 				await get_tree().physics_frame
+			if session_options.mode == "HOST" and not _start_host_session():
+				_fail_startup("Could not start host session; check UDP port availability")
+				return
 			_runtime_is_ready = true
 			player.set_runtime_ready(true)
 			player.show_status(world_save.load_status, 3000)
 			print("LEYFORGE_WAVE_1_RUNTIME_READY seed=%d" % active_seed)
 			runtime_ready.emit()
-			if DisplayServer.get_name() == "headless" and not _playtest_mode:
+			if DisplayServer.get_name() == "headless" and not _playtest_mode and session_options.mode == "OFFLINE":
 				await get_tree().process_frame
 				get_tree().quit(0)
 			return
@@ -861,3 +882,26 @@ func command(actor: String,operation: String,args: Dictionary={}) -> LfeCommandR
 			if success or not _harvest.is_empty():return LfeCommandResult.accepted({"completed":success})
 		"rest":success=_apply_begin_rest(args.get("target",""))
 	return LfeCommandResult.accepted() if success else LfeCommandResult.rejected("blocked")
+
+
+func _start_host_session() -> bool:
+	var fingerprint: String = LfeCompatibilityManifest.fingerprint()
+	if fingerprint.is_empty(): return false
+	network_session = LfeNetworkSession.new()
+	add_child(network_session)
+	if not network_session.start_host(session_options.port,LfeCompatibilityManifest.hello(local_player_id,fingerprint),LfeCompatibilityManifest.world(world_save,fingerprint),_admit_remote_character,_can_admit_remote_character): return false
+	var view: LeyforgeSessionView = LeyforgeSessionView.new()
+	add_child(view)
+	view.build(network_session,local_player_id,true)
+	return true
+
+func _admit_remote_character(player_id: String) -> bool:
+	if authority.character(player_id) != null:
+		print("LFE_SESSION reconnect player=%s" % player_id.left(8))
+		return true
+	var safe_spawn: Vector3 = _find_safe_spawn()
+	if not safe_spawn.is_finite(): return false
+	return authority.add_character(player_id,safe_spawn) != null
+
+func _can_admit_remote_character(player_id: String) -> bool:
+	return authority.character(player_id) != null or (authority.characters.size() < LfeWorldSave.MAX_PLAYERS and _find_safe_spawn().is_finite())
