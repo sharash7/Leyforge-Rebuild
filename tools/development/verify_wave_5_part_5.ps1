@@ -216,7 +216,7 @@ try {
             Copy-Item -LiteralPath $source -Destination $target
         } elseif ($relative -eq 'project.godot') {
             $text = [Text.Encoding]::UTF8.GetString((Read-GitBytes $relative))
-            $text = [regex]::Replace($text,'config/version="[^"]+"','config/version="0.5.7-wave5-w5.6"')
+            $text = [regex]::Replace($text,'config/version="[^"]+"','config/version="0.5.8-wave5-w5.6"')
             [IO.File]::WriteAllText($target,$text,(New-Object Text.UTF8Encoding($false)))
         } elseif ($relative -eq 'scenes/main/wave_1_playground.tscn' -or $relative -notin $edits) {
             [IO.File]::WriteAllBytes($target,(Read-GitBytes $relative))

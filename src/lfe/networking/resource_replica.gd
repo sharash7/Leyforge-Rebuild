@@ -144,7 +144,7 @@ func source_definition(id: String) -> Dictionary: return _definitions.get(id,{})
 func objects() -> Array: return _family("object")
 func object_at(cell: Vector3i) -> String:
 	for s: Dictionary in objects():
-		if s["cell"] == [cell.x,cell.y,cell.z]: return s["instance"]
+		if LfeVoxelProtocol.cell(s["cell"]) == cell: return s["instance"]
 	return ""
 func storage(id: String) -> LfeInventory: return inventories.get("storage/"+id)
 func storage_inventory(id: String) -> LfeInventory: return storage(id)

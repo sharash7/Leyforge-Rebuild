@@ -20,6 +20,9 @@ func _process(_delta: float) -> void:
 	if v.is_empty():
 		_hud.text = "Synchronizing survival"
 		return
-	var water: String = "  |  Water %.0f" % v["thirst"] if v["thirst_enabled"] else ""
+	var water: String = "  |  Water %.1f" % v["thirst"] if v["thirst_enabled"] else ""
 	_hud.text="Health %.0f  |  Stamina %.0f\nFood %.1f%s\nFatigue %.1f  |  Exposure %.1f\n%s" % [v["health"],v["stamina"],v["hunger"],water,v["fatigue"],v["exposure"],"Resting in shelter; move to stop" if v["resting"] else "Sheltered" if v["sheltered"] else "Outdoors"]
+	_hud.position=Vector2(280,2) if _world.player.inventory_open else Vector2(950,20)
+	if _world.player.inventory_open:
+		_hud.text="Health %.0f | Stamina %.0f | Food %.1f%s | Fatigue %.1f | Exposure %.1f\n%s" % [v["health"],v["stamina"],v["hunger"],water,v["fatigue"],v["exposure"],"Resting in shelter; move to stop" if v["resting"] else "Sheltered" if v["sheltered"] else "Outdoors"]
 	_context.text=_world.player.context_text();_context.visible=not _world.player.inventory_open

@@ -750,7 +750,13 @@ func targeted_interaction() -> bool:
 			_interact_object(id,function)
 			return true # A failed rest still owns RMB; never fall through to placement.
 	if not player.target_crate().is_empty():
-		return open_nearby_storage()
+		inventory_panel.open_context(player.target_crate())
+		return true
+	if session_options.mode == "JOIN" and player.has_voxel_target():
+		var definition: Dictionary = block_catalog.definition_for_voxel_id(_voxel_id_at(player.get_target_cell()))
+		if definition.get("function","") in ["kiln","storage","rest","workbench"]:
+			resource_network.wait_for_object(player.get_target_cell())
+			return true
 	return false
 
 func workstation_slot_transfer(id: String, source: LfeInventory, source_slot: int, destination: LfeInventory, destination_slot: int, quantity: int) -> int:

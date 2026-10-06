@@ -235,7 +235,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 			if event.keycode == KEY_ESCAPE and inventory_open:
-				gameplay_authority.close_inventory()
+				if gameplay_authority.inventory_panel.manual.visible: gameplay_authority.inventory_panel.manual.close()
+				else: gameplay_authority.close_inventory()
 				get_viewport().set_input_as_handled()
 				return
 		if inventory_open:

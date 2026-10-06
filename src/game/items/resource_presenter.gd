@@ -6,6 +6,10 @@ var _nodes: Dictionary = {}
 var _crates: Dictionary = {}
 var _cooldowns: Dictionary = {}
 var _animation: float = 0.0
+# JOIN visuals follow complete HOST targets; authoritative pickup uses record positions.
+const DROP_SNAP_DISTANCE: float = 0.75
+const DROP_FOLLOW_SPEED: float = 12.0
+var _drop_targets: Dictionary = {}
 
 func configure(world: LeyforgeWave1Playground) -> void:
 	_world=world
@@ -26,14 +30,18 @@ func sync() -> void:
 		seen[id]=true
 		if not _nodes.has(id):
 			_nodes[id]=_make_drop(entry)
-		_nodes[id].position=position
+		_drop_targets[id]=position
+		if _world.authority != null or _nodes[id].position.distance_to(position) > DROP_SNAP_DISTANCE:
+			_nodes[id].position=position
 		var label: Label3D = _nodes[id].get_node("Quantity")
 		label.text="%s x%d" % [_world.block_catalog.content_definition(StringName(entry["stack"]["content"]))["display_name"],int(entry["stack"]["quantity"])]
 		label.visible=(_world.player.global_position+Vector3.UP).distance_to(position)<3
 	for id: String in _nodes.keys():
 		if not seen.has(id):
+			_nodes[id].hide()
 			_nodes[id].queue_free()
 			_nodes.erase(id)
+			_drop_targets.erase(id)
 	# Cooldowns survive dematerialisation, but disappear with picked-up records.
 	for id: String in _cooldowns.keys():
 		if _world.world_resources.drop(id).is_empty():
@@ -53,6 +61,10 @@ func sync() -> void:
 func _process(delta: float) -> void:
 	_animation+=delta
 	for id: String in _nodes:
+		if _world.authority == null:
+			var target: Vector3 = _drop_targets[id]
+			_nodes[id].position = _nodes[id].position.lerp(target,1.0-exp(-DROP_FOLLOW_SPEED*delta))
+			if _nodes[id].position.distance_to(target)<0.001: _nodes[id].position=target
 		var phase: float = float(String(id).substr(0,6).hex_to_int()%1000)/1000.0*TAU
 		var visual: MeshInstance3D = _nodes[id].get_node("Visual")
 		visual.position.y=sin(_animation*1.7+phase)*0.02

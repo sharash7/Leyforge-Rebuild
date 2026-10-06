@@ -1,0 +1,70 @@
+extends SceneTree
+var checks: int = 0
+var failures: Array = []
+func check(ok: bool, message: String) -> void:
+	checks += 1
+	if not ok: failures.append(message)
+func _initialize() -> void: call_deferred("_run")
+func _run() -> void:
+	var output: String = ""
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--output="): output=arg.trim_prefix("--output=")
+	var catalog: LfeBlockCatalog = LfeBlockCatalog.new(); check(catalog.load_default()==OK,"canonical catalogue")
+	var session: LfeNetworkSession = LfeNetworkSession.new()
+	var status: LeyforgeSessionView = LeyforgeSessionView.new();root.add_child(status);status.build(session,"1".repeat(32))
+	check(status.get_child(0).mouse_filter==Control.MOUSE_FILTER_IGNORE and status._label.mouse_filter==Control.MOUSE_FILTER_IGNORE,"noninteractive session status cannot intercept grid clicks")
+	status.queue_free();session.free()
+	var biology: LfeCharacterSurvival = LfeCharacterSurvival.new()
+	for profile: String in ["Standard","Peaceful","Relaxed","Harsh"]:
+		biology.configure_profile(profile)
+		check(biology.thirst_enabled()==(profile in ["Standard","Harsh"]),"explicit profile hydration "+profile)
+	biology.configure_profile("Standard")
+	var state: Dictionary = biology.snapshot(); state["fatigue"]=10; state["exposure"]=10; state["thirst"]=40; biology.restore(state)
+	var retained: Dictionary = biology.snapshot()
+	var restored: LfeCharacterSurvival = LfeCharacterSurvival.new()
+	check(restored.restore(retained) and restored.snapshot()==retained,"saved values/timing unchanged on load")
+	biology.advance(60,false,false,true)
+	check(is_equal_approx(biology.snapshot()["fatigue"],11),"Standard sprint 1 fatigue/min")
+	check(is_equal_approx(biology.snapshot()["exposure"],10.5),"outdoors 0.5 exposure/min")
+	check(is_equal_approx(biology.snapshot()["thirst"],40-5.0/60),"Standard thirst 5/hour")
+	biology.advance(60,true,true,false)
+	check(is_equal_approx(biology.snapshot()["fatigue"],9) and is_equal_approx(biology.snapshot()["exposure"],8.5),"rest 2 fatigue/min; shelter 2 exposure/min exactly once")
+	biology.advance(60,false,false,false)
+	check(is_equal_approx(biology.snapshot()["fatigue"],9),"walking/ordinary activity has zero fatigue cost")
+	var inv: LfeInventory = LfeInventory.new(catalog)
+	LfeItemTransactions.add(inv,&"leyforge:drinking_water",3)
+	state=biology.snapshot();state["thirst"]=40;biology.restore(state)
+	check(biology.consume(inv,0) and biology.snapshot()["thirst"]==75 and inv.total(&"leyforge:drinking_water")==2,"Standard water +35 and one item")
+	state=biology.snapshot();state["thirst"]=100;biology.restore(state);retained=biology.snapshot()
+	check(not biology.consume(inv,0) and biology.snapshot()==retained and inv.total(&"leyforge:drinking_water")==2,"full water no-op atomic")
+	biology.configure_profile("Peaceful");state["thirst"]=40;biology.restore(state)
+	check(not biology.consume(inv,0) and inv.total(&"leyforge:drinking_water")==2,"disabled water no-op preserved")
+	state=biology.snapshot();state["health"]=0;state["exposure"]=25;biology.restore(state);biology.advance(60,false,false,false)
+	check(biology.snapshot()["exposure"]==25,"dead exposure does not advance")
+	var recipes: LfeRecipeCatalog = LfeRecipeCatalog.new();check(recipes.load_default(catalog),"canonical recipes load")
+	var manual: LeyforgeCraftingManual = LeyforgeCraftingManual.new();root.add_child(manual);manual.configure(catalog,recipes);manual.open()
+	check(manual.listed_ids.size()==recipes.all().size(),"manual count equals runtime count")
+	for recipe: Dictionary in recipes.all():
+		check(manual.listed_ids.count(recipe["id"])==1,"manual exactly once "+recipe["id"])
+		manual.select_recipe(recipe["id"])
+		check(manual.selected_recipe==recipe["id"],"all canonical details selectable "+recipe["id"])
+	var kiln: Dictionary = recipes.definition("leyforge:build_kiln")
+	check(kiln["grid"]["pattern"]==["SSS","S S","PSP"] and int(kiln["inputs"][0]["quantity"])==6 and int(kiln["inputs"][1]["quantity"])==2,"canonical kiln six Stone/two Planks exact empty center")
+	manual.select_recipe(kiln["id"])
+	var grid: GridContainer = manual._details.get_node("RecipePattern")
+	check(grid.get_child_count()==9 and grid.get_child(4).text=="Empty" and grid.get_child(6).text==catalog.content_definition(&"leyforge:oak_planks")["display_name"],"manual grid faithfully maps pattern")
+	var charcoal: Dictionary = recipes.definition("leyforge:charcoal_burn")
+	check(charcoal["seconds"]==8 and charcoal["inputs"][0]["quantity"]==2 and charcoal["fuel"][0]["quantity"]==1 and charcoal["outputs"][0]["quantity"]==2,"canonical kiln process definition")
+	var future: Dictionary = recipes.definition("leyforge:saw_planks");future["id"]="fixture:future"
+	recipes._recipes[future["id"]]=future;manual.open()
+	check(manual.listed_ids.size()==recipes.all().size() and manual.listed_ids.count("fixture:future")==1,"future validated recipe automatically appears")
+	var replica: LfeResourceReplica = LfeResourceReplica.new();replica.configure(catalog,"1".repeat(32))
+	var objects: LfeCreationState = LfeCreationState.new(catalog);objects.add_object(&"leyforge:workbench",Vector3i(1,2,3),0)
+	var object: Dictionary = JSON.parse_string(JSON.stringify(objects.objects()[0]))
+	check(replica.valid_state("object/"+object["instance"],object) and replica.publish("object/"+object["instance"],object),"wire object validated and published")
+	check(replica.object_at(Vector3i(1,2,3))==object["instance"],"JSON float cell resolves stable canonical identity")
+	var file: FileAccess = FileAccess.open(output,FileAccess.WRITE)
+	file.store_string(JSON.stringify({"passed":failures.is_empty(),"checks":checks,"failures":failures,"recipes":recipes.all().size()-1},"\t"));file=null
+	manual.queue_free();await process_frame
+	for failure: String in failures: push_error(failure)
+	print("W5_6_REPAIR_FOCUSED checks=%d failures=%d" % [checks,failures.size()]);quit(0 if failures.is_empty() else 1)

@@ -4,7 +4,7 @@ extends RefCounted
 # Set 29B/C reference rates use simulation seconds, not render frames.
 const KEYS: Array[String] = ["health", "stamina", "hunger", "thirst", "fatigue", "exposure"]
 const PROFILES: Dictionary = {
-	"Standard": {"hunger":1.0,"thirst":false,"fatigue":1.0,"health_delay":20.0,"health_rate":0.1,"regen":16.0,"spend_delay":1.25,"empty_delay":2.25,"attrition":true},
+	"Standard": {"hunger":1.0,"thirst":true,"fatigue":1.0,"health_delay":20.0,"health_rate":0.1,"regen":16.0,"spend_delay":1.25,"empty_delay":2.25,"attrition":true},
 	"Peaceful": {"hunger":0.35,"thirst":false,"fatigue":0.25,"health_delay":8.0,"health_rate":0.2,"regen":20.0,"spend_delay":0.75,"empty_delay":1.5,"attrition":false},
 	"Relaxed": {"hunger":0.55,"thirst":false,"fatigue":0.5,"health_delay":12.0,"health_rate":0.15,"regen":18.0,"spend_delay":1.0,"empty_delay":1.75,"attrition":false},
 	"Harsh": {"hunger":1.35,"thirst":true,"fatigue":1.5,"health_delay":30.0,"health_rate":0.07,"regen":14.0,"spend_delay":1.5,"empty_delay":3.0,"attrition":true}}
@@ -104,13 +104,12 @@ func _step(dt: float, sheltered: bool, resting: bool, sprinting: bool) -> void:
 	if thirst_enabled():
 		_values["thirst"] = maxf(0,float(_values["thirst"])-dt*thirst_rate)
 	if resting and sheltered:
-		_values["fatigue"] = maxf(0,float(_values["fatigue"])-dt*0.05/60.0)
+		_values["fatigue"] = maxf(0,float(_values["fatigue"])-dt*2.0/60.0)
 	elif sprinting:
-		_values["fatigue"] = minf(100,float(_values["fatigue"])+dt*0.18/60.0*float(p["fatigue"]))
-	# Wave 4 supplies benign conditions. Weather/biome hazards arrive in Wave 6.
-	# Legacy exposure is retained and can recover in shelter, never grows outdoors.
-	if sheltered:
-		_values["exposure"] = maxf(0,float(_values["exposure"])-dt*2.0/60.0)
+		_values["fatigue"] = minf(100,float(_values["fatigue"])+dt*1.0/60.0*float(p["fatigue"]))
+	# Owner repair: interim cover reserve, without weather or exposure damage.
+	if alive():
+		_values["exposure"] = clampf(float(_values["exposure"])+dt*(-2.0 if sheltered else 0.5)/60.0,0,100)
 	var stamina_delay: float = float(_timing["stamina_delay"])
 	if sprinting and float(_values["stamina"]) > 0:
 		exert(minf(float(_values["stamina"]),dt*12.0)) # Representative movement cost.

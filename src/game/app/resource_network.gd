@@ -15,6 +15,23 @@ var clock: float = 0.0
 var resync_clock: float = 0.0
 var resync: Dictionary = {}
 var open_wait: Dictionary = {}
+var object_wait: Dictionary = {}
+
+func wait_for_object(cell: Vector3i) -> void:
+	if object_wait.is_empty() or object_wait["cell"] != cell:
+		object_wait = {"cell":cell,"deadline":Time.get_ticks_msec()/1000.0+5.0}
+	game.player.show_status("Synchronizing object…",1500)
+
+func _context_ready(target: String) -> bool:
+	if target.is_empty(): return replica.grid != null and replica.states.get("grid/"+game.local_player_id,{}).get("context") == ""
+	if replica.states.has("storage/"+target): return replica.storage_inventory(target) != null
+	var object: Dictionary = replica.states.get("object/"+target,{})
+	if object.is_empty(): return false
+	match game.block_catalog.content_definition(StringName(object["content"])).get("function",""):
+		"workbench": return replica.grid != null and replica.grid.size == 3 and replica.states.get("grid/"+game.local_player_id,{}).get("context") == target
+		"storage": return replica.storage(target) != null
+		"kiln": return replica.station(target) != null
+	return false
 var results: Array = []
 var metrics: Dictionary = {"state_bytes":0,"request_bytes":0,"result_bytes":0,"resyncs":0,"latency_msec":0,"results":0,"rejected":0,"largest_part":0}
 
@@ -35,7 +52,7 @@ func configure(g: LeyforgeWave1Playground, s: LfeNetworkSession) -> void:
 
 func _state(state: String, _reason: String) -> void:
 	if session.mode == "JOIN" and state == "DISCONNECTED":
-		pending.clear(); open_wait.clear(); resync.clear()
+		pending.clear(); open_wait.clear(); object_wait.clear(); resync.clear()
 		replica.ready = false; replica.states.clear(); replica.revisions.clear(); replica.transfers.clear()
 		if game.player != null: game.player.resource_state = null
 		if game.inventory_panel != null: game.inventory_panel.hide()
@@ -110,14 +127,16 @@ func _physics_process(delta: float) -> void:
 			if Time.get_ticks_msec()-int(pending[id]["started"]) > 10000: session.disconnect_session(); return
 		if game.player != null and replica.ready and game.inventory_panel == null: game.build_client_resources()
 		if game.creation_presenter != null: game.creation_presenter.sync()
+		if not object_wait.is_empty():
+			var cell: Vector3i = object_wait["cell"]
+			if now > float(object_wait["deadline"]): object_wait.clear(); game.player.show_status("Object synchronization timed out; try again")
+			elif game.player.inventory_open or not game.player.has_voxel_target() or game.player.get_target_cell() != cell: object_wait.clear()
+			elif not replica.object_at(cell).is_empty(): object_wait.clear(); game.targeted_interaction()
 		if not open_wait.is_empty() and game.inventory_panel != null:
 			var target: String = open_wait["target"]
-			var workbench: bool = target.is_empty()
-			for s: Dictionary in replica.objects():
-				if s["instance"] == target: workbench = game.block_catalog.content_definition(StringName(s["content"])).get("function") == "workbench"
-			if not workbench or (replica.grid != null and replica.states.get("grid/"+game.local_player_id,{}).get("context") == target):
+			if now > float(open_wait["deadline"]): open_wait.clear(); game.player.show_status("Context synchronization timed out")
+			elif _context_ready(target):
 				open_wait.clear(); game.inventory_panel.open_context(target,false,true)
-			elif now > float(open_wait["deadline"]): open_wait.clear(); game.player.show_status("Context synchronization timed out")
 
 func _refresh() -> void:
 	game._sync_active_transform()

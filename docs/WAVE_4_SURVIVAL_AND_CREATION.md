@@ -1,5 +1,10 @@
 # Wave 4 - Survival & Creation
 
+Production tuning amendment: [W5.6 owner repair 1](WAVE_5_PART_6_OWNER_ACCEPTANCE_REPAIR_1.md)
+enables Standard thirst and updates fatigue/cover exposure. The Wave-4 tuning
+statements below retain the original accepted history; repaired runtime canon
+is defined by that explicit owner amendment. Save schema remains v4.
+
 Wave 4 connects the conserved Wave 3 substrate to a small survival game:
 
 Enter a seeded world -> gather timber -> craft planks/sticks and a Workbench -> craft wooden tools -> obtain ordinary Stone -> craft Stone tools -> harvest Dense Stone -> craft construction and a kiln -> burn charcoal -> build a covered rest/work area -> manage survival -> save -> restart -> continue the same process and resource state.

@@ -17,6 +17,7 @@ var _output: Button
 var _craft_title: Label
 var crafting: LfeCraftingGrid
 var _preview_recipe: String = ""
+var manual: LeyforgeCraftingManual
 
 func configure(world: LeyforgeWave1Playground) -> void:
 	_world=world
@@ -45,6 +46,7 @@ func configure(world: LeyforgeWave1Playground) -> void:
 	base.add_child(_panel)
 	_body=VBoxContainer.new();_body.add_theme_constant_override("separation",6)
 	_panel.add_child(_body);_panel.hide()
+	manual=LeyforgeCraftingManual.new();base.add_child(manual);manual.configure(world.block_catalog,world.creation.recipes)
 
 func open(storage: bool = false) -> bool:
 	var id: String = ""
@@ -55,18 +57,25 @@ func open_context(id: String = "", focus_crafting: bool = false, authorized: boo
 	if _world.session_options.mode == "JOIN" and not authorized:
 		return _world.command(_world.local_player_id,"open_context",{"target":id}).success
 	if _panel.visible and not close(authorized):return false
+	manual.close()
 	_object=id;_storage_id="";_picked_inventory=null;_picked_slot=-1
 	_buttons.clear();_progress=null;_output=null;_craft_title=null;crafting=null
 	for child: Node in _body.get_children():_body.remove_child(child);child.queue_free()
 	var station: LfeWorkstation = _world.creation.station(id)
 	var stored: LfeInventory = _world.creation.storage(id)
-	if stored==null and not id.is_empty():
-		stored=_world.world_resources.storage_inventory(id)
-		if stored!=null:_storage_id=id
+	# JOIN's read replica exposes both storage types through one endpoint lookup.
+	# The canonical storage family identifies the origin crate for context checks.
+	if not id.is_empty():
+		for entry: Dictionary in _world.world_resources.snapshot()["storage"]:
+			if entry["instance"]==id:
+				stored=_world.world_resources.storage_inventory(id);_storage_id=id
+				break
 	var workbench: bool = false
 	for entry: Dictionary in _world.creation.objects():
 		if entry["instance"]==id:workbench=_world.block_catalog.content_definition(StringName(entry["content"])).get("function","")=="workbench"
 	_label(_body,"Workbench · 3×3 crafting" if workbench else "Stone kiln" if station!=null else "Storage" if stored!=null else "Inventory · personal crafting",22)
+	var manual_button: Button = Button.new();manual_button.name="OpenCraftingManual";manual_button.text="Crafting Manual"
+	manual_button.pressed.connect(manual.open);_body.add_child(manual_button)
 	_hint=_label(_body,"",13)
 	var top: HBoxContainer = HBoxContainer.new();top.add_theme_constant_override("separation",20);_body.add_child(top)
 	_storage_group=null
@@ -124,6 +133,7 @@ func close(authorized: bool = false) -> bool:
 	if not authorized and crafting!=null and not _world.command(_world.local_player_id,"close_grid").success:
 		_world.player.show_status("Backpack full — return crafting items to free slots before closing or saving",5000)
 		return false
+	manual.close()
 	crafting=null;_picked_inventory=null;_picked_slot=-1
 	_panel.hide();_hotbar.show();_world.player.inventory_open=false
 	if DisplayServer.get_name()!="headless" and not OS.get_cmdline_user_args().has("--wave3-playtest") and not OS.get_cmdline_user_args().has("--wave4-playtest"):

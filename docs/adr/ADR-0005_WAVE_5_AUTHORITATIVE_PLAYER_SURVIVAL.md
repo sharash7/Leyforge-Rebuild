@@ -39,3 +39,20 @@ body transforms before its existing save path; transient rest is never saved.
 JOIN owns no authoritative save. Stronger failure/reconnection persistence
 hardening remains W5.7. Downed/revival, combat/PvP, weather/temperature, mana,
 host migration, relay, LAN/WAN qualification and dedicated servers are deferred.
+
+
+## Post-certification owner amendment: W5.6 repair 1
+
+The owner changed production canon after initial automated qualification:
+Standard enables existing thirst (5/hour) and canonical water (+35), sprint
+fatigue becomes 1/min, sheltered rest recovery 2/min, and alive outdoor
+exposure grows 0.5/min with sheltered recovery 2/min once. This interim cover
+reserve has no weather/temperature/damage. Peaceful/Relaxed keep disabled
+thirst; Harsh retains enabled thirst and multipliers. Existing saved values/
+timing remain unchanged on restore. The canonical model, HOST authority,
+private replacements, atomic idempotent consumption, actor cover/rest, one
+world tick and disconnected freeze remain. Protocol 5/save v4 stay compatible;
+app advances to 0.5.8-wave5-w5.6. Acceptance awaits owner repair retest.
+The read-only Manual presents the existing local validated recipe catalogue
+without new authority or a second registry.
+See [repair record](../WAVE_5_PART_6_OWNER_ACCEPTANCE_REPAIR_1.md).

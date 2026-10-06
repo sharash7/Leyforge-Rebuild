@@ -201,18 +201,22 @@ function Harvest([string] $Name, $Cell) {
 }
 
 try {
-    $paths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons docs AGENTS.md | Where-Object { $_ -notlike '*.gd.uid' -or @(& git -C $repositoryRoot ls-files -- $_).Count -gt 0 })
+    $snapshotInventory = Join-Path $repositoryRoot '.verification_snapshot_inventory.json'
+    $usingSnapshot = Test-Path $snapshotInventory
+    $paths = if ($usingSnapshot) { @(Get-Content $snapshotInventory -Raw | ConvertFrom-Json) } else { @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons docs AGENTS.md | Where-Object { $_ -notlike '*.gd.uid' -or @(& git -C $repositoryRoot ls-files -- $_).Count -gt 0 }) }
     $manifest = @{}
     $workingManifest = @{}
-    $edits = @(& git -C $repositoryRoot diff HEAD --name-only) + @(& git -C $repositoryRoot ls-files --others --exclude-standard)
+    $edits = if ($usingSnapshot) { $paths } else { @(& git -C $repositoryRoot diff HEAD --name-only) + @(& git -C $repositoryRoot ls-files --others --exclude-standard) }
     foreach ($relative in $paths) {
         $source = Join-Path $repositoryRoot $relative
         $target = Join-Path $testProject $relative
         New-Item -ItemType Directory -Force ([IO.Path]::GetDirectoryName($target)) | Out-Null
         $workingManifest[$relative] = (Get-FileHash -LiteralPath $source).Hash
-        if ($relative -eq 'project.godot') {
+        if ($usingSnapshot) {
+            Copy-Item -LiteralPath $source -Destination $target
+        } elseif ($relative -eq 'project.godot') {
             $text = [Text.Encoding]::UTF8.GetString((Read-GitBytes $relative))
-            $text = [regex]::Replace($text,'config/version="[^"]+"','config/version="0.5.7-wave5-w5.6"')
+            $text = [regex]::Replace($text,'config/version="[^"]+"','config/version="0.5.8-wave5-w5.6"')
             [IO.File]::WriteAllText($target,$text,(New-Object Text.UTF8Encoding($false)))
         } elseif ($relative -eq 'scenes/main/wave_1_playground.tscn' -or $relative -notin $edits) {
             [IO.File]::WriteAllBytes($target,(Read-GitBytes $relative))
@@ -251,8 +255,8 @@ try {
     $third = Wait-Condition 'third' {param($r) $r.survival_ready} 'Third owner bootstrap'
     $thirdId = $third.player_id
     Assert ($id -ne $thirdId) 'Distinct third identity'
-    Assert ($client.survival.health -eq 100 -and -not $client.survival.thirst_enabled -and $client.survival_hud -match 'Health') 'Client HUD uses HOST Standard state'
-    Assert ($client.survival_hud -notmatch 'Water') 'Standard hydration hidden'
+    Assert ($client.survival.health -eq 100 -and $client.survival.thirst_enabled -and $client.survival_hud -match 'Health') 'Client HUD uses HOST Standard state'
+    Assert ($client.survival_hud -match 'Water') 'Owner repair Standard hydration displayed'
     [void](Command 'host' @{op='actor_position';player_id=$id;position=@(1.5,($y+0.05),4.5)})
     [void](Command 'host' @{op='actor_position';player_id=$thirdId;position=@(-1.5,($y+0.05),4.5)})
     Start-Sleep -Milliseconds 700
@@ -298,8 +302,10 @@ try {
     $full = Command 'client' @{op='survival_consume';content='leyforge:provisions'}
     Assert (-not $full.commands[-1].result.success -and (Quantity $full.personal 'leyforge:provisions') -eq ($foodBefore-1)) 'Full hunger consume no-op conserves item'
     $waterBefore = Quantity $full.personal 'leyforge:drinking_water'
+    [void](Command 'host' @{op='survival_set';player_id=$id;profile='Peaceful'})
+    Start-Sleep -Milliseconds 200
     $water = Command 'client' @{op='survival_consume';content='leyforge:drinking_water'}
-    Assert (-not $water.commands[-1].result.success -and (Quantity $water.personal 'leyforge:drinking_water') -eq $waterBefore -and $water.survival.thirst -eq 40 -and -not $water.survival.thirst_enabled) 'Standard water no-op'
+    Assert (-not $water.commands[-1].result.success -and (Quantity $water.personal 'leyforge:drinking_water') -eq $waterBefore -and $water.survival.thirst -eq 40 -and -not $water.survival.thirst_enabled) 'Disabled Peaceful water no-op'
     [void](Command 'host' @{op='survival_set';player_id=$id;profile='Harsh'})
     Start-Sleep -Milliseconds 200
     $water = Command 'client' @{op='survival_consume';content='leyforge:drinking_water'}

@@ -261,11 +261,13 @@ func _roster_commands() -> void:
 				for n: int in LfeWorldSave.MAX_PLAYERS+1:
 					var player: Dictionary=data["players"][0].duplicate(true);player["player_id"]=str(n).sha256_text().substr(0,32);bad["players"].append(player)
 		_corrupt_fixture(bad,"bad_"+mutation)
+	# Fractional owner-repair biology exercises the existing exact serialized
+	# number comparison, without a tolerance or omitting any durable field.
 	var loaded: LfeWorldSave=_new("two_players",C)
-	_check(loaded.owner_player_id==A and loaded.players_state==save.players_state,"A different local profile cannot steal ownership or progress")
+	_check(loaded.owner_player_id==A and _same(loaded.players_state,save.players_state),"A different local profile cannot steal ownership or progress")
 	var other: LfeGameplayAuthority=_authority(loaded)
 	var new_character: LfePlayerCharacter=other.add_character(C,Vector3(0.5,20.05,0.5))
-	_check(new_character!=null and new_character.resources.total(&"leyforge:oak_heartwood")==0 and other.characters.size()==3 and other.character(A).snapshot()==a.snapshot(),"Missing v4 identity obtains separate safe default character")
+	_check(new_character!=null and new_character.resources.total(&"leyforge:oak_heartwood")==0 and other.characters.size()==3 and _same(other.character(A).snapshot(),a.snapshot()),"Missing v4 identity obtains separate safe default character")
 	var isolation: LfeWorldSave=_new("same_seed")
 	var isolated: LfeGameplayAuthority=_authority(isolation)
 	var separate: LfePlayerCharacter=isolated.add_character(A,Vector3(0.5,20.05,0.5))
@@ -280,7 +282,7 @@ func _roster_commands() -> void:
 	_check(loaded.save(valid_players,valid_world,valid_creation)==OK,"Valid save rotates complete previous copy")
 	_check(DirAccess.remove_absolute(primary)==OK,"Disposable interrupted promotion setup")
 	var recovered: LfeWorldSave=_new("two_players")
-	_check(recovered.load_status.contains("Recovered") and recovered.players_state==save.players_state and recovered.world_resource_state==valid_world,"Previous copy recovers both characters/shared state")
+	_check(recovered.load_status.contains("Recovered") and _same(recovered.players_state,save.players_state) and recovered.world_resource_state==valid_world,"Previous copy recovers both characters/shared state")
 	_check(recovered.save()==OK,"Recovered v4 snapshot promotes safely")
 
 func _corrupt_fixture(data: Dictionary,id: String) -> void:

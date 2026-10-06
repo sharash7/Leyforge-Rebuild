@@ -8,11 +8,13 @@ var _label: Label
 func build(network: LfeNetworkSession, player_id: String, host: bool = false) -> void:
 	session = network
 	local_player_id = player_id
-	layer = 20
+	layer = 2
 	var panel: PanelContainer = PanelContainer.new()
+	panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	panel.position = Vector2(16,180)
 	add_child(panel)
 	_label = Label.new()
+	_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	_label.add_theme_font_size_override("font_size",16)
 	panel.add_child(_label)
 	_update()
