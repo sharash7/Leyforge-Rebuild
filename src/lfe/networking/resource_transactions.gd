@@ -11,6 +11,8 @@ var completed: Dictionary = {}
 var owners: Dictionary = {}
 var sequences: Dictionary = {}
 var rates: Dictionary = {}
+var survival_revision: Callable
+var survival_commit: Callable
 var commits: int = 0
 
 func configure(a: LfeGameplayAuthority, c: LfeBlockCatalog, world_adapter: Callable) -> void:
@@ -52,7 +54,7 @@ func required(actor: String, op: String, args: Dictionary) -> Array[String]:
 		"open_context":
 			keys.append("player/"+actor)
 			if authority._grids.has(actor): keys.append("grid/"+actor)
-		"select","drop","place": keys.append("player/"+actor)
+		"select","drop","place","consume": keys.append("player/"+actor)
 		"pickup": keys.assign(["player/"+actor,"drop/"+args["target"]])
 		"transfer","swap":
 			keys.append(stream_for(actor,args["source"])); keys.append(stream_for(actor,args["destination"]))
@@ -63,6 +65,7 @@ func required(actor: String, op: String, args: Dictionary) -> Array[String]:
 			keys.append("player/"+actor)
 			if authority._grids.has(actor): keys.append("grid/"+actor)
 		"start_process": keys.append("object/"+args["target"])
+		"rest": keys.append("object/"+args["target"])
 		"source_hold": keys.append("source/"+args["target"])
 	return keys
 
@@ -110,11 +113,14 @@ func execute(peer: int, actor: String, p: Dictionary, now: float) -> Dictionary:
 		if not allowed(actor,key,all) or not p["expected_revisions"].has(key) or int(p["expected_revisions"][key]) != int(revisions.get(key,0)): stale = true
 	for key: String in p["expected_revisions"]:
 		if not allowed(actor,key,all): stale = true
-	if stale: result = LfeCommandResult.rejected("stale_state")
+	if not authority.character(actor).survival.alive() and p["operation"] != "close_grid": result = LfeCommandResult.rejected("not_ready")
+	elif stale: result = LfeCommandResult.rejected("stale_state")
 	else:
 		var op: String = p["operation"]
 		var a: Dictionary = p["args"].duplicate(true)
-		if op in ["drop","place"] and authority.character(actor).resources.inventory.stack_at(int(a["slot"])) != a["expected"]: result = LfeCommandResult.rejected("stale_state")
+		if op == "consume" and (not survival_revision.is_valid() or int(a["survival_revision"]) != int(survival_revision.call(actor)) or int(a["slot"]) != authority.character(actor).resources.selected_slot()): result = LfeCommandResult.rejected("stale_state")
+		elif op in ["drop","place","consume"] and authority.character(actor).resources.inventory.stack_at(int(a["slot"])) != a["expected"]: result = LfeCommandResult.rejected("stale_state")
+		elif op == "consume" and a["expected"]["content"] == "leyforge:drinking_water" and not authority.character(actor).survival.thirst_enabled(): result = LfeCommandResult.rejected("thirst_disabled")
 		elif op == "open_context":
 			var target: String = a["target"]
 			if not target.is_empty() and not authority.object_near(actor,target): result = LfeCommandResult.rejected("out_of_range")
@@ -125,9 +131,15 @@ func execute(peer: int, actor: String, p: Dictionary, now: float) -> Dictionary:
 				else: result = _open(actor,target)
 			elif authority._endpoint(actor,"storage/"+target,false) != null or authority.creation.station(target) != null: result = LfeCommandResult.accepted({"context":target})
 			else: result = LfeCommandResult.rejected("context_invalid")
-		elif op in ["pickup","drop","place","source_hold"]: result = adapter.call(actor,op,a,now)
+		elif op in ["pickup","drop","place","source_hold","rest"]: result = adapter.call(actor,op,a,now)
 		else: result = authority.execute(actor,op,a)
-		if result.success: commits += 1
+		if op == "consume" and not result.success and result.reason_code == "blocked": result = LfeCommandResult.rejected("no_effect")
+		if result.success:
+			commits += 1
+			if op == "consume" and survival_commit.is_valid(): survival_commit.call(actor)
+			if op == "consume":
+				observe()
+				result.data = {"resource_revision":revisions["player/"+actor],"survival_revision":survival_revision.call(actor)}
 	var response: Dictionary = _result(id,result)
 	if not completed.has(actor): completed[actor] = {}
 	if completed[actor].size() >= RETAIN:

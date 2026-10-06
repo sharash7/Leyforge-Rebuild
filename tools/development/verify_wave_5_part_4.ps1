@@ -183,7 +183,7 @@ try {
         $workingManifest[$relative] = (Get-FileHash -LiteralPath $source).Hash
         if (-not $usingSnapshot -and $relative -eq 'project.godot') {
             $text = [Text.Encoding]::UTF8.GetString((Read-GitBytes $relative))
-            $text = [regex]::Replace($text,'config/version="[^"]+"','config/version="0.5.5-wave5-w5.4"')
+            $text = [regex]::Replace($text,'config/version="[^"]+"','config/version="0.5.7-wave5-w5.6"')
             [IO.File]::WriteAllText($target,$text,(New-Object Text.UTF8Encoding($false)))
         } elseif (-not $usingSnapshot -and $relative -eq 'scenes/main/wave_1_playground.tscn') {
             [IO.File]::WriteAllBytes($target,(Read-GitBytes $relative))

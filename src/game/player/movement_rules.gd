@@ -9,6 +9,9 @@ const AIR_ACCELERATION: float = 8.0
 const DECELERATION: float = 30.0
 const JUMP_VELOCITY: float = 6.25
 
+static func fall_damage(speed: float) -> float:
+	return minf(100,(speed-12)*3) if is_finite(speed) and speed > 12 else 0.0
+
 static func step(body: CharacterBody3D, movement: Vector2, jump: bool, sprint: bool, gravity: float, delta: float) -> float:
 	if not body.is_on_floor():
 		body.velocity.y -= gravity * delta

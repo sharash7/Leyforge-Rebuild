@@ -157,6 +157,13 @@ func consume(inventory: LfeInventory, slot: int) -> bool:
 		var value: float = minf(100,float(next[key])+float(effects[key]))
 		changed = changed or value != float(next[key])
 		next[key] = value
-	if not changed or not LfeItemTransactions.remove(inventory,slot,1):
+	# Prepare both sides before publishing either. Canonical biology remains the
+	# sole implementation; a failed removal/restore cannot destroy an item.
+	var prepared: LfeInventory = LfeInventory.new(inventory._catalog,inventory.capacity(),inventory._restrictions)
+	var biology: LfeCharacterSurvival = LfeCharacterSurvival.new()
+	if not changed or not biology.restore(next) or not prepared.restore(inventory.snapshot()) or not LfeItemTransactions.remove(prepared,slot,1):
 		return false
-	return restore(next)
+	inventory._slots = prepared.snapshot()
+	_values = biology._values.duplicate(true)
+	_timing = biology._timing.duplicate(true)
+	return true

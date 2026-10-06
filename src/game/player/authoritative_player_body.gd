@@ -12,6 +12,11 @@ var processed_sequence: int = 0
 var input_age: float = 1.0
 var intent: Dictionary = {}
 var jump_pending: bool = false
+var input_epoch: int = 1
+var activity_sprinting: bool = false
+var activity_moving: bool = false
+var landing_speed: float = 0.0
+
 var gravity: float = 9.8
 
 func build(character: LfePlayerCharacter) -> void:
@@ -46,9 +51,9 @@ func build(character: LfePlayerCharacter) -> void:
 	pitch = float(record.transform["pitch"])
 
 func accept_input(packet: Dictionary) -> bool:
-	if not LfeMovementProtocol.valid_input(packet) or not LfeMovementProtocol.fresh(packet["sequence"],accepted_sequence): return false
+	if not LfeMovementProtocol.valid_input(packet) or int(packet["input_epoch"]) != input_epoch or not LfeMovementProtocol.fresh(packet["sequence"],accepted_sequence): return false
 	accepted_sequence = int(packet["sequence"])
-	intent = packet
+	intent = packet.duplicate(true)
 	# Latch an edge across two 30 Hz packets, then consume exactly once in physics.
 	jump_pending = jump_pending or bool(packet["jump_pressed"])
 	input_age = 0.0
@@ -69,8 +74,16 @@ func simulate(delta: float) -> void:
 			sprint = bool(intent["sprint_requested"]) and record.survival.alive() and float(record.survival.snapshot()["stamina"]) >= 1 and float(record.survival.snapshot()["fatigue"]) < 100
 			jump = jump_pending
 	jump_pending = false
-	LeyforgeMovementRules.step(self,movement,jump,sprint,gravity,delta)
+	if not record.survival.alive(): movement = Vector2.ZERO; jump = false; sprint = false
+	activity_moving = movement != Vector2.ZERO or jump
+	landing_speed = LeyforgeMovementRules.step(self,movement,jump,sprint,gravity,delta)
+	activity_sprinting = sprint and movement != Vector2.ZERO and Vector2(velocity.x,velocity.z).length() > LeyforgeMovementRules.WALK_SPEED
 	sync_record()
+
+func reset_input(advance_epoch: bool = true) -> void:
+	if advance_epoch: input_epoch += 1
+	intent.clear(); jump_pending = false; input_age = 1.0
+	activity_moving = false; activity_sprinting = false; landing_speed = 0.0
 
 func sync_record() -> void:
 	record.transform = {"position":LfeMovementProtocol.array3(global_position),"yaw":rotation.y,"pitch":pitch,"selected_block":record.transform.get("selected_block","")}

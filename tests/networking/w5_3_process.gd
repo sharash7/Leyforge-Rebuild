@@ -24,7 +24,7 @@ func _run() -> void:
 	started = Time.get_ticks_msec()
 	game = load("res://scenes/main/wave_1_playground.tscn").instantiate()
 	root.add_child(game)
-	while Time.get_ticks_msec() - started < (600000 if OS.get_cmdline_user_args().has("--w55-proof") else 180000) and not stop_requested:
+	while Time.get_ticks_msec() - started < (600000 if OS.get_cmdline_user_args().has("--w55-proof") or OS.get_cmdline_user_args().has("--w56-proof") else 180000) and not stop_requested:
 		await physics_frame
 		if game.network_session == null: continue
 		var path: String = directory.path_join(label+".command.json")

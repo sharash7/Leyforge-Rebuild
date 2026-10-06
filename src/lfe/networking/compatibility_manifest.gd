@@ -1,7 +1,7 @@
 class_name LfeCompatibilityManifest
 extends RefCounted
 
-const PROTOCOL: int = 4
+const PROTOCOL: int = 5
 const MAX_BYTES: int = 4096
 const HELLO_KEYS: Array = ["network_protocol_version", "build_version", "player_id", "save_version", "content_version", "content_hash", "worldgen_versions"]
 const WORLD_KEYS: Array = ["world_id", "seed", "worldgen_version", "save_version", "content_version", "content_hash", "network_protocol_version"]

@@ -24,6 +24,9 @@ const MAX_LOOK_ANGLE: float = deg_to_rad(89.0)
 var movement_only: bool = false
 var remote_voxels: bool = false
 var voxel_region_ready: bool = true
+var activity_sprinting: bool = false
+var activity_moving: bool = false
+
 var _movement_intent: Dictionary = {"move":Vector2.ZERO,"jump":false,"sprint":false,"yaw":0.0,"pitch":0.0}
 var character_record: LfePlayerCharacter
 var resource_state: LfePlayerResourceState
@@ -293,18 +296,23 @@ func _apply_movement(delta: float) -> void:
 	var controls_ready: bool = not inventory_open and (not remote_voxels or voxel_region_ready)
 	var input_vector: Vector2 = Input.get_vector("move_left","move_right","move_forward","move_back") if controls_ready else Vector2.ZERO
 	var jump: bool = controls_ready and Input.is_action_just_pressed("jump")
-	var sprint_allowed: bool = movement_only or development_selector or (gameplay_authority != null and gameplay_authority.can_sprint())
+	var sprint_allowed: bool = (movement_only and gameplay_authority == null) or development_selector or (gameplay_authority != null and gameplay_authority.can_sprint())
 	var sprint: bool = controls_ready and Input.is_action_pressed("sprint") and sprint_allowed
 	_movement_intent["move"] = input_vector
 	_movement_intent["jump"] = (bool(_movement_intent["jump"]) or jump) if controls_ready else false
 	_movement_intent["sprint"] = sprint
 	_movement_intent["yaw"] = wrapf(rotation.y,-PI,PI)
 	_movement_intent["pitch"] = _head.rotation.x
-	if input_vector != Vector2.ZERO and gameplay_authority != null:
-		gameplay_authority._resting = false
+	activity_moving = input_vector != Vector2.ZERO or jump
 	var fall_speed: float = LeyforgeMovementRules.step(self,input_vector,jump,sprint,_gravity,delta)
-	if fall_speed > 12 and gameplay_authority != null:
-		gameplay_authority.damage_player(minf(100,(fall_speed-12)*3))
+	activity_sprinting = sprint and input_vector != Vector2.ZERO and Vector2(velocity.x,velocity.z).length() > LeyforgeMovementRules.WALK_SPEED
+	if gameplay_authority != null and gameplay_authority.authority != null:
+		gameplay_authority.survival_system.landing(gameplay_authority.local_player_id,fall_speed)
+
+func clear_movement_intent() -> void:
+	_movement_intent["move"] = Vector2.ZERO
+	_movement_intent["jump"] = false
+	_movement_intent["sprint"] = false
 
 func consume_movement_intent() -> Dictionary:
 	var result: Dictionary = _movement_intent.duplicate()

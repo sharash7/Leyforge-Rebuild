@@ -168,7 +168,7 @@ try {
     $id = $client.player_id
     $two = Wait-Bindings 2
     Assert ($client.pid -ne $two.pid -and $id -ne $two.player_id) 'Distinct real processes and identities'
-    Assert ($client.no_authority -and $client.no_world_save -and $client.world.network_protocol_version -eq 4) 'JOIN current protocol / no authority'
+    Assert ($client.no_authority -and $client.no_world_save -and $client.world.network_protocol_version -eq 5) 'JOIN current protocol / no authority'
     Assert (@($client.avatars).Count -eq 1) 'JOIN sees host presence'
     [void] (Command 'host' @{op='screenshot';player_id=$id})
     [void] (Command 'client' @{op='screenshot';player_id=$two.player_id})

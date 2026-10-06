@@ -48,6 +48,7 @@ var session_options: LfeSessionOptions
 var movement: LeyforgePlayerMovement
 var network_session: LfeNetworkSession
 var resource_network: LeyforgeResourceNetwork
+var survival_system: LeyforgePlayerSurvival
 var voxel_network: LeyforgeVoxelNetwork
 var client_voxel_overrides: LfeVoxelOverrideStore
 
@@ -58,6 +59,9 @@ func _ready() -> void:
 	if not session_options.parse(OS.get_cmdline_user_args()):
 		_fail_startup(session_options.error)
 		return
+	survival_system = LeyforgePlayerSurvival.new()
+	add_child(survival_system); survival_system.configure(self)
+	process_physics_priority = 20
 	if session_options.mode == "JOIN":
 		var view: LeyforgeSessionView = LeyforgeSessionView.new()
 		add_child(view)
@@ -567,20 +571,7 @@ func _physics_process(delta: float) -> void:
 func advance_creation(seconds: float) -> bool:
 	if not LfeWorldSave._finite_in_range(seconds,60) or seconds < 0:
 		return false
-	_shelter_timer -= seconds
-	if _shelter_timer <= 0:
-		_sheltered = detect_shelter()
-		_shelter_timer = 0.5
-	var sprinting: bool = not player.inventory_open and Input.is_action_pressed("sprint") and Input.get_vector("move_left","move_right","move_forward","move_back") != Vector2.ZERO and can_sprint()
-	authority.advance_world(seconds)
-	command(local_player_id,"advance_player",{"seconds":seconds,"sheltered":_sheltered,"resting":_resting,"sprinting":sprinting})
-	if not active_character.survival.alive():
-		player.global_position = _find_safe_spawn()
-		player.velocity = Vector3.ZERO
-		command(local_player_id,"recover",{"spawn":player.global_position})
-		_resting = false
-		set_primary_action(false)
-		player.show_status("Recovered at safe spawn; inventory retained",5000)
+	if not survival_system.advance(seconds): return false
 	if not _harvest.is_empty():
 		advance_harvest(seconds)
 	if creation_presenter != null:
@@ -588,7 +579,7 @@ func advance_creation(seconds: float) -> bool:
 	return true
 
 func can_sprint() -> bool:
-	if session_options.mode == "JOIN": return true
+	if session_options.mode == "JOIN": return survival_system.replica.can_sprint()
 	return creation != null and active_character.survival.alive() and float(active_character.survival.snapshot()["stamina"]) >= 1 and float(active_character.survival.snapshot()["fatigue"]) < 100
 
 # Explicit input/authority seam: begin, held continuation and immediate cancel.
@@ -663,9 +654,8 @@ func craft_recipe(id: String) -> bool:
 	return result.success
 
 func consume_selected() -> bool:
-	if session_options.mode == "JOIN": player.show_status("Survival consumption arrives in W5.6"); return false
 	var result: LfeCommandResult=command(local_player_id,"consume")
-	player.show_status("Consumed" if result.success else "Cannot use selected item now")
+	player.show_status("Consumption pending" if result.data.get("pending",false) else "Consumed" if result.success else "Cannot use selected item now")
 	return result.success
 
 func toggle_crafting() -> void:
@@ -678,27 +668,21 @@ func interact_creation() -> bool:
 func _interact_object(id: String, function: String) -> bool:
 	if function == "source":
 		return begin_source_harvest(id)
-	if function == "rest" and session_options.mode == "JOIN":
-		player.show_status("Rest survival arrives in W5.6")
-		return false
 	if function == "rest":
 		return begin_rest(id)
 	return inventory_panel.open_context(id)
 
 func _apply_begin_rest(id: String) -> bool:
-	for entry: Dictionary in creation.objects():
-		if entry["instance"] == id and block_catalog.content_definition(StringName(entry["content"])).get("function") == "rest":
-			var p: Array = entry["cell"]
-			if _near_position([float(p[0])+0.5,float(p[1])+0.5,float(p[2])+0.5],3) and detect_shelter():
-				_resting = true
-				player.show_status("Resting in shelter; move to stop")
-				return true
-	player.show_status("Rest needs a covered, enclosed rest point")
-	return false
+	var result: LfeCommandResult = survival_system.begin_rest(local_player_id,id)
+	player.show_status("Resting in shelter; move to stop" if result.success else "Rest needs a covered, enclosed rest point")
+	return result.success
 
 func detect_shelter() -> bool:
+	return detect_shelter_at(player.global_position)
+
+func detect_shelter_at(position: Vector3) -> bool:
 	# Five short rays through authoritative voxel state, cached twice a second.
-	var center: Vector3i = Vector3i((player.global_position + Vector3.UP).floor())
+	var center: Vector3i = Vector3i((position + Vector3.UP).floor())
 	var covered: bool = false
 	for distance: int in range(1,5):
 		if block_catalog.is_solid_voxel(_voxel_id_at(center + Vector3i.UP * distance)):
@@ -734,9 +718,7 @@ func transfer_object(id: String, channel: String, slot: int, quantity: int, with
 	return int(result.data.get("quantity",0))
 
 func damage_player(amount: float) -> bool:
-	var result: bool=command(local_player_id,"damage",{"amount":amount}).success
-	if result and not active_character.survival.alive():set_primary_action(false)
-	return result
+	return survival_system.damage(local_player_id,amount) if authority != null else false
 
 func region_relevant(position: Vector3) -> bool:
 	if terrain == null:
@@ -982,6 +964,7 @@ func _build_voxel_network() -> void:
 	resource_network = LeyforgeResourceNetwork.new()
 	add_child(resource_network)
 	resource_network.configure(self,network_session)
+	survival_system.bind(network_session)
 
 func cancel_actor_harvest(actor: String) -> void:
 	_actor_harvests.erase(actor)
@@ -1046,7 +1029,7 @@ func _begin_actor_voxel(actor: String, cell: Vector3i, block: int, now: float) -
 	var effect: Dictionary = LfeHarvestRules.evaluate(rule,LfeHarvestRules.tool(authority.character(actor).resources),block_catalog)
 	effect.merge({"actor":actor,"cell":cell,"block":block,"work":0.0,"lease":now+LfeVoxelProtocol.HOLD_SECONDS})
 	_actor_harvests[actor] = effect
-	if actor == local_player_id: _resting = false
+	survival_system.cancel_rest(actor)
 	return "accepted"
 
 func _actor_voxel_valid(actor: String) -> String:
@@ -1112,19 +1095,26 @@ func build_client_resources() -> void:
 	creation = resource_network.replica
 	player.resource_state = personal_resources
 	player.gameplay_authority = self
-	player._instruction_label.text = "WASD move | Hold LMB gather | RMB interact/place | I inventory | C craft | Q drop | F10 leave"
+	player._instruction_label.text = "WASD move | Shift sprint | Space jump | Hold LMB gather | RMB interact/place\nI inventory | C craft | F consume | Q drop | F10 leave"
 	resource_presenter = LeyforgeResourcePresenter.new()
 	add_child(resource_presenter); resource_presenter.configure(self)
 	creation_presenter = LeyforgeCreationPresenter.new()
 	add_child(creation_presenter); creation_presenter.configure(self)
 	inventory_panel = LeyforgeInventoryPanel.new()
 	add_child(inventory_panel); inventory_panel.configure(self)
+	creation_panel = LeyforgeCreationPanel.new()
+	add_child(creation_panel); creation_panel.configure(self)
 	print("W5_5_PERSONAL_RESOURCES_READY")
 
 func client_resource_command(operation: String, args: Dictionary) -> LfeCommandResult:
 	if resource_network == null or resource_network.replica == null: return LfeCommandResult.rejected("not_ready")
 	if operation == "primary": return LfeCommandResult.accepted()
-	if operation in ["consume","rest"]: return LfeCommandResult.rejected("not_ready")
+	if operation == "consume":
+		if not survival_system.replica.ready(): return LfeCommandResult.rejected("not_ready")
+		var slot: int = personal_resources.selected_slot()
+		var stack: Dictionary = personal_resources.inventory.stack_at(slot)
+		if stack.is_empty(): return LfeCommandResult.rejected("blocked")
+		return resource_network.submit("consume",{"slot":slot,"expected":stack,"survival_revision":survival_system.replica.snapshot()["mutation_revision"]})
 	if operation == "drop_selected":
 		var slot: int = personal_resources.selected_slot()
 		var stack: Dictionary = personal_resources.inventory.stack_at(slot)
@@ -1141,6 +1131,7 @@ func resource_world_command(actor: String, operation: String, args: Dictionary, 
 	var personal: LfePlayerResourceState = authority.character(actor).resources
 	var body: Node3D = player if actor == local_player_id else movement.bodies.get(actor)
 	if body == null: return LfeCommandResult.rejected("not_ready")
+	if operation == "rest": return survival_system.begin_rest(actor,args["target"])
 	if operation == "pickup":
 		if Time.get_ticks_msec() < int(resource_presenter._cooldowns.get(args["target"],0)): return LfeCommandResult.rejected("not_ready")
 		return authority.execute(actor,"pickup",args)

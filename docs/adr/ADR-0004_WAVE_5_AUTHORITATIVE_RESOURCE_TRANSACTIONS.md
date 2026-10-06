@@ -1,6 +1,6 @@
 # ADR-0004: Wave 5 authoritative resource transactions
 
-Status: implemented for W5.5; owner manual acceptance pending.
+Status: implemented for W5.5; AUTOMATED CERTIFIED + OWNER ACCEPTED at 0.5.6-wave5-w5.5 / 69cd29a4a50a540b7b2b9796ed10ad22f04be301.
 
 W5.4 synchronizes movement and voxels. Extending that model to items requires preserving global quantity and stateful identity while requests may race, retry or lose their results.
 

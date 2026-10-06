@@ -53,6 +53,7 @@ func _run() -> void:
 			"protocol_mismatch": session._hello["network_protocol_version"] = 1
 			"w53_protocol_mismatch": session._hello["network_protocol_version"] = 2
 			"w54_protocol_mismatch": session._hello["network_protocol_version"] = 3
+			"w55_protocol_mismatch": session._hello["network_protocol_version"] = 4
 			"build_mismatch": session._hello["build_version"] = "incompatible"
 			"save_schema_mismatch": session._hello["save_version"] = 3
 			"content_version_mismatch": session._hello["content_version"] = 2

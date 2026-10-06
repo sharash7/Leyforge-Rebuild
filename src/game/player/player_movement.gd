@@ -21,6 +21,7 @@ var sequence: int = 0
 var sent_yaw: float = 0.0
 var sent_pitch: float = 0.0
 var last_snapshot_tick: int = -1
+var input_epoch: int = 1
 var client_epoch: int = 0
 var bootstrap_received: bool = false
 var send_enabled: bool = true
@@ -55,6 +56,8 @@ func _session_state(state: String, _reason: String) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _packet(peer: int, bytes: PackedByteArray) -> void:
+	var family: Variant = JSON.parse_string(bytes.get_string_from_utf8())
+	if family is Dictionary and family.get("kind") is String and (family["kind"].begins_with("resource_") or family["kind"].begins_with("survival_")): return
 	if LeyforgeVoxelNetwork.is_voxel_packet(bytes): return
 	var packet: Dictionary = LfeMovementProtocol.decode(bytes)
 	if packet.is_empty():
@@ -97,6 +100,7 @@ func _physics_process(delta: float) -> void:
 			if not body.ready_for_movement and game.movement_area_ready(body.global_position):
 				body.ready_for_movement = true
 			body.simulate(delta)
+			game.survival_system.landing(id,body.landing_speed)
 		for peer: int in session.peer_to_player:
 			if peer == 1: continue
 			var id: String = session.peer_to_player[peer]
@@ -119,7 +123,7 @@ func _physics_process(delta: float) -> void:
 			var intent: Dictionary = game.player.consume_movement_intent()
 			sent_yaw = float(intent["yaw"])
 			sent_pitch = float(intent["pitch"])
-			_send(1,LfeMovementProtocol.input(sequence,intent))
+			_send(1,LfeMovementProtocol.input(sequence,intent,input_epoch))
 
 func _spawn(id: String) -> void:
 	if bodies.has(id) or not session.player_to_peer.has(id): return
@@ -149,6 +153,19 @@ func _leave(peer: int, id: String) -> void:
 	relevant.erase(peer)
 	epochs.erase(peer)
 	# Remaining peers receive reliable removal at their next physics relevance pass.
+
+func reset_actor(actor: String) -> void:
+	var owner_peer: int = session.player_to_peer.get(actor,0)
+	if not epochs.has(owner_peer): return
+	# Owner reset and snapshot epoch are ordered with all presence events.
+	epochs[owner_peer] += 1
+	_send(owner_peer,{"kind":"movement_reset","tick":tick,"epoch":epochs[owner_peer],"input_epoch":bodies[actor].input_epoch,"state":_state(actor)})
+	for peer: int in relevant:
+		if peer == owner_peer or actor not in relevant[peer]: continue
+		epochs[peer] += 1
+		_send(peer,{"kind":"presence_leave","tick":tick,"epoch":epochs[peer],"player_id":actor})
+		epochs[peer] += 1
+		_send(peer,{"kind":"presence_enter","tick":tick,"epoch":epochs[peer],"state":_state(actor)})
 
 func sync_records() -> void:
 	for body: LeyforgeAuthoritativePlayerBody in bodies.values(): body.sync_record()
@@ -240,6 +257,15 @@ func _process_presence() -> void:
 				for state: Dictionary in packet["states"]:
 					if state["player_id"] != game.local_player_id: _present(state,int(packet["tick"]))
 				print("W5_3_MOVEMENT_BOOTSTRAP player=%s tick=%d" % [game.local_player_id.left(8),last_snapshot_tick])
+			"movement_reset":
+				if not bootstrap_received or packet["state"]["player_id"] != game.local_player_id or int(packet["epoch"]) != client_epoch+1: continue
+				client_epoch = int(packet["epoch"]); input_epoch = int(packet["input_epoch"])
+				last_snapshot_tick = int(packet["tick"]); pending_snapshot.clear()
+				latest_self = packet["state"].duplicate(true)
+				game.player.global_position = LfeMovementProtocol.vec3(latest_self["position"])
+				game.player.velocity = Vector3.ZERO
+				game.player.clear_movement_intent()
+				game.player.show_status("Recovered at safe spawn; inventory retained",5000)
 			"presence_enter":
 				if not bootstrap_received or int(packet["epoch"]) != client_epoch + 1: continue
 				client_epoch = int(packet["epoch"])

@@ -1,6 +1,6 @@
 # Wave 5 Part 5: Resources, inventory and authoritative transactions
 
-Application `0.5.6-wave5-w5.5`; network protocol **4**; save/content/worldgen **4/1/2**. W5.4 was accepted by the owner at `275615fb9a7032d56f868fe7853fb7e82470c937`. W5.5 automated certification requires a complete, source-pinned `gate.json` from the verifier below. Owner manual acceptance is **pending** and remains a separate judgement. W5.6 has not begun.
+Application `0.5.6-wave5-w5.5`; network protocol **4**; save/content/worldgen **4/1/2**. W5.4 was accepted by the owner at `275615fb9a7032d56f868fe7853fb7e82470c937`. W5.5 automated certification requires a complete, source-pinned `gate.json` from the verifier below. W5.5 is **AUTOMATED CERTIFIED + OWNER ACCEPTED** at `0.5.6-wave5-w5.5` / `69cd29a4a50a540b7b2b9796ed10ad22f04be301`. The owner confirmed shared drops, independent Client 2 inventory/hotbar/equipment, tools/durability, finite sources, crafting/Workbench, placement, storage, kiln and resource persistence/reconnect. Survival was intentionally deferred to W5.6.
 
 ## Authority and the resource seam
 

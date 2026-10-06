@@ -14,7 +14,7 @@ const PRESENCE_CHANNEL: int = 3
 const INPUT_HZ: float = 30.0
 const SNAPSHOT_HZ: float = 20.0
 const INPUT_HOLD_SECONDS: float = 0.25
-const INPUT_KEYS: Array = ["kind","sequence","move_x","move_z","jump_pressed","sprint_requested","yaw","pitch"]
+const INPUT_KEYS: Array = ["kind","sequence","input_epoch","move_x","move_z","jump_pressed","sprint_requested","yaw","pitch"]
 const STATE_KEYS: Array = ["player_id","position","velocity","yaw","pitch","grounded","ack"]
 
 static func finite(value: Variant, bound: float) -> bool:
@@ -34,7 +34,7 @@ static func vector(value: Variant, bound: float) -> bool:
 
 static func valid_input(value: Variant) -> bool:
 	if not LfeCompatibilityManifest.exact_keys(value,INPUT_KEYS) or value["kind"] != "movement_input": return false
-	if not integer(value["sequence"],1) or not finite(value["move_x"],1.0) or not finite(value["move_z"],1.0): return false
+	if not integer(value["input_epoch"],1) or not integer(value["sequence"],1) or not finite(value["move_x"],1.0) or not finite(value["move_z"],1.0): return false
 	if Vector2(float(value["move_x"]),float(value["move_z"])).length_squared() > 1.000002: return false
 	return value["jump_pressed"] is bool and value["sprint_requested"] is bool and finite(value["yaw"],PI + 0.000001) and finite(value["pitch"],MAX_PITCH + ANGLE_EPSILON)
 
@@ -61,6 +61,8 @@ static func valid(value: Variant) -> bool:
 			return false
 		"movement_snapshot":
 			return LfeCompatibilityManifest.exact_keys(value,["kind","tick","epoch","states"]) and integer(value["tick"]) and integer(value["epoch"],1) and valid_states(value["states"])
+		"movement_reset":
+			return LfeCompatibilityManifest.exact_keys(value,["kind","tick","epoch","input_epoch","state"]) and integer(value["tick"]) and integer(value["epoch"],1) and integer(value["input_epoch"],2) and valid_state(value["state"])
 		"presence_enter":
 			return LfeCompatibilityManifest.exact_keys(value,["kind","tick","epoch","state"]) and integer(value["tick"]) and integer(value["epoch"],1) and valid_state(value["state"])
 		"presence_leave":
@@ -80,8 +82,8 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 	if parser.parse(source) != OK or not valid(parser.data): return {}
 	return parser.data
 
-static func input(sequence: int, intent: Dictionary) -> Dictionary:
-	return {"kind":"movement_input","sequence":sequence,"move_x":intent["move"].x,"move_z":intent["move"].y,"jump_pressed":intent["jump"],"sprint_requested":intent["sprint"],"yaw":wrapf(float(intent["yaw"]),-PI,PI),"pitch":intent["pitch"]}
+static func input(sequence: int, intent: Dictionary, input_epoch: int = 1) -> Dictionary:
+	return {"kind":"movement_input","sequence":sequence,"input_epoch":input_epoch,"move_x":intent["move"].x,"move_z":intent["move"].y,"jump_pressed":intent["jump"],"sprint_requested":intent["sprint"],"yaw":wrapf(float(intent["yaw"]),-PI,PI),"pitch":intent["pitch"]}
 
 static func array3(value: Vector3) -> Array:
 	return [value.x,value.y,value.z]

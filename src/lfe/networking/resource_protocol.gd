@@ -14,9 +14,10 @@ const OPERATIONS: Dictionary = {
 	"swap":["source","destination","source_slot","destination_slot","expected"],
 	"open_context":["target"], "close_grid":[], "craft":["recipe"],
 	"start_process":["target","recipe"], "place":["cell","expected_block","slot","expected"],
+	"consume":["slot","expected","survival_revision"], "rest":["target"],
 	"source_hold":["target","active"]
 }
-const REASONS: Array = ["ok","stale_state","invalid_target","out_of_range","inventory_full","insufficient_resources","blocked","tool_required","context_invalid","output_full","not_ready","rate_limited","already_processed"]
+const REASONS: Array = ["ok","stale_state","invalid_target","out_of_range","inventory_full","insufficient_resources","blocked","tool_required","context_invalid","output_full","not_ready","rate_limited","already_processed","thirst_disabled","no_effect"]
 
 static func integer(value: Variant, low: int, high: int) -> bool:
 	return LfeWorldSave._is_integer(value) and value >= low and value <= high
@@ -42,6 +43,8 @@ static func request_valid(p: Variant, catalog: LfeBlockCatalog) -> bool:
 	var a: Dictionary = p["args"]
 	for key: String in a:
 		match key:
+			"survival_revision":
+				if not integer(a[key],1,MAX_SEQUENCE): return false
 			"slot","source_slot":
 				if not integer(a[key],0,26): return false
 			"destination_slot":

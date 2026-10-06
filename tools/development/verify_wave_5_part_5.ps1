@@ -201,18 +201,22 @@ function Harvest([string] $Name, $Cell) {
 }
 
 try {
-    $paths = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons docs AGENTS.md | Where-Object { $_ -notlike '*.gd.uid' -or @(& git -C $repositoryRoot ls-files -- $_).Count -gt 0 })
+    $snapshotInventory = Join-Path $repositoryRoot '.verification_snapshot_inventory.json'
+    $usingSnapshot = Test-Path $snapshotInventory
+    $paths = if ($usingSnapshot) { @(Get-Content $snapshotInventory -Raw | ConvertFrom-Json) } else { @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard -- project.godot src content scenes tests tools addons docs AGENTS.md | Where-Object { $_ -notlike '*.gd.uid' -or @(& git -C $repositoryRoot ls-files -- $_).Count -gt 0 }) }
     $manifest = @{}
     $workingManifest = @{}
-    $edits = @(& git -C $repositoryRoot diff HEAD --name-only) + @(& git -C $repositoryRoot ls-files --others --exclude-standard)
+    $edits = if ($usingSnapshot) { $paths } else { @(& git -C $repositoryRoot diff HEAD --name-only) + @(& git -C $repositoryRoot ls-files --others --exclude-standard) }
     foreach ($relative in $paths) {
         $source = Join-Path $repositoryRoot $relative
         $target = Join-Path $testProject $relative
         New-Item -ItemType Directory -Force ([IO.Path]::GetDirectoryName($target)) | Out-Null
         $workingManifest[$relative] = (Get-FileHash -LiteralPath $source).Hash
-        if ($relative -eq 'project.godot') {
+        if ($usingSnapshot) {
+            Copy-Item -LiteralPath $source -Destination $target
+        } elseif ($relative -eq 'project.godot') {
             $text = [Text.Encoding]::UTF8.GetString((Read-GitBytes $relative))
-            $text = [regex]::Replace($text,'config/version="[^"]+"','config/version="0.5.6-wave5-w5.5"')
+            $text = [regex]::Replace($text,'config/version="[^"]+"','config/version="0.5.7-wave5-w5.6"')
             [IO.File]::WriteAllText($target,$text,(New-Object Text.UTF8Encoding($false)))
         } elseif ($relative -eq 'scenes/main/wave_1_playground.tscn' -or $relative -notin $edits) {
             [IO.File]::WriteAllBytes($target,(Read-GitBytes $relative))

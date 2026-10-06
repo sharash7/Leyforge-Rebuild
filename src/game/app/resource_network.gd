@@ -24,6 +24,8 @@ func configure(g: LeyforgeWave1Playground, s: LfeNetworkSession) -> void:
 	if s.mode == "HOST":
 		transactions = LfeResourceTransactions.new()
 		transactions.configure(g.authority,g.block_catalog,g.resource_world_command)
+		transactions.survival_revision = g.survival_system.mutation_revision
+		transactions.survival_commit = g.survival_system.changed
 	else:
 		replica = LfeResourceReplica.new()
 		replica.configure(g.block_catalog,g.local_player_id)
@@ -56,7 +58,9 @@ func _packet(peer: int, bytes: PackedByteArray) -> void:
 		game._sync_active_transform()
 		if p["kind"] == "resource_request":
 			var response: Dictionary = transactions.execute(peer,actor,p,now)
-			if not response.is_empty(): _send(peer,response)
+			if not response.is_empty():
+				_send(peer,response)
+				if p["operation"] in ["consume","rest"]: game.survival_system.publish(actor,true)
 		elif p["kind"] == "resource_resync":
 			var rate: Dictionary = transactions.rates.get(peer,{"tokens":16.0,"time":now})
 			if now-float(rate.get("resync_time",-1.0)) < 0.2: return
@@ -73,7 +77,9 @@ func _packet(peer: int, bytes: PackedByteArray) -> void:
 			pending.erase(p["transaction_id"])
 			results.append(p.duplicate(true))
 			if results.size() > 256: results.pop_front()
-			if game.player != null: game.player.show_status(p["reason"] if not p["success"] else "Transaction committed",1500)
+			if game.player != null:
+				var feedback: String = "Hydration disabled in this profile; water retained" if p["reason"] == "thirst_disabled" else "No survival effect; item retained" if p["reason"] == "no_effect" else p["reason"] if not p["success"] else "Resting in shelter; move to stop" if req["packet"]["operation"] == "rest" else "Transaction committed"
+				game.player.show_status(feedback,2500)
 			if p["success"] and req["packet"]["operation"] == "open_context": open_wait = {"target":req["packet"]["args"]["target"],"deadline":now+5.0}
 			if p["success"] and req["packet"]["operation"] == "close_grid" and game.inventory_panel != null: game.inventory_panel.close(true)
 		elif p["kind"] in ["resource_part","resource_forget","resource_position","resource_ready"]:
@@ -156,7 +162,7 @@ func prepare(op: String, args: Dictionary) -> Dictionary:
 		"open_context":
 			keys.append("player/"+game.local_player_id)
 			if replica.states.has("grid/"+game.local_player_id): keys.append("grid/"+game.local_player_id)
-		"select","drop","place": keys.append("player/"+game.local_player_id)
+		"select","drop","place","consume": keys.append("player/"+game.local_player_id)
 		"pickup": keys.assign(["player/"+game.local_player_id,"drop/"+a["target"]])
 		"craft": keys.assign(["player/"+game.local_player_id,"grid/"+game.local_player_id])
 		"close_grid":
@@ -168,6 +174,7 @@ func prepare(op: String, args: Dictionary) -> Dictionary:
 				if key.begins_with("storage/") and replica.states.has("object/"+key.get_slice("/",1)): key = "object/"+key.get_slice("/",1)
 				keys.append(key)
 		"start_process": keys.append("object/"+a["target"])
+		"rest": keys.append("object/"+a["target"])
 		"source_hold": keys.append("source/"+a["target"])
 	var expected: Dictionary = {}
 	for key: String in keys: expected[key] = int(replica.revisions.get(key,0))
