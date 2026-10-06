@@ -174,6 +174,16 @@ func _write_report() -> void:
 	var session: LfeNetworkSession = game.network_session
 	if session == null: return
 	var report: Dictionary = {"pid":OS.get_process_id(),"name":label,"state":session.state,"reason":session.reason_code,"ready":game.is_runtime_ready(),"player_id":game.local_player_id,"commands":commands,"failures":failures,"passed":failures.is_empty(),"bindings":session.peer_to_player.duplicate(),"world":session.world_manifest.duplicate(true)}
+	if game.movement == null and session.mode == "JOIN":
+		# W5.7 destroys the old gameplay nodes; retain the real ended-state
+		# assertions without dereferencing the now-absent movement presentation.
+		report["no_authority"] = game.authority == null and game.world_save == null
+		report["no_world_save"] = not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://worlds"))
+		report["teardown"] = game.teardown_facts.duplicate(true)
+		report["avatars"] = []
+		var ended_file: FileAccess = FileAccess.open(directory.path_join(label+".json"),FileAccess.WRITE)
+		ended_file.store_string(JSON.stringify(report,"\t")); ended_file = null
+		return
 	if game.movement != null:
 		report["rejected_packets"] = game.movement.rejected_packets
 		report["presence"] = game.movement.presence_events.duplicate(true)

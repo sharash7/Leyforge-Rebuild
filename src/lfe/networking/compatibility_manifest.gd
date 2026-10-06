@@ -1,11 +1,11 @@
 class_name LfeCompatibilityManifest
 extends RefCounted
 
-const PROTOCOL: int = 5
+const PROTOCOL: int = 6
 const MAX_BYTES: int = 4096
 const HELLO_KEYS: Array = ["network_protocol_version", "build_version", "player_id", "save_version", "content_version", "content_hash", "worldgen_versions"]
 const WORLD_KEYS: Array = ["world_id", "seed", "worldgen_version", "save_version", "content_version", "content_hash", "network_protocol_version"]
-const REASONS: Array = ["ok", "malformed_handshake", "invalid_identity", "protocol_mismatch", "build_mismatch", "save_schema_mismatch", "content_version_mismatch", "content_hash_mismatch", "worldgen_unsupported", "duplicate_identity", "server_full", "auth_timeout", "connection_failed", "server_disconnected"]
+const REASONS: Array = ["ok", "malformed_handshake", "invalid_identity", "protocol_mismatch", "build_mismatch", "save_schema_mismatch", "content_version_mismatch", "content_hash_mismatch", "worldgen_unsupported", "duplicate_identity", "server_full", "auth_timeout", "connection_failed", "server_disconnected", "server_timeout", "host_shutdown", "client_left", "server_closing", "world_mismatch"]
 
 static func hello(player_id: String, fingerprint: String) -> Dictionary:
 	return {"network_protocol_version":PROTOCOL, "build_version":ProjectSettings.get_setting("application/config/version"), "player_id":player_id, "save_version":LfeWorldSave.SAVE_VERSION, "content_version":LfeWorldSave.CONTENT_VERSION, "content_hash":fingerprint, "worldgen_versions":[1,2]}

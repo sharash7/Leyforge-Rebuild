@@ -1,7 +1,19 @@
 # W5.6 owner acceptance repair 1
 
-Status: W5.6 AUTOMATED CERTIFIED / OWNER ACCEPTANCE PENDING / REPAIR REQUIRED.
-Only owner manual retest can close W5.6. W5.7 has not begun.
+## Owner acceptance recorded for W5.6 repair 1
+
+**AUTOMATED CERTIFIED + OWNER ACCEPTED**
+
+Accepted build: **0.5.8-wave5-w5.6**.
+Accepted SHA: **cced5167004e3056c150bbd16fee25252c665843**.
+Accepted commit: fix: complete W5.6 owner survival and interactions.
+
+The owner manually retested and confirmed functional objects, smoothed drops,
+Thirst, Fatigue, Exposure, the Crafting Manual, and no noticeable gameplay blockers.
+The longstanding JOIN world remaining after HOST exits is assigned to W5.7;
+it does not reopen W5.6. Wave 5 remains in progress.
+
+Status: W5.6 AUTOMATED CERTIFIED + OWNER ACCEPTED; acceptance recorded above.
 
 Candidate: **0.5.8-wave5-w5.6**. Starting automated build: 0.5.7-wave5-w5.6 /
 7f55c612a098dd23e160ffa0f9b7757cfc7df317. Protocol remains **5**, save **4**,
@@ -176,6 +188,6 @@ user://identity/development/wave5-client-2.json. No cache/save/profile deletion.
 10. Outdoors Exposure rises; valid sheltered Rest Mat recovers Fatigue/Exposure. Move to cancel only your rest.
 11. Close/rejoin Client, save/restart HOST and reconnect; verify same identity/resources/survival. Accepted legitimate fall/safe recovery remains available.
 
-Human acceptance stays pending owner observations. W5.7 hardening is outside
-scope. No downed/revival, combat/PvP, temperature/weather, mana, LAN/WAN, relay,
+Human acceptance is recorded above from the owner repair retest. W5.7 hardening
+proceeds separately. No downed/revival, combat/PvP, temperature/weather, mana, LAN/WAN, relay,
 dedicated server or host migration is implemented or certified.

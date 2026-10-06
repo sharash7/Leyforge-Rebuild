@@ -1,6 +1,6 @@
 # ADR-0005: Wave 5 authoritative player survival
 
-Status: implemented for W5.6; complete verifier certification required; owner acceptance pending.
+Status: W5.6 AUTOMATED CERTIFIED + OWNER ACCEPTED at 0.5.8-wave5-w5.6 / cced5167004e3056c150bbd16fee25252c665843.
 
 Each world-local `LfePlayerCharacter` already owns canonical
 `LfeCharacterSurvival` and its durable six values and timing/debt state. HOST
@@ -52,7 +52,7 @@ thirst; Harsh retains enabled thirst and multipliers. Existing saved values/
 timing remain unchanged on restore. The canonical model, HOST authority,
 private replacements, atomic idempotent consumption, actor cover/rest, one
 world tick and disconnected freeze remain. Protocol 5/save v4 stay compatible;
-app advances to 0.5.8-wave5-w5.6. Acceptance awaits owner repair retest.
+app advances to 0.5.8-wave5-w5.6. Owner repair retest accepted functional interactions, drops, survival and Manual.
 The read-only Manual presents the existing local validated recipe catalogue
 without new authority or a second registry.
 See [repair record](../WAVE_5_PART_6_OWNER_ACCEPTANCE_REPAIR_1.md).

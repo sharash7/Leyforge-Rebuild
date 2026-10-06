@@ -369,7 +369,8 @@ try {
     [void](Command 'client' @{op='repair_button';name='CloseManual'})
     [void](Command 'client' @{op='repair_key';code=4194305})
     [void](Command 'client' @{op='repair_select';content='leyforge:drinking_water'})
-    $a=Read-Report 'client';[void](Command 'client' @{op='repair_key';code=70});$b=Read-Report 'client'
+    $a=Read-Report 'client';[void](Command 'client' @{op='repair_key';code=70})
+    $b=Wait-Condition 'client' {param($r) $r.survival.mutation_revision -gt $a.survival.mutation_revision -and (Quantity $r.personal 'leyforge:drinking_water') -lt (Quantity $a.personal 'leyforge:drinking_water')} 'Water authoritative resource and biology results arrive'
     Assert ($b.survival.thirst -gt ($a.survival.thirst+34) -and (Quantity $b.personal 'leyforge:drinking_water') -eq ((Quantity $a.personal 'leyforge:drinking_water')-1) -and $b.survival_hud -match 'Water') 'Normal F consumes exactly one Standard water for +35'
     [void](Command 'client' @{op='retry'})
     Assert ((Quantity (Read-Report 'client').personal 'leyforge:drinking_water') -eq (Quantity $b.personal 'leyforge:drinking_water')) 'Water retry one item/effect through existing ledger'
@@ -400,11 +401,11 @@ try {
     $d=Command 'host' @{op='repair_drops';position=@(-2.5,($y+0.3),-2.5)}
     $ids=$d.commands[-1].ids
     [void](Wait-Condition 'client' {param($r) @($r.drop_nodes).Count -eq 2} 'Reliable drop spawn exact')
-    Start-Sleep -Seconds 1
+    Start-Sleep -Seconds 3
     [void](Command 'host' @{op='repair_drop_stop';hold=$true})
     Start-Sleep -Seconds 1
     $gate.drop_convergence_checkpoint=Read-Report 'client'
-    [void](Command 'host' @{op='repair_drop_jump';id=$ids[1];position=@(-0.5,($y+0.3),-2.5)})
+    [void](Command 'host' @{op='repair_drop_jump';id=$ids[1];position=@(0.5,($y+0.3),-2.5)})
     Start-Sleep -Milliseconds 350
     [void](Command 'host' @{op='repair_drop_jump';id=$ids[1];position=@(-2.1,($y+0.3),-2.5)})
     [void](Command 'host' @{op='repair_drop_stop';hold=$false})

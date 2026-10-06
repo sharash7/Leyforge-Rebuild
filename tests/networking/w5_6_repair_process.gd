@@ -103,9 +103,9 @@ func _command(c: Dictionary) -> void:
 		"repair_runway":
 			var y: int = c["y"]
 			var tool: VoxelTool = game.terrain.get_voxel_tool();tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
-			for z: int in range(5,31):
-				for x: int in range(1,3):
-					for h: int in range(y-1,y+4):
+			for z: int in range(5,66):
+				for x: int in range(0,5):
+					for h: int in range(y-1,y+3):
 						game._commit_voxel(Vector3i(x,h,z),game.block_catalog.get_voxel_id(&"leyforge:stone" if h==y-1 else &"leyforge:air"),tool)
 		"repair_items":
 			var inventory: LfeInventory = game.authority.character(c["player_id"]).resources.inventory
@@ -154,7 +154,7 @@ func _command(c: Dictionary) -> void:
 			var donor: LfePlayerResourceState = LfePlayerResourceState.new(game.block_catalog)
 			LfeItemTransactions.add(donor.inventory,&"leyforge:oak_stick",2)
 			var point: Vector3 = LfeMovementProtocol.vec3(c["position"])
-			result["ids"]=[game.world_resources.drop_from_inventory(donor,0,1,point),game.world_resources.drop_from_inventory(donor,0,1,point+Vector3.RIGHT*0.9)]
+			result["ids"]=[game.world_resources.drop_from_inventory(donor,0,1,point),game.world_resources.drop_from_inventory(donor,0,1,point+Vector3.RIGHT*1.5)]
 			for id: String in result["ids"]: game.world_resources.ground_drop(id,game.drop_rest_position)
 			game.resource_network._refresh()
 		"repair_drop_jump":

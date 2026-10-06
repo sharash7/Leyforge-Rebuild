@@ -1,18 +1,30 @@
 # Wave 5 Part 6: Authoritative survival and the shared Wave-4 loop
 
+## Owner acceptance recorded for W5.6 repair 1
+
+**AUTOMATED CERTIFIED + OWNER ACCEPTED**
+
+Accepted build: **0.5.8-wave5-w5.6**.
+Accepted SHA: **cced5167004e3056c150bbd16fee25252c665843**.
+Accepted commit: fix: complete W5.6 owner survival and interactions.
+
+The owner manually retested and confirmed functional objects, smoothed drops,
+Thirst, Fatigue, Exposure, the Crafting Manual, and no noticeable gameplay blockers.
+The longstanding JOIN world remaining after HOST exits is assigned to W5.7;
+it does not reopen W5.6. Wave 5 remains in progress.
+
 Initial automated candidate application `0.5.7-wave5-w5.6`; protocol **5**; save/content/current
 worldgen **4/1/2**, with stored worldgen v1 supported. W5.5 is AUTOMATED
 CERTIFIED + OWNER ACCEPTED at `0.5.6-wave5-w5.5` /
 `69cd29a4a50a540b7b2b9796ed10ad22f04be301`. W5.6 automated certification
 requires a complete source-pinned `gate.json` from the verifier below. Owner
-acceptance is pending. Wave 5 remains in progress; W5.7 is outside this work.
+acceptance is recorded above. Wave 5 remains in progress.
 
 ## Owner acceptance repair 1
 
 Owner findings require [repair 1](WAVE_5_PART_6_OWNER_ACCEPTANCE_REPAIR_1.md).
-Current candidate is 0.5.8-wave5-w5.6; protocol/save/content/worldgen stay 5/4/1/2.
-The original qualification remains historical; owner acceptance awaits repair
-retest. Repair 1 fixes physical functional interactions, smooths JOIN drops,
+Accepted repaired build is 0.5.8-wave5-w5.6; protocol/save/content/worldgen stay 5/4/1/2.
+The original qualification remains historical; owner repair retest is accepted above. Repair 1 fixes physical functional interactions, smooths JOIN drops,
 adds the canonical Manual and explicitly amends Standard hydration/fatigue/
 exposure. Tuning below describes initial 0.5.7 certification, not repaired canon.
 

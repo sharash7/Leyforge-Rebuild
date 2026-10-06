@@ -71,6 +71,7 @@ func _process(delta: float) -> void:
 		visual.rotation.y=_animation*0.45+phase
 
 func _physics_process(delta: float) -> void:
+	if _world != null and _world._host_closing: return
 	if _world==null or not _world.is_runtime_ready():
 		return
 	if _world.authority != null and not OS.get_cmdline_user_args().has("--wave4-playtest") and not OS.get_cmdline_user_args().has("--wave3-playtest"):

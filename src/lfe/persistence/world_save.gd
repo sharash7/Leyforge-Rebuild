@@ -29,6 +29,10 @@ var _expected_primary_hash: String = ""
 var _edits_dirty: bool = false
 var _is_open: bool = false
 var _last_error: String = ""
+var recovery_candidate: String = ""
+var recovery_reasons: Dictionary = {}
+var _recovery_path: String = ""
+var _recovery_hash: String = ""
 
 
 func get_last_error() -> String:
@@ -84,12 +88,37 @@ func open_world(
 	_world_directory = absolute_root.path_join(world_id)
 	var primary: String = get_primary_path()
 	var previous: String = _world_directory.path_join(PREVIOUS_FILE)
+	recovery_candidate = ""
+	recovery_reasons.clear()
+	_recovery_path = ""
+	_recovery_hash = ""
+	var pending: String = _world_directory.path_join(PENDING_FILE)
+	var decoded: Dictionary = {}
 	var path_to_load: String = ""
-	if FileAccess.file_exists(primary):
-		path_to_load = primary
-	elif FileAccess.file_exists(previous):
-		path_to_load = previous
-	if path_to_load.is_empty():
+	var candidate_exists: bool = false
+	# Primary is the commit point. Without a valid primary, a fully validated
+	# pending file is the next transaction, then previous is the bounded fallback.
+	for candidate: String in [primary,pending,previous]:
+		if not FileAccess.file_exists(candidate): continue
+		candidate_exists = true
+		var value: Dictionary = _decode_file(candidate)
+		if value.is_empty():
+			recovery_reasons[candidate.get_file()] = _last_error
+			continue
+		var facts: Dictionary = value["metadata"]
+		if facts["world_id"] != world_id:
+			recovery_reasons[candidate.get_file()] = "Save world ID does not match selected world ID."
+			continue
+		if seed_was_explicit and LfeDeterministicSeed.normalize(requested_seed) != int(facts["seed"]):
+			recovery_reasons[candidate.get_file()] = "Explicit seed conflicts with saved world seed %d." % int(facts["seed"])
+			continue
+		decoded = value
+		path_to_load = candidate
+		break
+	if decoded.is_empty():
+		if candidate_exists:
+			load_status = "Authoritative save corrupt; recovery failed"
+			return _fail(ERR_INVALID_DATA,load_status + ": " + JSON.stringify(recovery_reasons))
 		seed = LfeDeterministicSeed.normalize(requested_seed)
 		display_name = world_id
 		created_utc = Time.get_datetime_string_from_system(true)
@@ -107,15 +136,8 @@ func open_world(
 		_last_error = ""
 		return OK
 
-	var decoded: Dictionary = _decode_file(path_to_load)
-	if decoded.is_empty():
-		return ERR_INVALID_DATA
 	var metadata: Dictionary = decoded["metadata"]
-	if String(metadata["world_id"]) != world_id:
-		return _fail(ERR_INVALID_DATA, "Save world ID does not match selected world ID.")
 	var stored_seed: int = int(metadata["seed"])
-	if seed_was_explicit and LfeDeterministicSeed.normalize(requested_seed) != stored_seed:
-		return _fail(ERR_INVALID_DATA, "Explicit seed conflicts with saved world seed %d." % stored_seed)
 	seed = stored_seed
 	worldgen_version = int(metadata["worldgen_version"])
 	display_name = String(metadata["display_name"])
@@ -126,9 +148,13 @@ func open_world(
 	world_resource_state = decoded["world_resources"]
 	creation_state = decoded["creation"]
 	overrides = decoded["overrides"]
-	_expected_primary_hash = String(decoded["file_hash"]) if path_to_load == primary else ""
+	_expected_primary_hash = _bounded_file_hash(primary) if FileAccess.file_exists(primary) else ""
+	recovery_candidate = path_to_load.get_file()
+	if path_to_load != primary:
+		_recovery_path = path_to_load
+		_recovery_hash = decoded["file_hash"]
 	_edits_dirty = false
-	load_status = "Loaded world" if path_to_load == primary else "Recovered previous save; primary was missing"
+	load_status = "Loaded world" if path_to_load == primary else "Recovered interrupted pending save" if path_to_load == pending else "Recovered previous save"
 	if int(metadata["save_version"]) < SAVE_VERSION:
 		load_status += "; migrated v%d in memory; next save writes v%d" % [int(metadata["save_version"]), SAVE_VERSION]
 	save_status = "Saved %s" % last_saved_utc
@@ -182,12 +208,35 @@ func save(current_players: Variant = null,current_resources: Variant = null,curr
 	if not primary_exists and not _expected_primary_hash.is_empty():
 		return _fail(ERR_FILE_CORRUPT, "Authoritative save disappeared since load; refusing to replace it.")
 	if primary_exists:
-		var current_file: FileAccess = FileAccess.open(primary, FileAccess.READ)
-		if current_file == null:
-			return _fail(ERR_FILE_CANT_OPEN, "Could not inspect existing authoritative save.")
-		var current_hash: String = current_file.get_as_text().sha256_text()
-		if current_hash != _expected_primary_hash:
+		var current_hash: String = _bounded_file_hash(primary)
+		if current_hash.is_empty() or current_hash != _expected_primary_hash:
 			return _fail(ERR_FILE_CORRUPT, "Authoritative save changed since load; refusing to overwrite it.")
+	if not _recovery_path.is_empty():
+		if _bounded_file_hash(_recovery_path) != _recovery_hash:
+			return _fail(ERR_FILE_CORRUPT,"Recovery candidate changed since load; refusing save.")
+		# Establish a durable validated primary BEFORE overwriting pending or
+		# rotating previous. A failed new write retains the recovered world.
+		if primary_exists:
+			var diagnostic: String = _world_directory.path_join("world.json.corrupt")
+			var older: String = _world_directory.path_join("world.json.corrupt.previous")
+			if FileAccess.file_exists(diagnostic):
+				if FileAccess.file_exists(older) and DirAccess.remove_absolute(older) != OK:
+					return _fail(ERR_FILE_CANT_WRITE,"Could not retire bounded corrupt-save diagnostic.")
+				if DirAccess.rename_absolute(diagnostic,older) != OK:
+					return _fail(ERR_FILE_CANT_WRITE,"Could not retain corrupt-save diagnostic.")
+			if DirAccess.rename_absolute(primary,diagnostic) != OK:
+				return _fail(ERR_FILE_CANT_WRITE,"Could not preserve corrupt primary.")
+			_expected_primary_hash = ""
+		var recovery_base: String = _world_directory.path_join("world.json.recovery")
+		var base_error: Error = DirAccess.copy_absolute(_recovery_path,recovery_base)
+		if base_error != OK or _bounded_file_hash(recovery_base) != _recovery_hash:
+			return _fail(ERR_FILE_CANT_WRITE,"Could not establish recovered primary; recovery candidate retained.")
+		if DirAccess.rename_absolute(recovery_base,primary) != OK:
+			return _fail(ERR_FILE_CANT_WRITE,"Could not promote recovered primary; candidate retained.")
+		_expected_primary_hash = _recovery_hash
+		_recovery_path = ""
+		_recovery_hash = ""
+		primary_exists = true
 
 	var pending_file: FileAccess = FileAccess.open(pending, FileAccess.WRITE)
 	if pending_file == null:
@@ -434,3 +483,18 @@ func _valid_object_voxels(creation: Dictionary, edits: LfeVoxelOverrideStore) ->
 		if edits.canonical_id_at(cell) != entry["content"]:
 			return false
 	return true
+
+
+func _bounded_file_hash(path: String) -> String:
+	var file: FileAccess = FileAccess.open(path,FileAccess.READ)
+	if file == null: return ""
+	# Decode is bounded at 16 MiB; diagnostics may contain an oversized corrupt
+	# primary. Hash it with bounded memory so its exact bytes remain protected.
+	var hash: HashingContext = HashingContext.new()
+	hash.start(HashingContext.HASH_SHA256)
+	while file.get_position() < file.get_length():
+		var chunk: PackedByteArray = file.get_buffer(mini(65536,file.get_length()-file.get_position()))
+		if chunk.is_empty(): return ""
+		hash.update(chunk)
+	if file.get_error() not in [OK,ERR_FILE_EOF]: return ""
+	return hash.finish().hex_encode()

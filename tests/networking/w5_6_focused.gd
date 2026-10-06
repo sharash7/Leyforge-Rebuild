@@ -118,7 +118,7 @@ func _run() -> void:
 			world.advance(0.1)
 			for actor: int in count: LfeCharacterSurvival.new().advance(0.1,false,false,false)
 		check(is_equal_approx(float(world.snapshot()["elapsed"]),10),"world clock once with "+str(count))
-	check(LfeCompatibilityManifest.PROTOCOL == 5 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1 and LfeWorldSave.WORLDGEN_VERSION == 2,"version boundary")
+	check(LfeCompatibilityManifest.PROTOCOL == 6 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1 and LfeWorldSave.WORLDGEN_VERSION == 2,"version boundary")
 	var file: FileAccess = FileAccess.open(output,FileAccess.WRITE)
 	file.store_string(JSON.stringify({"passed":failures.is_empty(),"checks":checks,"failures":failures,"packet_bytes":LfeSurvivalProtocol.encode(packet).size()},"\t")); file = null
 	for failure: String in failures: push_error(failure)

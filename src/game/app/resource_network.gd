@@ -68,6 +68,7 @@ func _packet(peer: int, bytes: PackedByteArray) -> void:
 	if not value is Dictionary or not value.get("kind") is String or not value["kind"].begins_with("resource_"): return
 	var p: Dictionary = LfeResourceProtocol.decode(bytes,game.block_catalog)
 	if p.is_empty(): metrics["rejected"] += 1; return
+	if session.mode == "JOIN" and peer == 1: session.note_host_traffic()
 	var now: float = Time.get_ticks_msec()/1000.0
 	if session.mode == "HOST":
 		var actor: String = session.peer_to_player.get(peer,"")

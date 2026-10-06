@@ -61,12 +61,14 @@ func _packet(peer: int, bytes: PackedByteArray) -> void:
 		metrics["rejected"] += 1
 		if session.mode == "JOIN" and not client_ready: session.disconnect_session()
 		return
+	if session.mode == "JOIN" and peer == 1: session.note_host_traffic()
 	if incoming.size() >= MAX_RECEIVE:
 		session.disconnect_session() if session.mode == "JOIN" else session.disconnect_player(session.peer_to_player.get(peer,""))
 		return
 	incoming.append({"peer":peer,"packet":packet})
 
 func _leave(peer: int, id: String) -> void:
+	incoming = incoming.filter(func(entry: Dictionary) -> bool: return entry["peer"] != peer)
 	known.erase(peer)
 	transactions.erase(peer)
 	forced.erase(peer)

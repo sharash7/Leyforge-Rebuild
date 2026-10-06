@@ -63,6 +63,7 @@ func _packet(peer: int, bytes: PackedByteArray) -> void:
 	if packet.is_empty():
 		rejected_packets += 1
 		return
+	if session.mode == "JOIN" and peer == 1: session.note_host_traffic()
 	if session.mode == "HOST":
 		# Actor resolution happens ONLY through the authenticated transport binding.
 		var id: String = session.peer_to_player.get(peer,"")
@@ -143,6 +144,7 @@ func _spawn(id: String) -> void:
 	print("W5_3_BODY_SPAWN peer=%d player=%s position=%s" % [session.player_to_peer[id],id.left(8),saved])
 
 func _leave(peer: int, id: String) -> void:
+	pending_admissions.erase(id)
 	if bodies.has(id):
 		var body: LeyforgeAuthoritativePlayerBody = bodies[id]
 		body.sync_record()

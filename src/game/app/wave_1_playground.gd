@@ -51,6 +51,13 @@ var resource_network: LeyforgeResourceNetwork
 var survival_system: LeyforgePlayerSurvival
 var voxel_network: LeyforgeVoxelNetwork
 var client_voxel_overrides: LfeVoxelOverrideStore
+var session_view: LeyforgeSessionView
+var session_generation: int = 0
+var _teardown_pending: bool = false
+var _host_closing: bool = false
+var _client_exit_requested: bool = false
+var previous_world_id: String = ""
+var teardown_facts: Dictionary = {}
 
 
 func _ready() -> void:
@@ -63,18 +70,11 @@ func _ready() -> void:
 	add_child(survival_system); survival_system.configure(self)
 	process_physics_priority = 20
 	if session_options.mode == "JOIN":
-		var view: LeyforgeSessionView = LeyforgeSessionView.new()
-		add_child(view)
-		if not view.start_join(session_options):
-			_fail_startup("JOIN startup failed")
-			return
-		network_session = view.session
-		local_player_id = view.local_player_id
-		movement = LeyforgePlayerMovement.new()
-		add_child(movement)
-		movement.configure(self,network_session)
-		_build_voxel_network()
+		session_view = LeyforgeSessionView.new()
+		add_child(session_view)
+		session_view.game = self
 		get_tree().auto_accept_quit = false
+		if not _start_client_attempt(): _fail_startup("JOIN startup failed")
 		return
 	if not ClassDB.class_exists(&"VoxelTerrain"):
 		_fail_startup("Voxel Tools is not registered: missing VoxelTerrain.")
@@ -196,14 +196,15 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _runtime_is_ready or not event is InputEventKey:
+	if not event is InputEventKey:
 		return
 	var key: InputEventKey = event
 	if not key.pressed or key.echo:
 		return
 	if session_options.mode == "JOIN":
-		if key.keycode == KEY_F10: get_tree().quit(0)
+		if key.keycode == KEY_F10: request_client_leave(true)
 		return
+	if not _runtime_is_ready: return
 	if key.keycode == KEY_F5:
 		request_save()
 		get_viewport().set_input_as_handled()
@@ -215,7 +216,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if session_options != null and session_options.mode == "JOIN":
-			get_tree().quit(0)
+			request_client_leave(true)
 			return
 		if _runtime_is_ready:
 			request_save_and_quit()
@@ -234,12 +235,14 @@ func request_save() -> bool:
 		if not authority.execute(actor,"close_grid").success:
 			player.show_status("Save blocked: crafting staging must be returned",5000)
 			return false
-	if inventory_panel!=null and not close_inventory():
+	if inventory_panel!=null and not inventory_panel.close(true):
 		return false
 	_save_in_progress = true
 	_sync_active_transform()
+	var save_started: int = Time.get_ticks_usec()
 	var result: Error = world_save.save(authority.players_snapshot(),world_resources.snapshot(),creation.snapshot())
 	_save_in_progress = false
+	if _host_closing: print("W5_7_SHUTDOWN_SAVE_MSEC=%0.3f" % ((Time.get_ticks_usec()-save_started)/1000.0))
 	if result != OK:
 		player.show_status("Save failed: %s" % world_save.get_last_error(), 8000)
 		push_error("WAVE_2_SAVE_FAIL %s" % world_save.get_last_error())
@@ -252,9 +255,22 @@ func request_save() -> bool:
 
 
 func request_save_and_quit() -> bool:
+	if _host_closing: return false
+	if session_options.mode != "HOST":
+		if not request_save(): return false
+		get_tree().quit(0)
+		return true
+	if not network_session.begin_host_closing(): return false
+	_host_closing = true
+	player.set_runtime_ready(false)
+	_actor_harvests.clear()
+	for actor: String in authority.characters: survival_system.cancel_rest(actor)
 	if not request_save():
+		_host_closing = false
+		network_session.cancel_host_closing()
+		player.set_runtime_ready(true)
 		return false
-	get_tree().quit(0)
+	network_session.finish_host_closing()
 	return true
 
 
@@ -399,7 +415,8 @@ func _record_edit(cell: Vector3i, voxel_id: int) -> void:
 
 
 
-func _finish_startup() -> void:
+func _finish_startup(owned_generation: int = 0) -> void:
+	if owned_generation != session_generation or terrain == null: return
 	var voxel_tool: VoxelTool = terrain.get_voxel_tool()
 	voxel_tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
 	var floor_y: int = floori(spawn_position.y) - 1
@@ -409,9 +426,11 @@ func _finish_startup() -> void:
 	)
 	for _frame_index: int in range(3600 if session_options.mode == "JOIN" else STARTUP_TIMEOUT_FRAMES):
 		await get_tree().physics_frame
-		if (session_options.mode != "JOIN" or voxel_network.spawn_applied()) and voxel_tool.is_area_editable(spawn_area) and _spawn_floor_has_collision():
+		if owned_generation != session_generation or terrain == null: return
+		if (session_options.mode != "JOIN" or (voxel_network.spawn_applied() and resource_network.replica.ready and survival_system.replica.ready())) and voxel_tool.is_area_editable(spawn_area) and _spawn_floor_has_collision():
 			for _settle_frame: int in range(4):
 				await get_tree().physics_frame
+				if owned_generation != session_generation or terrain == null: return
 			if session_options.mode == "HOST" and not _start_host_session():
 				_fail_startup("Could not start host session; check UDP port availability")
 				return
@@ -420,7 +439,10 @@ func _finish_startup() -> void:
 			player.show_status(world_save.load_status if world_save != null else "World synchronized / host authoritative voxels", 3000)
 			print("LEYFORGE_WAVE_1_RUNTIME_READY seed=%d" % active_seed)
 			runtime_ready.emit()
-			if session_options.mode == "JOIN": print("W5_3_CLIENT_WORLD_READY player=%s" % local_player_id.left(8))
+			if session_options.mode == "JOIN":
+				print("W5_3_CLIENT_WORLD_READY player=%s" % local_player_id.left(8))
+				previous_world_id = network_session.world_manifest["world_id"]
+				session_view.show_playing()
 			if DisplayServer.get_name() == "headless" and not _playtest_mode and session_options.mode == "OFFLINE":
 				await get_tree().process_frame
 				get_tree().quit(0)
@@ -442,6 +464,9 @@ func _spawn_floor_has_collision() -> bool:
 
 
 func _fail_startup(message: String) -> void:
+	if session_options != null and session_options.mode == "JOIN" and network_session != null:
+		network_session.end_session("connection_failed")
+		return
 	push_error(message)
 	print("LEYFORGE_WAVE_1_STARTUP_FAIL message=%s" % message)
 	get_tree().quit(1)
@@ -559,7 +584,7 @@ func _commit_voxel(cell: Vector3i, voxel: int, tool: VoxelTool) -> Error:
 
 
 func _physics_process(delta: float) -> void:
-	if session_options.mode == "JOIN": return
+	if session_options.mode == "JOIN" or _host_closing: return
 	if not _runtime_is_ready or player == null or creation == null:
 		return
 	# Rendered drivers advance this same simulation seam with fixed durations,
@@ -569,6 +594,7 @@ func _physics_process(delta: float) -> void:
 		advance_creation(delta)
 
 func advance_creation(seconds: float) -> bool:
+	if _host_closing: return false
 	if not LfeWorldSave._finite_in_range(seconds,60) or seconds < 0:
 		return false
 	if not survival_system.advance(seconds): return false
@@ -826,6 +852,7 @@ func _sync_active_transform() -> void:
 
 # Single local controller submits directly. Future transport calls this same seam.
 func command(actor: String,operation: String,args: Dictionary={}) -> LfeCommandResult:
+	if _host_closing: return LfeCommandResult.rejected("server_closing")
 	if session_options.mode == "JOIN": return client_resource_command(operation,args)
 	if authority==null or authority.character(actor)==null:return LfeCommandResult.rejected("invalid_actor")
 	_sync_active_transform()
@@ -867,6 +894,7 @@ func _start_host_session() -> bool:
 	if fingerprint.is_empty(): return false
 	network_session = LfeNetworkSession.new()
 	add_child(network_session)
+	network_session.shutdown_complete.connect(func(): get_tree().quit(0))
 	if not network_session.start_host(session_options.port,LfeCompatibilityManifest.hello(local_player_id,fingerprint),LfeCompatibilityManifest.world(world_save,fingerprint),_admit_remote_character,_can_admit_remote_character): return false
 	var view: LeyforgeSessionView = LeyforgeSessionView.new()
 	add_child(view)
@@ -903,7 +931,7 @@ func build_client_world(state: Dictionary) -> bool:
 	player.configure(terrain,block_catalog,active_seed,spawn_position)
 	player.set_movement_look(float(state["yaw"]),float(state["pitch"]))
 	player.set_runtime_ready(false)
-	call_deferred("_finish_startup")
+	call_deferred("_finish_startup",session_generation)
 	return true
 
 func network_spawn_safe(position: Vector3, player_id: String, support_depth: float = 0.1) -> bool:
@@ -1113,6 +1141,7 @@ func build_client_resources() -> void:
 	print("W5_5_PERSONAL_RESOURCES_READY")
 
 func client_resource_command(operation: String, args: Dictionary) -> LfeCommandResult:
+	if network_session == null or network_session.state != "CONNECTED" or not _runtime_is_ready: return LfeCommandResult.rejected("not_ready")
 	if resource_network == null or resource_network.replica == null: return LfeCommandResult.rejected("not_ready")
 	if operation == "primary": return LfeCommandResult.accepted()
 	if operation == "consume":
@@ -1223,3 +1252,97 @@ func _advance_actor_source(actor: String, seconds: float, now: float) -> void:
 		var success: bool = creation.harvest_source(state["source"],authority.character(actor).resources,authority.character(actor).survival)
 		cancel_actor_harvest(actor); creation_presenter.sync()
 		voxel_network.harvest_finished(actor,"completed" if success else "stale_state")
+
+
+# Each attempt owns new transport, protocol nodes and replicas. The durable profile
+# and bounded reconnect metadata belong to the application, not the joined world.
+func _start_client_attempt() -> bool:
+	if _teardown_pending or session_generation >= 2147483647: return false
+	session_generation += 1
+	var owned_generation: int = session_generation
+	var profile: LfeLocalProfile = LfeLocalProfile.new()
+	if profile.open_profile(session_options.profile_path) != OK:
+		push_error(profile.error)
+		return false
+	local_player_id = profile.player_id
+	var fingerprint: String = LfeCompatibilityManifest.fingerprint()
+	if fingerprint.is_empty(): return false
+	if network_session != null:
+		network_session.disconnect_session()
+		network_session.queue_free()
+	network_session = LfeNetworkSession.new()
+	network_session.mode = "JOIN"
+	network_session.expected_world_id = previous_world_id
+	add_child(network_session)
+	session_view.build(network_session,local_player_id)
+	if survival_system == null:
+		survival_system = LeyforgePlayerSurvival.new()
+		add_child(survival_system); survival_system.configure(self)
+	movement = LeyforgePlayerMovement.new()
+	add_child(movement); movement.configure(self,network_session)
+	_build_voxel_network()
+	network_session.state_changed.connect(func(state: String, reason: String):
+		if owned_generation == session_generation: _client_state(state,reason))
+	session_view.show_connecting()
+	return network_session.start_join(session_options.address,session_options.port,LfeCompatibilityManifest.hello(local_player_id,fingerprint))
+
+func reconnect_client() -> void:
+	if session_options.mode != "JOIN" or _teardown_pending: return
+	if network_session.state not in ["DISCONNECTED","REJECTED","CONNECTION_FAILED"]: return
+	_start_client_attempt()
+
+func request_client_leave(exit_application: bool = false) -> void:
+	_client_exit_requested = exit_application
+	if network_session == null or network_session.state not in ["CONNECTED","ENDING"]:
+		if exit_application: get_tree().quit(0)
+		return
+	network_session.leave_session()
+
+func _client_state(state: String, reason: String) -> void:
+	if state not in ["ENDING","DISCONNECTED","REJECTED","CONNECTION_FAILED"]: return
+	if not network_session.world_manifest.is_empty(): previous_world_id = network_session.world_manifest["world_id"]
+	if not _teardown_pending and (player != null or movement != null):
+		_runtime_is_ready = false
+		_primary_action_active = false
+		Input.action_release("break_block")
+		_actor_harvests.clear()
+		if player != null:
+			player.clear_movement_intent()
+			player.set_runtime_ready(false)
+			player.inventory_open = false
+			player.process_mode = Node.PROCESS_MODE_DISABLED
+		for node: Node in [movement,voxel_network,resource_network,survival_system,resource_presenter,creation_presenter,inventory_panel,creation_panel]:
+			if node != null:
+				node.process_mode = Node.PROCESS_MODE_DISABLED
+				if node is CanvasLayer: node.hide()
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_teardown_pending = true
+		call_deferred("_teardown_joined_world",session_generation)
+	session_view.show_ended(reason)
+	if state == "DISCONNECTED" and _client_exit_requested: get_tree().quit(0)
+
+func _teardown_joined_world(owned_generation: int) -> void:
+	if owned_generation != session_generation: return
+	# Removing the old world from the tree is deferred beyond transport callbacks.
+	# Its terrain generator may finish its existing worker jobs with its old store.
+	for child: Node in get_children():
+		if child == session_view or child == network_session: continue
+		remove_child(child)
+		child.queue_free()
+	player = null
+	terrain = null
+	_generator = null
+	client_voxel_overrides = null
+	movement = null
+	voxel_network = null
+	resource_network = null
+	survival_system = null
+	resource_presenter = null
+	creation_presenter = null
+	inventory_panel = null
+	creation_panel = null
+	creation = null
+	_teardown_pending = false
+	teardown_facts = {"generation":owned_generation,"msec":Time.get_ticks_msec(),"terrain_removed":true,"player_removed":true,"replicas_removed":true,"ui_removed":true,"input_disabled":not _runtime_is_ready,"no_save":world_save==null and authority==null}
+	session_view.teardown_complete()
+	print("W5_7_CLIENT_TEARDOWN " + JSON.stringify(teardown_facts))

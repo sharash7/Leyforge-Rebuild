@@ -63,7 +63,7 @@ func _run() -> void:
 			"malformed_handshake": session._hello["extra"] = true
 			"oversized_handshake": session._hello["extra"] = "x".repeat(4096)
 			"auth_timeout":
-				session._api.peer_authenticating.disconnect(session._authenticating)
+				session._api.peer_authenticating.disconnect(session._authenticating_callback)
 				session._api.peer_authenticating.connect(_silent_auth)
 	states.append(session.state)
 	session.state_changed.connect(func(state: String, reason: String): states.append(state); events.append({"kind":"state","state":state,"reason":reason}))

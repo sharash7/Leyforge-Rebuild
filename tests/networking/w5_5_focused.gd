@@ -54,7 +54,7 @@ func _run() -> void:
 	authority.add_character(a,Vector3.ZERO)
 	authority.add_character(b,Vector3.ZERO)
 	router = LfeResourceTransactions.new(); router.configure(authority,catalog,adapter)
-	check(LfeCompatibilityManifest.PROTOCOL == 5 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1 and LfeWorldSave.WORLDGEN_VERSION == 2,"version boundary")
+	check(LfeCompatibilityManifest.PROTOCOL == 6 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1 and LfeWorldSave.WORLDGEN_VERSION == 2,"version boundary")
 	LfeItemTransactions.add(authority.character(a).resources.inventory,&"leyforge:dirt",12)
 	var total: int = authority.total(&"leyforge:dirt")
 	var p: Dictionary = request(a,"drop",{"slot":0,"quantity":3,"expected":authority.character(a).resources.inventory.stack_at(0)})

@@ -173,6 +173,7 @@ func _packet(peer: int, bytes: PackedByteArray) -> void:
 	if not family is Dictionary or not family.get("kind") is String or not family["kind"].begins_with("survival_"): return
 	var p: Dictionary = LfeSurvivalProtocol.decode(bytes)
 	if p.is_empty(): metrics["rejected"] += 1; return
+	if session.mode == "JOIN" and peer == 1: session.note_host_traffic()
 	var now: float = Time.get_ticks_msec()/1000.0
 	if session.mode == "HOST":
 		if p["kind"] != "survival_resync": metrics["rejected"] += 1; return
