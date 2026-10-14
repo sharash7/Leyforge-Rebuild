@@ -86,7 +86,7 @@ func _run() -> void:
 				if hold >= 0 and Time.get_ticks_msec() - connected_at >= int(hold * 1000): break
 			elif session.state in ["REJECTED","CONNECTION_FAILED","DISCONNECTED"]: break
 			if FileAccess.file_exists(directory.path_join(label + ".stop")): break
-			if Time.get_ticks_msec() - started > 12000 and connected_at == 0: failures.append("client state timeout"); break
+			if Time.get_ticks_msec() - started > int((LfeNetworkSession.CONNECT_SECONDS+LfeNetworkSession.AUTH_SECONDS+6)*1000) and connected_at == 0: failures.append("client state timeout"); break
 			_write_report()
 	_write_report()
 	session.disconnect_session()

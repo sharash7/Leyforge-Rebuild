@@ -230,6 +230,7 @@ try {
     $manifest | ConvertTo-Json | Set-Content (Join-Path $evidenceRoot 'source_manifest.json') -Encoding UTF8
     $workingManifest | ConvertTo-Json | Set-Content (Join-Path $evidenceRoot 'working_source_manifest.json') -Encoding UTF8
     $gate.publication_projection = $true
+    . (Join-Path $PSScriptRoot 'w5_8_regression_fixture.ps1')
     Start-Run 'import' @('--headless','--editor','--path',$testProject,'--quit')
     Finish-Run 'import' 0 180000
 
@@ -416,11 +417,13 @@ try {
     Stop-Probe 'reconnect'; Stop-Probe 'third'
     [void](Wait-Bindings 1)
     [void](Command 'host' @{op='save'})
-    $saved = (Read-Report 'host').characters.$id
+    $saved = Read-Report 'host'
     Stop-Probe 'host'
     Start-Probe 'reload_host' 'HOST' 'host'
     [void](Wait-Ready 'reload_host')
-    Assert (((Read-Report 'reload_host').characters.$id | ConvertTo-Json -Depth 20 -Compress) -eq ($saved | ConvertTo-Json -Depth 20 -Compress)) 'Fresh HOST save-v4 exact survival/timing/resource restore'
+    $restored = Read-Report 'reload_host'
+    Assert ($saved.persisted_character_hashes.$id -and $restored.character_hashes.$id -eq $saved.persisted_character_hashes.$id -and $restored.opened_checkpoint_file_hash -eq $saved.checkpoint_file_hash) 'Fresh HOST save-v4 exact serialized survival/timing/resource graph and checkpoint bytes restore'
+    $gate.restore_checkpoint=@{persisted_character_hash=$saved.persisted_character_hashes.$id;restored_character_hash=$restored.character_hashes.$id;checkpoint_sha256=$saved.checkpoint_file_hash;opened_checkpoint_sha256=$restored.opened_checkpoint_file_hash}
     Start-Probe 'reload_client' 'JOIN' 'client'
     [void](Wait-Resources 'reload_client')
     $reload = Wait-Condition 'reload_client' {param($r) $r.survival_ready} 'Fresh reload owner survival bootstrap'

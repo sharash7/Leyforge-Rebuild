@@ -9,8 +9,8 @@ signal packet_received(peer_id: int, bytes: PackedByteArray)
 signal shutdown_complete
 
 const MAX_PLAYERS: int = 8
-const AUTH_SECONDS: float = 3.0
-const CONNECT_SECONDS: float = 6.0
+const AUTH_SECONDS: float = 6.0
+const CONNECT_SECONDS: float = 12.0
 const TRANSITIONS: Dictionary = {
 	"OFFLINE":["STARTING_HOST","CONNECTING","DISCONNECTED"],
 	"STARTING_HOST":["HOSTING","CONNECTION_FAILED","DISCONNECTED"],
@@ -35,6 +35,15 @@ var listen_port: int = 0
 var _api: SceneMultiplayer
 var _transport: ENetMultiplayerPeer
 var _hello: Dictionary = {}
+var private_auth: LfePrivateSessionAuth
+var invite_secret: PackedByteArray = PackedByteArray()
+var _client_nonce: String = ""
+var _proof_sent: bool = false
+var ping_msec: float = -1
+var _ping_sequence: int = 0
+var _ping_started: int = 0
+var _last_peer_ping: Dictionary = {}
+var bind_address: String = "*"
 var _authenticating_callback: Callable
 var _admit: Callable
 var _can_admit: Callable
@@ -52,7 +61,7 @@ var _heartbeat_at: int = 0
 var _closing_deadline: int = 0
 var _closing_acks: Dictionary = {}
 var _leave_requests: Array[int] = []
-const LIVENESS_MSEC: int = 5000
+const LIVENESS_MSEC: int = 10000
 const CLOSING_ACK_MSEC: int = 350
 
 func transition(next: String, reason: String = "ok") -> bool:
@@ -97,6 +106,10 @@ func start_host(port: int, local: Dictionary, hosted: Dictionary, admission: Cal
 	mode = "HOST"
 	if not transition("STARTING_HOST"): return false
 	_setup()
+	private_auth = LfePrivateSessionAuth.new()
+	if not private_auth.initialize():
+		transition("CONNECTION_FAILED","connection_failed"); _close_transport(); return false
+	_transport.set_bind_ip(bind_address)
 	_hello = local.duplicate(true)
 	world_manifest = hosted.duplicate(true)
 	_admit = admission
@@ -115,10 +128,13 @@ func start_host(port: int, local: Dictionary, hosted: Dictionary, admission: Cal
 	print("LFE_SESSION listening port=%d host_player=%s" % [port,local["player_id"].left(8)])
 	return transition("HOSTING")
 
-func start_join(address: String, port: int, local: Dictionary) -> bool:
+func start_join(address: String, port: int, local: Dictionary, secret: PackedByteArray = PackedByteArray()) -> bool:
 	if not LfeSessionOptions.valid_address(address) or port < 1 or port > 65535: return false
 	if state not in ["OFFLINE","DISCONNECTED"] or generation >= 2147483645: return false
 	mode = "JOIN"
+	invite_secret = secret.duplicate()
+	_client_nonce = LfePrivateSessionAuth.random_token()
+	_proof_sent = false
 	_attempt_started = Time.get_ticks_msec()
 	if not transition("CONNECTING"): return false
 	_setup()
@@ -130,7 +146,7 @@ func start_join(address: String, port: int, local: Dictionary) -> bool:
 	_api.multiplayer_peer = _transport
 	local_peer_id = _api.get_unique_id()
 	_deadline = Time.get_ticks_msec() + int(CONNECT_SECONDS * 1000)
-	print("LFE_SESSION joining address=%s port=%d player=%s" % [address,port,String(local.get("player_id","")).left(8)])
+	print("LFE_SESSION joining port=%d player=%s" % [port,String(local.get("player_id","")).left(8)])
 	return true
 
 func _process(_delta: float) -> void:
@@ -156,6 +172,11 @@ func _process(_delta: float) -> void:
 		_heartbeat_at = now + 1000
 		for id: int in peer_to_player:
 			if id != local_peer_id: _send_control(id,{"kind":"session_heartbeat"})
+	if mode == "JOIN" and state == "CONNECTED" and now >= _heartbeat_at:
+		_heartbeat_at = now+1000
+		_ping_sequence = _ping_sequence % 2147483646 + 1
+		_ping_started = now
+		_send_control(1,{"kind":"session_ping","sequence":_ping_sequence})
 	if mode == "JOIN" and state == "CONNECTED" and now-last_host_traffic >= LIVENESS_MSEC:
 		end_session("server_timeout")
 	if state == "CLOSING" and _closing_deadline > 0 and (now >= _closing_deadline or _closing_acks.is_empty()):
@@ -169,27 +190,48 @@ func _authenticating(id: int) -> void:
 	if mode == "JOIN":
 		if id != 1 or not transition("AUTHENTICATING"): return
 		_deadline = Time.get_ticks_msec() + int(AUTH_SECONDS * 1000)
-		_api.send_auth(id, JSON.stringify(_hello).to_utf8_buffer())
+		lifecycle_metrics["connect_msec"] = Time.get_ticks_msec()-_attempt_started
+		_api.send_auth(id, JSON.stringify(LfePrivateSessionAuth.hello(_hello,_client_nonce)).to_utf8_buffer())
 
 func _auth(id: int, bytes: PackedByteArray) -> void:
 	var value: Variant = LfeCompatibilityManifest.decode(bytes)
 	if mode == "HOST":
 		if _pending.has(id) or _rejections.has(id): return
 		if state != "HOSTING": _reject(id,"server_closing"); return
-		var reason: String = LfeCompatibilityManifest.validate_hello(value,_hello,world_manifest)
-		if reason == "ok":
-			var player_id: String = value["player_id"]
+		if private_auth.pending.has(id):
+			var manifest: Dictionary = private_auth.verify(id,value,Time.get_ticks_msec())
+			if manifest.is_empty(): _reject(id,"private_session_denied"); return
+			var player_id: String = manifest["player_id"]
+			var reason: String = "ok"
 			if player_to_peer.has(player_id) or player_id in _pending.values(): reason = "duplicate_identity"
 			elif peer_to_player.size() + _pending.size() >= MAX_PLAYERS: reason = "server_full"
 			elif _can_admit.is_valid() and not _can_admit.call(player_id): reason = "server_full"
-		if reason != "ok":
-			_reject(id,reason)
-			return
-		_pending[id] = value["player_id"]
-		_api.send_auth(id, JSON.stringify({"reason":"ok","world":world_manifest}).to_utf8_buffer())
-		_api.complete_auth(id)
+			if reason != "ok": _reject(id,reason); return
+			_pending[id] = player_id
+			_api.send_auth(id, JSON.stringify({"reason":"ok","world":world_manifest}).to_utf8_buffer())
+			_api.complete_auth(id)
+		else:
+			# Historical real clients still receive the explicit version rejection.
+			if LfeCompatibilityManifest.exact_keys(value,LfeCompatibilityManifest.HELLO_KEYS):
+				var legacy_reason: String = LfeCompatibilityManifest.validate_hello(value,_hello,world_manifest)
+				_reject(id,legacy_reason if legacy_reason != "ok" else "private_session_denied"); return
+			if value == null: _reject(id,"malformed_handshake"); return
+			if not LfePrivateSessionAuth.valid_hello(value): _reject(id,"private_session_denied"); return
+			var reason: String = LfeCompatibilityManifest.validate_hello(value["manifest"],_hello,world_manifest)
+			if reason != "ok": _reject(id,reason); return
+			var challenge: Dictionary = private_auth.challenge(id,value,Time.get_ticks_msec(),int(AUTH_SECONDS*1000))
+			if challenge.is_empty(): _reject(id,"private_session_denied"); return
+			_api.send_auth(id,JSON.stringify(challenge).to_utf8_buffer())
 	else:
 		if state != "AUTHENTICATING" or id != 1: return
+		if LfePrivateSessionAuth.valid_challenge(value):
+			if _proof_sent: transition("REJECTED","private_session_denied"); _close_transport(); return
+			_proof_sent = true
+			var packet: Dictionary = LfePrivateSessionAuth.proof(invite_secret,_hello,_client_nonce,value)
+			# Missing/malformed invite follows the same generic host rejection.
+			if packet.is_empty(): packet = {"kind":"private_proof","session_instance":value["session_instance"],"proof":""}
+			_api.send_auth(id,JSON.stringify(packet).to_utf8_buffer())
+			return
 		if not LfeCompatibilityManifest.exact_keys(value,["reason","world"]) or not value["reason"] is String or value["reason"] not in LfeCompatibilityManifest.REASONS:
 			transition("REJECTED","malformed_handshake")
 			_close_transport()
@@ -197,7 +239,7 @@ func _auth(id: int, bytes: PackedByteArray) -> void:
 		if value["reason"] != "ok":
 			transition("REJECTED",value["reason"])
 			_close_transport()
-		elif not LfeCompatibilityManifest.valid_world(value["world"],_hello):
+		elif not _proof_sent or not LfeCompatibilityManifest.valid_world(value["world"],_hello):
 			transition("REJECTED","malformed_handshake")
 			_close_transport()
 		else:
@@ -209,6 +251,7 @@ func _auth(id: int, bytes: PackedByteArray) -> void:
 			_api.complete_auth(id)
 
 func _reject(id: int, reason: String) -> void:
+	private_auth.pending.erase(id)
 	print("LFE_SESSION rejected peer=%d reason=%s" % [id,reason])
 	_api.send_auth(id,JSON.stringify({"reason":reason,"world":{}}).to_utf8_buffer())
 	_rejections[id] = Time.get_ticks_msec() + 250
@@ -231,11 +274,14 @@ func _connected_peer(id: int) -> void:
 	elif id == 1 and state == "AUTHENTICATING":
 		last_host_traffic = Time.get_ticks_msec()
 		lifecycle_metrics["handshake_msec"] = last_host_traffic-_attempt_started
+		lifecycle_metrics["auth_msec"] = lifecycle_metrics["handshake_msec"]-int(lifecycle_metrics.get("connect_msec",0))
 		peer_to_player[local_peer_id] = _hello["player_id"]
 		player_to_peer[_hello["player_id"]] = local_peer_id
 		transition("CONNECTED")
 
 func _left_peer(id: int) -> void:
+	if private_auth != null: private_auth.pending.erase(id)
+	_last_peer_ping.erase(id)
 	_pending.erase(id)
 	_rejections.erase(id)
 	if peer_to_player.has(id):
@@ -246,6 +292,7 @@ func _left_peer(id: int) -> void:
 		peer_left.emit(id,player_id)
 
 func _auth_failed(id: int) -> void:
+	if private_auth != null: private_auth.pending.erase(id)
 	var rejected: bool = _rejections.has(id)
 	_pending.erase(id)
 	_rejections.erase(id)
@@ -282,6 +329,9 @@ func _close_transport() -> void:
 	_closing_acks.clear()
 	_leave_requests.clear()
 	_pending.clear()
+	if private_auth != null: private_auth.clear()
+	invite_secret.fill(0); invite_secret.clear()
+	_last_peer_ping.clear()
 	_rejections.clear()
 	peer_to_player.clear()
 	player_to_peer.clear()
@@ -346,20 +396,31 @@ func end_session(reason: String) -> void:
 
 func _send_control(peer: int, packet: Dictionary) -> void:
 	var bytes: PackedByteArray = LfeSessionLifecycleProtocol.encode(packet)
-	if _api != null and not bytes.is_empty():
+	if _api != null and peer in _api.get_peers() and not bytes.is_empty():
 		if _api.send_bytes(bytes,peer,MultiplayerPeer.TRANSFER_MODE_RELIABLE,LfeSessionLifecycleProtocol.CHANNEL) == OK:
 			lifecycle_metrics["sent_bytes"] += bytes.size()
 			lifecycle_metrics["sent_packets"] += 1
 
 func _control(peer: int, packet: Dictionary) -> void:
 	if mode == "HOST" and peer != local_peer_id and peer_to_player.has(peer):
-		if packet["kind"] == "session_closing_ack" and state == "CLOSING": _closing_acks.erase(peer)
+		if packet["kind"] == "session_ping" and state == "HOSTING":
+			var now: int = Time.get_ticks_msec()
+			if now-int(_last_peer_ping.get(peer,0)) >= 900:
+				_last_peer_ping[peer] = now
+				_send_control(peer,{"kind":"session_pong","sequence":packet["sequence"]})
+		elif packet["kind"] == "session_closing_ack" and state == "CLOSING": _closing_acks.erase(peer)
 		elif packet["kind"] == "client_leaving":
 			_left_peer(peer)
 			_leave_requests.append(peer)
 	elif mode == "JOIN" and peer == 1 and state == "CONNECTED":
-		if packet["kind"] not in ["session_heartbeat","session_closing"]: return
+		if packet["kind"] not in ["session_heartbeat","session_closing","session_pong"]: return
 		last_host_traffic = Time.get_ticks_msec()
+		if packet["kind"] == "session_pong" and int(packet["sequence"]) == _ping_sequence:
+			ping_msec = float(last_host_traffic-_ping_started)
+			var samples: Array = lifecycle_metrics.get("rtt_samples",[])
+			samples.append(ping_msec)
+			if samples.size() > 60: samples.pop_front()
+			lifecycle_metrics["rtt_samples"] = samples
 		if packet["kind"] == "session_closing":
 			transition("ENDING","host_shutdown")
 			_send_control(1,{"kind":"session_closing_ack"})

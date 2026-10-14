@@ -109,6 +109,7 @@ try {
     }
     @($manifest.Keys) | ConvertTo-Json | Set-Content (Join-Path $testProject '.verification_snapshot_inventory.json') -Encoding UTF8
     $manifest | ConvertTo-Json | Set-Content (Join-Path $evidenceRoot 'source_manifest.json') -Encoding UTF8
+    . (Join-Path $PSScriptRoot 'w5_8_regression_fixture.ps1')
     Start-Run 'import' @('--headless','--editor','--path',$testProject,'--quit')
     Finish-Run 'import' 0 180000
     Start-Run 'focused' @('--headless','--path',$testProject,'--script','res://tests/networking/w5_2_focused.gd','--',("--fixture=" + (Join-Path $tempRoot 'focused-fixture')),"--output=$evidenceRoot\focused.json")

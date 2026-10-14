@@ -47,6 +47,7 @@ func _run() -> void:
 	for kind: String in LfeSessionLifecycleProtocol.KINDS:
 		var p: Dictionary = {"kind":kind}
 		if kind == "session_closing": p["reason"] = "host_shutdown"
+		if kind in ["session_ping","session_pong"]: p["sequence"] = 1
 		check(LfeSessionLifecycleProtocol.decode(LfeSessionLifecycleProtocol.encode(p)) == p,"lifecycle roundtrip "+kind)
 		var bad: Dictionary = p.duplicate(); bad["player_id"] = A
 		check(LfeSessionLifecycleProtocol.encode(bad).is_empty(),"no claimed identity "+kind)
@@ -55,9 +56,9 @@ func _run() -> void:
 			check(LfeSessionLifecycleProtocol.encode(bad).is_empty(),"exact keys "+kind+key)
 	for bytes: PackedByteArray in [PackedByteArray([255]),"{}".to_utf8_buffer(),"x".repeat(129).to_utf8_buffer(),'{"kind":"session_closing","reason":"other"}'.to_utf8_buffer()]:
 		check(LfeSessionLifecycleProtocol.decode(bytes).is_empty(),"strict invalid lifecycle packet")
-	check(LfeCompatibilityManifest.PROTOCOL == 6 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1 and LfeWorldSave.WORLDGEN_VERSION == 2,"versions")
+	check(LfeCompatibilityManifest.PROTOCOL == 7 and LfeWorldSave.SAVE_VERSION == 4 and LfeWorldSave.CONTENT_VERSION == 1 and LfeWorldSave.WORLDGEN_VERSION == 2,"versions")
 	var local: Dictionary = LfeCompatibilityManifest.hello(A,LfeCompatibilityManifest.fingerprint())
-	var world: Dictionary = {"world_id":"w57","seed":184552221,"worldgen_version":2,"save_version":4,"content_version":1,"content_hash":local["content_hash"],"network_protocol_version":6}
+	var world: Dictionary = {"world_id":"w57","seed":184552221,"worldgen_version":2,"save_version":4,"content_version":1,"content_hash":local["content_hash"],"network_protocol_version":7}
 	var old: Dictionary = local.duplicate(true); old["network_protocol_version"] = 5
 	check(LfeCompatibilityManifest.validate_hello(old,local,world) == "protocol_mismatch","real old wire hello")
 	for phase: String in ["before_pending","after_pending_flush","after_pending_validation","after_rotation","before_promotion","after_promotion"]:

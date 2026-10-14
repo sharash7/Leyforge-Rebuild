@@ -8,12 +8,15 @@ var address: String = "127.0.0.1"
 var port: int = DEFAULT_PORT
 var profile_path: String = LfeLocalProfile.PROFILE_PATH
 var error: String = ""
+var invite_secret: PackedByteArray = PackedByteArray()
+var enable_upnp: bool = false
+var bind_address: String = "*"
 
 func parse(arguments: PackedStringArray) -> bool:
 	var seen: Dictionary = {}
 	for argument: String in arguments:
 		var key: String = argument.get_slice("=", 0)
-		if key not in ["--session", "--address", "--port", "--profile-path"]: continue
+		if key not in ["--session", "--address", "--port", "--profile-path", "--enable-upnp", "--bind-address"]: continue
 		if seen.has(key) or not argument.contains("="): return _fail("Duplicate or missing session argument: " + key)
 		seen[key] = true
 		var value: String = argument.substr(key.length() + 1)
@@ -24,17 +27,25 @@ func parse(arguments: PackedStringArray) -> bool:
 				if not value.is_valid_int(): return _fail("Invalid UDP port")
 				port = int(value)
 			"--profile-path": profile_path = value
+			"--enable-upnp":
+				if value not in ["true","false"]: return _fail("Invalid UPnP option")
+				enable_upnp = value == "true"
+			"--bind-address": bind_address = value
 	if mode not in ["OFFLINE", "HOST", "JOIN"]: return _fail("Invalid session mode")
 	if not valid_address(address) or port < 1 or port > 65535: return _fail("Invalid address or UDP port")
 	if mode == "JOIN" and not seen.has("--profile-path"): profile_path = CLIENT_PROFILE
 	if not valid_profile_path(profile_path): return _fail("Profile must be a bounded identity JSON path outside the project")
+	if bind_address != "*" and not bind_address.is_valid_ip_address(): return _fail("Invalid bind address")
+	if mode == "JOIN":
+		invite_secret = LfePrivateSessionAuth.parse_invite(OS.get_environment("LEYFORGE_INVITE"))
+		OS.unset_environment("LEYFORGE_INVITE")
 	return true
 
 static func valid_address(value: String) -> bool:
 	if value.is_empty() or value.length() > 253: return false
 	var regex: RegEx = RegEx.new()
 	regex.compile("^[A-Za-z0-9][A-Za-z0-9.:-]*$")
-	return regex.search(value) != null
+	return value.is_valid_ip_address() or regex.search(value) != null
 
 static func valid_profile_path(value: String) -> bool:
 	if value.is_empty() or value.length() > 512 or not value.ends_with(".json") or ".." in value.replace("\\", "/").split("/"): return false

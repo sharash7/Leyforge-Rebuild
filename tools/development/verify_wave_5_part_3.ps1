@@ -150,6 +150,7 @@ try {
     }
     @($manifest.Keys) | ConvertTo-Json | Set-Content (Join-Path $testProject '.verification_snapshot_inventory.json') -Encoding UTF8
     $manifest | ConvertTo-Json | Set-Content (Join-Path $evidenceRoot 'source_manifest.json') -Encoding UTF8
+    . (Join-Path $PSScriptRoot 'w5_8_regression_fixture.ps1')
     Start-Run 'import' @('--headless','--editor','--path',$testProject,'--quit')
     Finish-Run 'import' 0 180000
     Start-Run 'focused' @('--headless','--path',$testProject,'--script','res://tests/networking/w5_3_focused.gd','--',("--fixture=" + (Join-Path $tempRoot 'focused-fixture')),"--output=$evidenceRoot\focused.json")
@@ -168,7 +169,7 @@ try {
     $id = $client.player_id
     $two = Wait-Bindings 2
     Assert ($client.pid -ne $two.pid -and $id -ne $two.player_id) 'Distinct real processes and identities'
-    Assert ($client.no_authority -and $client.no_world_save -and $client.world.network_protocol_version -eq 6) 'JOIN current protocol / no authority'
+    Assert ($client.no_authority -and $client.no_world_save -and $client.world.network_protocol_version -eq 7) 'JOIN current protocol / no authority'
     Assert (@($client.avatars).Count -eq 1) 'JOIN sees host presence'
     [void] (Command 'host' @{op='screenshot';player_id=$id})
     [void] (Command 'client' @{op='screenshot';player_id=$two.player_id})

@@ -4,8 +4,9 @@ param(
     [ValidateRange(0,2147483647)] [int] $Seed = 184552221,
     [ValidateRange(1,65535)] [int] $Port = 25652,
     [string] $ProfilePath = 'user://identity/local_profile.json',
-    [string] $RuntimeLogPath = ''
+    [string] $RuntimeLogPath = '',
+    [string] $GodotRoot = ''
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'w5_2_launcher.ps1')
-Start-W52Game @("--session=HOST","--world-id=$WorldId","--seed=$Seed","--port=$Port","--profile-path=$ProfilePath") $RuntimeLogPath
+Start-W52Game @("--session=HOST","--world-id=$WorldId","--seed=$Seed","--port=$Port","--profile-path=$ProfilePath") $RuntimeLogPath $GodotRoot

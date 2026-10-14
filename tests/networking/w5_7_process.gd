@@ -6,7 +6,9 @@ var ended_captured: int = -1
 var remembered_personal: Dictionary = {}
 var remembered_survival: Dictionary = {}
 var loaded_graph_hash: String = ""
+var loaded_file_hash: String = ""
 var dropped_results: int = 0
+var shutdown_capture_connected: bool = false
 
 func _discard_resource_results(peer: int, bytes: PackedByteArray) -> void:
 	var packet: Dictionary = LfeResourceProtocol.decode(bytes,game.block_catalog)
@@ -140,6 +142,9 @@ func _command(c: Dictionary) -> void:
 	_write_report()
 
 func _write_report() -> void:
+	if game.network_session != null and not shutdown_capture_connected:
+		game.network_session.shutdown_complete.connect(_write_report)
+		shutdown_capture_connected = true
 	var net: LfeNetworkSession = game.network_session
 	if net == null: return
 	var report: Dictionary = {"pid":OS.get_process_id(),"name":label,"state":net.state,"reason":net.reason_code,"ready":game.is_runtime_ready(),"player_id":game.local_player_id,"commands":commands,"failures":failures,"passed":failures.is_empty(),"bindings":net.peer_to_player.duplicate(),"world":net.world_manifest.duplicate(true),"generation":game.session_generation,"msec":Time.get_ticks_msec(),"teardown":game.teardown_facts,"terrain_exists":game.terrain != null,"player_exists":game.player != null,"no_world_save":not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://worlds")),"no_authority":game.world_save==null and game.authority==null,"ended_visible":game.session_view!=null and game.session_view._ended.visible,"previous_world":game.previous_world_id,"remembered_personal":remembered_personal,"remembered_survival":remembered_survival}
@@ -164,13 +169,29 @@ func _write_report() -> void:
 		var saved_graph: Dictionary = {"players":game.world_save.players_state,"resources":game.world_save.world_resource_state,"creation":game.world_save.creation_state,"overrides":game.world_save.overrides.serialized_entries()}
 		if loaded_graph_hash.is_empty(): loaded_graph_hash = LfeResourceProtocol.normalized(saved_graph).sha256_text()
 		report["loaded_graph_hash"] = loaded_graph_hash
-		report["saved_graph_hash"] = LfeResourceProtocol.normalized(saved_graph).sha256_text()
+		report["saved_memory_graph_hash"] = LfeResourceProtocol.normalized(saved_graph).sha256_text()
+		report["saved_graph_hash"] = report["saved_memory_graph_hash"]
+		var primary: String = game.world_save.get_primary_path()
+		if FileAccess.file_exists(primary):
+			var envelope: Variant = JSON.parse_string(FileAccess.get_file_as_string(primary))
+			if envelope is Dictionary and envelope.get("payload_json") is String and envelope.get("sha256") == envelope["payload_json"].sha256_text():
+				var payload: Dictionary = JSON.parse_string(envelope["payload_json"])
+				var persisted_graph: Dictionary = {"players":payload["players"],"resources":payload["world_resources"],"creation":payload["creation"],"overrides":payload["voxel_overrides"]}
+				report["saved_graph_hash"] = LfeResourceProtocol.normalized(persisted_graph).sha256_text()
+				report["saved_file_hash"] = FileAccess.get_sha256(primary)
+				if loaded_file_hash.is_empty(): loaded_file_hash = game.world_save._expected_primary_hash
+				report["loaded_file_hash"] = loaded_file_hash
 		report["durable_roster_hash"] = LfeResourceProtocol.normalized(game.world_save.players_state).sha256_text()
 		report["save_status"]=game.world_save.save_status;report["load_status"]=game.world_save.load_status
 		report["shutdown_fence"]=game._host_closing
 	lifecycle_trace.append({"msec":Time.get_ticks_msec(),"state":net.state,"reason":net.reason_code,"generation":game.session_generation,"ready":game.is_runtime_ready(),"terrain":game.terrain!=null})
 	if lifecycle_trace.size()>1800:lifecycle_trace.pop_front()
+	_extend_quality_report(report)
 	var target: String = directory.path_join(label+".json")
 	var file: FileAccess = FileAccess.open(target+".pending",FileAccess.WRITE);file.store_string(JSON.stringify(report,"\t"));file.flush();file=null
 	DirAccess.rename_absolute(target+".pending",target)
 	file=FileAccess.open(directory.path_join(label+"-lifecycle.json"),FileAccess.WRITE);file.store_string(JSON.stringify(lifecycle_trace,"\t"));file=null
+
+# Derived impairment fixtures enrich the same atomic report before publication.
+func _extend_quality_report(_report: Dictionary) -> void:
+	pass

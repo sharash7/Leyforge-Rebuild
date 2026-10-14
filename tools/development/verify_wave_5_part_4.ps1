@@ -200,6 +200,7 @@ try {
     $manifest | ConvertTo-Json | Set-Content (Join-Path $evidenceRoot 'source_manifest.json') -Encoding UTF8
     $workingManifest | ConvertTo-Json | Set-Content (Join-Path $evidenceRoot 'working_source_manifest.json') -Encoding UTF8
     $gate.publication_projection = $true
+    . (Join-Path $PSScriptRoot 'w5_8_regression_fixture.ps1')
     Start-Run 'import' @('--headless','--editor','--path',$testProject,'--quit')
     Finish-Run 'import' 0 180000
     Start-Run 'focused' @('--headless','--path',$testProject,'--script','res://tests/networking/w5_4_focused.gd','--',("--fixture=" + (Join-Path $tempRoot 'focused-fixture')),"--output=$evidenceRoot\focused.json")

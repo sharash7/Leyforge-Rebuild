@@ -4,6 +4,7 @@ var survival_trace: Array = []
 var falling_trace: Array = []
 var suppress_periodic: bool = false
 var retained_input: Dictionary = {}
+var checkpoint_load_hash: String = ""
 
 func _survival_loss(peer: int, bytes: PackedByteArray) -> void:
 	var p: Variant = JSON.parse_string(bytes.get_string_from_utf8())
@@ -156,7 +157,23 @@ func _extend_report(report: Dictionary) -> void:
 	report["survival_hud"] = game.creation_panel._hud.text if game.creation_panel != null else ""
 	if game.authority != null:
 		report["characters"] = {}
-		for actor: String in game.authority.characters: report["characters"][actor] = game.authority.character(actor).snapshot()
+		report["character_hashes"] = {}
+		for actor: String in game.authority.characters:
+			report["characters"][actor] = game.authority.character(actor).snapshot()
+			report["character_hashes"][actor] = LfeResourceProtocol.normalized(report["characters"][actor]).sha256_text()
+		# Compare reloaded state with the checksummed serialized checkpoint, not
+		# pre-serialization doubles that Godot's JSON parser can round differently.
+		var primary: String = game.world_save.get_primary_path()
+		if FileAccess.file_exists(primary):
+			var envelope: Variant = JSON.parse_string(FileAccess.get_file_as_string(primary))
+			if envelope is Dictionary and envelope.get("payload_json") is String and envelope.get("sha256") == envelope["payload_json"].sha256_text():
+				var payload: Variant = JSON.parse_string(envelope["payload_json"])
+				if payload is Dictionary and payload.get("players") is Array:
+					report["persisted_character_hashes"] = {}
+					for character: Dictionary in payload["players"]: report["persisted_character_hashes"][character["player_id"]] = LfeResourceProtocol.normalized(character).sha256_text()
+					report["checkpoint_file_hash"] = FileAccess.get_sha256(primary)
+					if checkpoint_load_hash.is_empty(): checkpoint_load_hash = game.world_save._expected_primary_hash
+					report["opened_checkpoint_file_hash"] = checkpoint_load_hash
 		report["rests"] = system.rests.duplicate(); report["shelter"] = system.shelter.duplicate(true)
 		for actor: String in game.movement.bodies:
 			var body: LeyforgeAuthoritativePlayerBody = game.movement.bodies[actor]

@@ -46,6 +46,7 @@ var _playtest_mode: bool = false
 var _save_in_progress: bool = false
 var session_options: LfeSessionOptions
 var movement: LeyforgePlayerMovement
+var connectivity: LfeHostConnectivity
 var network_session: LfeNetworkSession
 var resource_network: LeyforgeResourceNetwork
 var survival_system: LeyforgePlayerSurvival
@@ -442,6 +443,7 @@ func _finish_startup(owned_generation: int = 0) -> void:
 			if session_options.mode == "JOIN":
 				print("W5_3_CLIENT_WORLD_READY player=%s" % local_player_id.left(8))
 				previous_world_id = network_session.world_manifest["world_id"]
+				network_session.lifecycle_metrics["world_ready_msec"] = Time.get_ticks_msec()-network_session._attempt_started
 				session_view.show_playing()
 			if DisplayServer.get_name() == "headless" and not _playtest_mode and session_options.mode == "OFFLINE":
 				await get_tree().process_frame
@@ -894,10 +896,15 @@ func _start_host_session() -> bool:
 	if fingerprint.is_empty(): return false
 	network_session = LfeNetworkSession.new()
 	add_child(network_session)
+	network_session.bind_address = session_options.bind_address
 	network_session.shutdown_complete.connect(func(): get_tree().quit(0))
 	if not network_session.start_host(session_options.port,LfeCompatibilityManifest.hello(local_player_id,fingerprint),LfeCompatibilityManifest.world(world_save,fingerprint),_admit_remote_character,_can_admit_remote_character): return false
 	var view: LeyforgeSessionView = LeyforgeSessionView.new()
 	add_child(view)
+	connectivity = LfeHostConnectivity.new()
+	add_child(connectivity)
+	connectivity.configure(session_options.port,session_options.enable_upnp)
+	view.game = self
 	view.build(network_session,local_player_id,true)
 	movement = LeyforgePlayerMovement.new()
 	add_child(movement)
@@ -1284,7 +1291,7 @@ func _start_client_attempt() -> bool:
 	network_session.state_changed.connect(func(state: String, reason: String):
 		if owned_generation == session_generation: _client_state(state,reason))
 	session_view.show_connecting()
-	return network_session.start_join(session_options.address,session_options.port,LfeCompatibilityManifest.hello(local_player_id,fingerprint))
+	return network_session.start_join(session_options.address,session_options.port,LfeCompatibilityManifest.hello(local_player_id,fingerprint),session_options.invite_secret)
 
 func reconnect_client() -> void:
 	if session_options.mode != "JOIN" or _teardown_pending: return

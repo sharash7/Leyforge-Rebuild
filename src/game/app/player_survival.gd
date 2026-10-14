@@ -204,4 +204,4 @@ func _physics_process(delta: float) -> void:
 		if not replica.ready() or now-replica.received_at > 3.0:
 			if waiting_since < 0: waiting_since = now
 			if now-last_request > 0.5: _send(1,{"kind":"survival_resync"}); last_request = now
-			if now-waiting_since > 10.0: session.disconnect_session()
+			if now-waiting_since > 10.0: session.end_session("server_timeout")

@@ -2,11 +2,13 @@
 param(
     [string] $GodotExecutable = 'D:\AI\Projects\leyforge\.local\Godot_v4.8-dev-a9c94-shutdown-fixed\godot.windows.editor.x86_64.console.exe',
     [switch] $SkipRegression,
-    [string] $CertifiedRegressionEvidence = ''
+    [string] $CertifiedRegressionEvidence = '',
+    [string] $GitSourceRepository = ''
 )
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $godotPath = (Resolve-Path -LiteralPath $GodotExecutable).Path
+$gitSourceRoot=if($GitSourceRepository){(Resolve-Path -LiteralPath $GitSourceRepository).Path}else{$repositoryRoot}
 # Pin the approved runner before executing it.
 $approved = 'D:\AI\Projects\leyforge\.local\Godot_v4.8-dev-a9c94-shutdown-fixed\godot.windows.editor.x86_64.console.exe'
 if ((Get-FileHash $godotPath).Hash -ne (Get-FileHash $approved).Hash) { throw 'W5.7 requires the approved shutdown-fixed runner.' }
@@ -76,7 +78,7 @@ function Wait-State([string] $Name, [string] $State) {
     throw "$Name did not reach $State"
 }
 function Start-Probe([string] $Name, [string] $Mode, [string] $ProfileName, [string] $Fault = '', [double] $Hold = -1, [int] $Port = 25652) {
- Start-Run $Name @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $testProject 'tests/networking/w5_7_launch.ps1'),'-ProjectPath',$testProject,'-ProofDir',$evidenceRoot,'-ProofName',$Name,'-Mode',$Mode,'-Port',"$Port") $ProfileName 'powershell.exe'
+ Start-Run $Name @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $testProject 'tests/networking/w5_7_launch.ps1'),'-ProjectPath',$testProject,'-ProofDir',$evidenceRoot,'-ProofName',$Name,'-Mode',$Mode,'-Port',"$Port",'-GodotRoot',(Split-Path $godotPath -Parent)) $ProfileName 'powershell.exe'
 }
 function Stop-Probe([string] $Name) {
     [IO.File]::WriteAllText((Join-Path $evidenceRoot "$Name.stop"),'stop')
@@ -196,6 +198,7 @@ try {
     $manifest | ConvertTo-Json | Set-Content (Join-Path $evidenceRoot 'source_manifest.json') -Encoding UTF8
     $workingManifest | ConvertTo-Json | Set-Content (Join-Path $evidenceRoot 'working_source_manifest.json') -Encoding UTF8
     $gate.publication_projection = $true
+    . (Join-Path $PSScriptRoot 'w5_8_regression_fixture.ps1')
     Start-Run 'import' @('--headless','--editor','--path',$testProject,'--quit')
     Finish-Run 'import' 0 180000
 
@@ -212,7 +215,7 @@ try {
     $legacyProject=Join-Path $tempRoot 'accepted-w56'
     New-Item -ItemType Directory -Force $legacyProject | Out-Null
     $archive=Join-Path $tempRoot 'accepted-w56.tar'
-    & git -C $repositoryRoot archive --format=tar --output=$archive cced5167004e3056c150bbd16fee25252c665843
+    & git -C $gitSourceRoot archive --format=tar --output=$archive cced5167004e3056c150bbd16fee25252c665843
     Check ($LASTEXITCODE -eq 0) 'Archive immutable accepted W5.6 source outside repo'
     & tar.exe -xf $archive -C $legacyProject
     Check ($LASTEXITCODE -eq 0) 'Extract historical protocol-5 client'
@@ -317,7 +320,16 @@ try {
     [void](Command 'host' @{op='w57_record_fixture';player_id=$id})
     # Valid remote rest over ENet, followed by leave and shared world advancement.
     $shelter=Command 'host' @{op='survival_shelter';player_id=$id}
-    $rest=Command 'client' @{op='survival_rest';target=$shelter.commands[-1].target}
+    $restTarget=$shelter.commands[-1].target
+    $restObjectKey='object/'+$restTarget; $restPlayerKey='player/'+$id
+    # The fixture creates an object on HOST; wait for both authoritative facts
+    # before issuing one normal optimistic-concurrency request from Client.
+    $restBasis=Wait-Condition 'host' {param($r) $r.resource_revisions.PSObject.Properties[$restObjectKey] -and [int]$r.resource_revisions.PSObject.Properties[$restObjectKey].Value -gt 0} 'HOST publishes rest fixture revision'
+    $restObjectRevision=[int]$restBasis.resource_revisions.PSObject.Properties[$restObjectKey].Value
+    $restPlayerRevision=[int]$restBasis.resource_revisions.PSObject.Properties[$restPlayerKey].Value
+    $restReady=Wait-Condition 'client' {param($r) $r.resource_streams.PSObject.Properties[$restObjectKey] -and $r.resource_revisions.PSObject.Properties[$restObjectKey] -and $r.resource_revisions.PSObject.Properties[$restPlayerKey] -and [int]$r.resource_revisions.PSObject.Properties[$restObjectKey].Value -eq $restObjectRevision -and [int]$r.resource_revisions.PSObject.Properties[$restPlayerKey].Value -eq $restPlayerRevision} 'Client receives current rest object/player revisions'
+    $gate.rest_request_revision_basis=@{object_revision=$restObjectRevision;player_revision=$restPlayerRevision;client_object_revision=[int]$restReady.resource_revisions.PSObject.Properties[$restObjectKey].Value;client_player_revision=[int]$restReady.resource_revisions.PSObject.Properties[$restPlayerKey].Value}
+    $rest=Command 'client' @{op='survival_rest';target=$restTarget}
     Assert $rest.commands[-1].result.success 'Remote rest begins normally'
     [void](Command 'client' @{op='w57_leave'});[void](Wait-Ended 'client')
     $absent=Wait-Condition 'host' {param($r) @($r.bindings.PSObject.Properties).Count -eq 2} 'Resting client left'
@@ -382,13 +394,14 @@ try {
     [IO.File]::WriteAllText((Join-Path $evidenceRoot 'host.command.json'),(@{op='w57_f10'}|ConvertTo-Json -Compress))
     $gracefulStarted=[DateTime]::UtcNow
     Finish-Run 'host' 0 20000
+    $saved=Record 'host' 'completed-shutdown-save'
     $ended=Wait-Ended 'client';Assert ($ended.reason -eq 'host_shutdown') 'HOST F10 session-closing fact'
     $gate.graceful_loss_teardown_msec=([DateTime]::UtcNow-$gracefulStarted).TotalMilliseconds
     [void](Wait-Ended 'third')
     [void](Record 'client' 'host-f10-ended');[void](Record 'third' 'host-f10-ended')
     Start-Probe 'host-restart' 'HOST' 'host' '' -1 25658
     $h=Wait-Resources 'host-restart'
-    Assert ($h.loaded_graph_hash -eq $saved.saved_graph_hash) 'Graceful restart restores exact saved authoritative graph'
+    Assert ($h.loaded_graph_hash -eq $saved.saved_graph_hash -and $h.loaded_file_hash -eq $saved.saved_file_hash) 'Graceful restart restores exact completed serialized authoritative graph/file'
     Assert (@($h.roster).Count -eq 3 -and $h.characters.$id.resources.equipment[0].durability -eq 7) 'Graceful host restart preserves both durable clients and tool'
     [void](Command 'client' @{op='w57_reconnect'});$r=Wait-Resources 'client'
     Assert ($r.pid -eq $clientPid -and $r.player_id -eq $id) 'Reconnect after host process restart'
@@ -423,11 +436,11 @@ try {
     [void](Record 'client' 'force-kill-ended');[void](Wait-Ended 'third');[void](Record 'third' 'force-kill-ended')
     # Failed reconnect is one bounded attempt and retains the ended view.
     [void](Command 'client' @{op='w57_reconnect'})
-    $failed=Wait-Condition 'client' {param($r) $r.state -eq 'CONNECTION_FAILED' -and $r.ended_visible -and -not $r.terrain_exists} 'Offline host reconnect fails visibly' 12
+    $failed=Wait-Condition 'client' {param($r) $r.state -eq 'CONNECTION_FAILED' -and $r.ended_visible -and -not $r.terrain_exists} 'Offline host reconnect fails visibly' 16
     Assert $failed.no_world_save 'Failed reconnect has no authoritative save'
     Start-Probe 'host-recovered' 'HOST' 'host' '' -1 25658
     $h=Wait-Resources 'host-recovered'
-    Assert ($h.loaded_graph_hash -eq $crashSaved.saved_graph_hash) 'Crash restart restores exact last successful authoritative graph'
+    Assert ($h.loaded_graph_hash -eq $crashSaved.saved_graph_hash -and $h.loaded_file_hash -eq $crashSaved.saved_file_hash) 'Crash restart restores exact last successful serialized authoritative graph/file'
     Assert (@($h.overrides | Where-Object { $_.block -eq 'leyforge:oak_planks' -and $_.position[0] -eq 5 }).Count -eq 0) 'Crash restores last successful save, unsaved edit absent'
     [void](Command 'client' @{op='w57_reconnect'});[void](Wait-Resources 'client')
     # A real Client process restart continues to use its existing identity file.

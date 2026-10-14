@@ -125,7 +125,7 @@ func _physics_process(delta: float) -> void:
 		for id: String in pending:
 			if Time.get_ticks_msec()-int(pending[id]["sent"]) > 500:
 				_send(1,pending[id]["packet"]); pending[id]["sent"] = Time.get_ticks_msec()
-			if Time.get_ticks_msec()-int(pending[id]["started"]) > 10000: session.disconnect_session(); return
+			if Time.get_ticks_msec()-int(pending[id]["started"]) > 10000: session.end_session("server_timeout"); return
 		if game.player != null and replica.ready and game.inventory_panel == null: game.build_client_resources()
 		if game.creation_presenter != null: game.creation_presenter.sync()
 		if not object_wait.is_empty():

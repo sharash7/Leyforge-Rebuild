@@ -138,7 +138,7 @@ func _physics_process(delta: float) -> void:
 			if client_ready and not game.player.voxel_region_ready:
 				metrics["region_wait_frames"] += 1
 				if region_wait_started == 0: region_wait_started = Time.get_ticks_msec()
-				if Time.get_ticks_msec()-region_wait_started > 10000: session.disconnect_session(); return
+				if Time.get_ticks_msec()-region_wait_started > 10000: session.end_session("server_timeout"); return
 			else: region_wait_started = 0
 		if replica.ready() and pending_resync.is_empty() and acknowledged_sync != replica.sync_id:
 			acknowledged_sync = replica.sync_id

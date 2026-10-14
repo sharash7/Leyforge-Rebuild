@@ -1,7 +1,12 @@
 # Wave 5 Part 7 — Reconnect, session teardown and persistence
 
-Status: automated certification is determined by the final full gate receipt;
-owner manual acceptance pending.
+Status: AUTOMATED CERTIFIED + OWNER ACCEPTED.
+Accepted build: 0.5.9-wave5-w5.7.
+Accepted SHA: 54eb181423e02e584f45c76a79bd08edd6cdfe35.
+Accepted commit: feat: harden multiplayer reconnect and persistence.
+The owner manually confirmed HOST shutdown ejects JOIN from gameplay, reconnect
+and persistence work, and no noticeable blocker remained. The longstanding
+HOST-leaves/JOIN-remains-in-world problem is resolved.
 Application 0.5.9-wave5-w5.7; network protocol 6; save/content/current worldgen
 4/1/2. Stored worldgen v1 remains supported. Wave 5 remains in progress.
 W5.6 repair 1 is AUTOMATED CERTIFIED + OWNER ACCEPTED at
