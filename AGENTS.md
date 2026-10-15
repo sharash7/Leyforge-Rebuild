@@ -1,70 +1,61 @@
 # AGENTS.md — Leyforge Production Rules
 
-## Purpose
-
 This repository is the clean production implementation of Leyforge.
 
-Keep implementation work focused on the game. Do not recreate the previous Project Brain, work-record, task-contract, evidence-governance, admission-gate, or mirrored documentation systems.
+Focus on the game. Do not recreate Project Brain, work-record, task-contract, evidence-governance, admission-gate or mirrored documentation systems.
 
 ## Core rules
 
 1. **One repo, one canonical implementation.**
-   Do not create duplicate source trees, temporary project clones, shadow registries, or parallel "canonical" copies inside the repository.
+   No duplicate source trees, project clones, shadow registries or parallel canonical copies inside this repository.
 
 2. **Build only what current gameplay or tooling needs.**
-   Avoid speculative frameworks and empty abstraction layers.
+   Avoid speculative frameworks and empty abstractions.
 
-3. **Breadth first for the Showcase Slice.**
-   Establish a playable foundation across Leyforge's major pillars before attempting content-complete implementations.
+3. **Breadth first within the authorized Showcase stage.**
+   Establish playable pillars before content completeness.
 
 4. **Depth is allowed when it pays off.**
-   Continue deeper when the work materially improves playability, validates important architecture, creates reusable LFE/Forge capability, or benefits multiple systems.
+   Deepen work for playability, proven architecture, reusable LFE/Forge capability or cross-system benefit.
 
-5. **LFE is extracted from real runtime needs.**
-   Code belongs under `src/lfe/` when it is reusable game-runtime infrastructure rather than Leyforge-specific gameplay presentation/content.
+5. **LFE follows real runtime needs.**
+   `src/lfe/` owns reusable runtime infrastructure; `src/game/` owns Leyforge gameplay/presentation.
 
-6. **Forge-ENG exists to support real authoring workflows.**
-   Add functionality under `src/forge_eng/` only when a Forge/development tool actually needs reusable authoring, validation, import/export, or compilation infrastructure.
+6. **Forge-ENG supports actual authoring needs.**
+   `src/forge_eng/` owns reusable authoring/validation/import/export/compilation infrastructure needed by an actual tool.
 
 7. **The Forge grows from actual production pain.**
-   Development/creator tools live under `tools/forge/`. Do not attempt to build the complete Forge up front.
+   Creator tools live under `tools/forge/`; do not build the complete Forge up front.
 
 8. **Canonical content stays canonical.**
-   Avoid separate game, Forge and runtime definitions of the same block/item/recipe/etc. Tools edit or generate the same canonical content consumed by runtime systems.
+   Game, Forge and runtime share definitions in `content/`; tools edit/generate the same blocks/items/recipes consumed at runtime.
 
 9. **Persistence starts early.**
-   Persistent gameplay state should gain save/load support when the feature is introduced rather than being retrofitted at the end.
+   Add save/load when persistent gameplay state is introduced.
 
 10. **World generation is real from the start.**
-    Use deterministic seed-driven generation rather than a handcrafted showcase map, even while world content is intentionally small.
+    Use deterministic seeded generation, including for small showcase worlds.
 
 11. **Tests protect risky foundations.**
-    Add focused tests for deterministic generation, persistence, registries, resource conservation and other systems where regressions could corrupt or invalidate worlds.
+    Test generation determinism, persistence, registries, conservation and other world-corruption risks.
 
-12. **Multiplayer is a first-class future requirement.**
-   Do not network every early feature immediately, but avoid single-player-only assumptions in authoritative state, identities, transactions, persistence and simulation. Add the first small multiplayer proof once the core world/player/persistence foundation is stable.
+12. **Preserve authoritative multiplayer.**
+    Client intent -> HOST validation/commit/save -> revisioned replication -> JOIN presentation. JOIN never writes authoritative saves. Preserve world authority, identities, conservation, readiness and teardown boundaries.
 
 13. **Keep commits understandable.**
-    Prefer coherent gameplay/tooling increments over giant repository-wide rewrites.
+    Prefer coherent gameplay/tooling increments over repository-wide rewrites.
 
-## First target
+## Authority and task entry
 
-Do not implement advanced systems during bootstrap.
+Implementation requires an explicit owner-authorized task. Plans and empty directories do not authorize implementation or the next Wave.
 
-The first playable target is:
+The authorized stage specification defines behavior/verification. Consult relevant sections of `docs/SHOWCASE_BUILD_WAVES.md`, `docs/SHOWCASE_MASTER_COVERAGE.md` and `docs/ARCHITECTURE_BOUNDARIES.md`; do not read the whole collection by default.
 
-**Launch -> generate simple voxel terrain -> spawn player -> move/jump -> target voxel -> break voxel -> place voxel.**
+Use `$leyforge-development` for implementation and `$leyforge-verification` for checks/certification. Workflow/status: `docs/development/CODEX_WORKFLOW.md`.
 
-Once that works reliably, add persistence before expanding the game loop.
+## Runtime and preservation
 
-## v0.3 showcase authority
-
-Current planning authority:
-1. `docs/SHOWCASE_MASTER_COVERAGE.md`
-2. `docs/SHOWCASE_BUILD_WAVES.md`
-3. `docs/ARCHITECTURE_BOUNDARIES.md`
-
-These documents describe eventual showcase coverage; they do not authorize speculative implementation.
-
-During bootstrap, implement Wave 0 only unless explicitly instructed otherwise.
-The empty Forge workspace directories intentionally make future coverage visible. Do not scaffold implementations simply because those directories exist.
+- Automation: `D:\AI\Projects\leyforge\.local\Godot_v4.8-dev-a9c94-shutdown-fixed\godot.windows.editor.x86_64.console.exe`; adjacent graphical executable only for editor/rendered runs. Never execute 4.6.3, 4.7.1 or `.exe.disabled`, including from historical instructions.
+- Gates: `powershell -NoProfile -ExecutionPolicy Bypass -File ...`. Isolate writable project/profile state outside this checkout for imports or `user://`; never mutate owner saves or shared fixtures.
+- Preserve unrelated changes, UID sidecars, owner identities and append-only evidence. Stage exact owned paths/hunks, commit/push only as authorized.
+- Full final stage gates remain mandatory. Distinguish automated certification from owner acceptance; focused checks cannot close a Wave.
