@@ -25,8 +25,17 @@ Drops/pickup; canonical item/content runtime; inventory/hotbar/storage/equipment
 ## Wave 4 — Survival & Creation
 Gathering/tools; crafting/processing; building; health/basic survival; progression; early Blueprint/Recipe/Resource/Equipment Forge slices.
 
-## Wave 5 — Multiplayer Proof #1
-Host/join; two players; movement; authoritative voxel edits and item transactions; clean leave/reconnect; anti-duplication.
+## Wave 5 — Multiplayer Proof #1 — Local/LAN
+Two-player authoritative shared world; local/LAN host/join; secure private admission;
+movement and relevance; authoritative voxel mutations; inventories/resources;
+crafting/workstations; independent survival; reconnection; HOST-owned persistence;
+duplicate/abuse prevention; disconnect cleanup; local/LAN certification.
+
+Owner scope amendment dated 2026-10-15: direct WAN is not a Wave 5 closure
+requirement. Existing W5.8 connectivity and historical results remain intact;
+external-WAN owner acceptance is deferred to Wave 17. W5.9 automated certification
+and subsequent owner LAN acceptance are required before Wave 5 closes or W6.1
+implementation starts. See `WAVE_5_MULTIPLAYER_SCOPE_AND_WAN_DEFERRAL.md` and ADR-0008.
 
 ## Wave 6 — The World Becomes Alive
 Biomes/climate; caves/geology/resources; weather/time; water foundations; flora; creatures; farming/husbandry; Biome/Worldgen/Structure/Creature/Ecology Forge slices.
@@ -63,6 +72,13 @@ Simulation LOD; background NPC/machine/settlement/ecology work; reconciliation; 
 
 ## Wave 17 — Multiplayer Proof #2
 Combat; settlements; machines; vehicles/vessels; portals/realms; multiplayer-safe save/resync; headless/dedicated-server pathway.
+
+Planned online-connectivity workstream: direct WAN; CGNAT/Starlink compatibility;
+NAT traversal assessment; reliable relay fallback; internet friend/session
+discovery; clickable one-use/expiring invitations; click-to-join flow;
+platform/network backend assessment; secure transport design; internet-scale
+network testing. These are future architecture/planning responsibilities,
+including deferred W5.8 direct-WAN human acceptance, not completed capabilities.
 
 ## Wave 18 — Forge Ecosystem Completion
 Give every known Forge workspace a small real workflow; mature shared Forge-ENG schemas/editing/history/validation/references/indexing/import-export/baking/preview/variants/migration/batch/packaging/test hooks; dogfood Forge-created content.

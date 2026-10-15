@@ -1,7 +1,16 @@
 # W5.8 real network test guide
 
+Owner scope amendment, 2026-10-15: **W5.9 may proceed under revised LAN-first
+Wave 5 scope. Direct WAN owner acceptance is deferred to Wave 17.** The original
+WAN instructions below remain future-reference material for the historical
+W5.8 build. Use the W5.9 guide/compatible kit for current LAN acceptance.
+W5.8 automated certification and localhost owner test passed. Two-computer
+connectivity is owner-reported with topology/details still to capture; no direct
+LAN or WAN PASS is inferred. See the scope amendment and ADR-0008.
+
 Use the exact certified 0.6.0-wave5-w5.8 / protocol 7 build on both PCs.
-**REAL_WAN_OWNER_TEST_REQUIRED = true** until the actual owner/friend test passes.
+Historical receipt: **REAL_WAN_OWNER_TEST_REQUIRED = true**. That uncompleted
+human WAN requirement is deferred to Wave 17; no historical receipt is rewritten.
 Invite and public address are shared privately; omit both from reports.
 
 ## LOCALHOST REGRESSION
@@ -81,7 +90,9 @@ Record build/SHA, approximate connection types, separate networks, direct method
 (manual/UPnP/global IPv6), approximate ping, duration, completed gameplay checks,
 contention/reconnect/shutdown/restart, issues and quality (smooth/acceptable/delay/
 problematic). No public IP/secret required. Owner acceptance requires this actual
-human report. Optional two-friend smoke is useful; broader W5.9 is deferred.
+human report for direct WAN acceptance (now deferred to Wave 17). Optional
+two-friend smoke is useful. Broader W5.9 local/LAN certification is now authorized
+under the amendment above.
 
 ## TROUBLESHOOTING
 

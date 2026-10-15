@@ -1,13 +1,16 @@
 """W5.8 isolated qualification. Secrets exist only in parent/child process memory."""
-import argparse, hashlib, json, os, secrets, shutil, subprocess, tempfile, time
+import argparse, hashlib, json, os, re, secrets, shutil, subprocess, tempfile, time
 from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--runner', required=True)
 parser.add_argument('--skip-regression', action='store_true')
+parser.add_argument('--git-source-repository', type=Path)
 args = parser.parse_args()
 repo = Path(__file__).resolve().parents[2]
+git_repo = args.git_source_repository or repo
 runner = Path(args.runner)
+powershell_modules = str(Path(subprocess.check_output(['powershell.exe','-NoProfile','-Command','$PSHOME'],text=True).strip()) / 'Modules')
 stamp = time.strftime('%Y%m%dT%H%M%S', time.gmtime()) + f'{time.time_ns()%1000000000//1000000:03}'
 evidence = repo / '.verification/wave5/w5_8' / ('run-'+stamp)
 evidence.mkdir(parents=True)
@@ -21,7 +24,7 @@ credentials = []
 gate = dict(passed=False, certified=False, REAL_WAN_OWNER_TEST_REQUIRED=True,
             real_LAN_certified=False, real_WAN_certified=False, manual_acceptance='PENDING_EXTERNAL_HUMAN',
             timestamp_utc=stamp, runner_sha256=hashlib.sha256(runner.read_bytes()).hexdigest(),
-            starting_commit=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip(),
+            starting_commit=subprocess.check_output(['git','-C',str(git_repo),'rev-parse','HEAD'],text=True).strip(),
             temp_project=str(project), regressions=False)
 
 def check(condition, message):
@@ -49,7 +52,7 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2),encoding='utf-8')
 
 def git(*arguments):
-    return subprocess.check_output(['git','-C',str(repo),*arguments])
+    return subprocess.check_output(['git','-C',str(git_repo),*arguments])
 
 def new_secret():
     value = secrets.token_hex(16)
@@ -59,6 +62,10 @@ def new_secret():
 def start(name, arguments, profile=None, executable=runner, cwd=project, secret='', delay=0, bridge=False, next_key=''):
     profile = profile or name
     env = os.environ.copy()
+    if Path(executable).name.lower() == 'powershell.exe':
+        # Codex may inherit PowerShell 7 modules into a Windows PowerShell 5
+        # child. Use that child's built-ins; this is process-local only.
+        env['PSMODULEPATH'] = powershell_modules
     env['APPDATA'] = str(work / (profile+'-appdata'))
     env['LOCALAPPDATA'] = str(work / (profile+'-localappdata'))
     Path(env['APPDATA']).mkdir(exist_ok=True)
@@ -129,13 +136,16 @@ def game_probe(name, mode, key, delay, profile=None, port=25660, next_key=''):
 
 try:
     # Candidate projection deliberately excludes unrelated scene/editor and UID changes.
-    paths=git('ls-files','--cached','--others','--exclude-standard','--','project.godot','src','content','scenes','tests','tools','addons','docs','AGENTS.md').decode().splitlines()
+    snapshot_inventory = repo / '.verification_snapshot_inventory.json'
+    using_snapshot = snapshot_inventory.is_file()
+    paths = json.loads(snapshot_inventory.read_text(encoding='utf-8-sig')) if using_snapshot else git('ls-files','--cached','--others','--exclude-standard','--','project.godot','src','content','scenes','tests','tools','addons','docs','AGENTS.md').decode().splitlines()
     tracked=set(git('ls-files').decode().splitlines())
-    paths=[p for p in paths if not p.endswith('.gd.uid') or p in tracked]
+    paths=[p for p in paths if (not p.endswith('.gd.uid') or p in tracked) and '/__pycache__/' not in p and not p.endswith('.pyc')]
     for relative in paths:
         source=repo/relative;target=project/relative;target.parent.mkdir(parents=True,exist_ok=True)
         raw=source.read_bytes();raw_hashes[relative]=hashlib.sha256(raw).hexdigest().upper()
-        if relative=='project.godot': data=git('show','HEAD:'+relative).replace(b'0.5.9-wave5-w5.7',b'0.6.0-wave5-w5.8')
+        if using_snapshot: data=raw
+        elif relative=='project.godot': data=git('show','HEAD:'+relative).replace(b'0.5.9-wave5-w5.7',b'0.6.0-wave5-w5.8')
         elif relative=='scenes/main/wave_1_playground.tscn': data=git('show','HEAD:'+relative)
         else: data=raw.replace(b'\r\n',b'\n') if source.suffix in ('.gd','.ps1','.py','.md','.json','.tscn','.godot','.tres','.txt','.cfg','.gdextension','.svg') else raw
         target.write_bytes(data);manifest[relative]=hashlib.sha256(data).hexdigest().upper()
@@ -170,7 +180,7 @@ try:
     # A real accepted protocol-6 client is executed from its immutable committed source.
     legacy=work/'legacy';legacy.mkdir()
     archive=work/'legacy.tar'
-    subprocess.run(['git','-C',str(repo),'archive','--format=tar','--output='+str(archive),'54eb181423e02e584f45c76a79bd08edd6cdfe35'],check=True)
+    subprocess.run(['git','-C',str(git_repo),'archive','--format=tar','--output='+str(archive),'54eb181423e02e584f45c76a79bd08edd6cdfe35'],check=True)
     subprocess.run(['tar.exe','-xf',str(archive),'-C',str(legacy)],check=True)
     start('legacy-import',['--headless','--editor','--path',legacy,'--quit'],cwd=legacy);finish('legacy-import',180)
     auth_probe('legacy-host','HOST',key=key);wait('legacy-host',lambda r:r['state']=='HOSTING')
@@ -220,6 +230,16 @@ try:
         commits=after['resource_commits']
         command(client,op='retry');time.sleep(.5)
         check(read(host)['resource_commits']==commits and read(host)['totals']==before,'delayed exact retry cannot duplicate item')
+        begun=time.monotonic()
+        opened=command(client,op='resource',operation='open_context',args={'target':''})
+        check(opened['commands'][-1]['result'].get('success'),'personal context accepted under delay')
+        wait(client,lambda r:r.get('ui_open',False))
+        context_ms=(time.monotonic()-begun)*1000
+        command(client,op='resource',operation='close_grid',args={})
+        begun=time.monotonic()
+        command(host,op='survival_set',player_id=actor,values={'thirst':37.0})
+        wait(client,lambda r:36.0<r.get('survival',{}).get('thirst',100)<38.0)
+        survival_ms=(time.monotonic()-begun)*1000
         command(client,op='w57_leave');wait(client,lambda r:r['state']=='DISCONNECTED' and not r['terrain_exists'],15)
         # Headless/CLI fixture direct reconnect still uses the same production application seam.
         target=evidence/(client+'.command.json');write_json(target,{'op':'w57_reconnect'})
@@ -227,7 +247,7 @@ try:
         check(c['player_id']==actor and c['pid']==pid,'authenticated same-process reconnect retains character')
         time.sleep(2);c=read(client)
         check(c.get('lost_unreliable',0)>0,'unreliable loss actually applied')
-        quality.append(dict(simulated_rtt_msec=rtt,jitter_one_way_msec=6,unreliable_loss='every 20th eligible send',metrics=c['lifecycle_metrics'],maximum_error=moving_max_error,final_error=moving_final_error,voxel_propagation_msec=voxel_ms,resource_transaction_msec=resource_ms,reconnect=True))
+        quality.append(dict(simulated_rtt_msec=rtt,jitter_one_way_msec=6,unreliable_loss='every 20th eligible send',metrics=c['lifecycle_metrics'],maximum_error=moving_max_error,final_error=moving_final_error,voxel_propagation_msec=voxel_ms,resource_transaction_msec=resource_ms,context_open_msec=context_ms,survival_convergence_msec=survival_ms,reconnect=True))
         if rtt != 200: stop(client);stop(host)
     gate['network_quality']=quality
     saved=command(host,op='save')
@@ -256,6 +276,7 @@ try:
     start('kit-build',['-NoProfile','-ExecutionPolicy','Bypass','-File',project/'tools/development/build_wave_5_part_8_remote_join_kit.ps1','-OutputPath',kit,'-VerificationSnapshotPath',project],executable='powershell.exe')
     finish('kit-build',180)
     kit_manifest=json.loads((kit/'kit_manifest.json').read_text(encoding='utf-8-sig'))
+    check(kit_manifest['application']==re.search(r'config/version="([^"]+)"',(project/'project.godot').read_text())[1],'portable regression kit records actual candidate application')
     for relative,digest in kit_manifest['files'].items():check(hashlib.sha256((kit/relative).read_bytes()).hexdigest().upper()==digest,'kit hash '+relative)
     forbidden=['.git','.godot','identity','worlds','saves','logs','.verification','userdata']
     check(not any(p in forbidden for f in kit.rglob('*') for p in f.relative_to(kit).parts),'kit excludes private owner data/cache')
@@ -273,7 +294,7 @@ try:
     if not args.skip_regression:
         regression=work/'regression';shutil.copytree(project,regression)
         with (regression/'project.godot').open('a',encoding='utf-8') as file:file.write('\n[autoload]\nW58FixtureInvite="*res://tests/networking/w5_8_regression_bridge.gd"\n')
-        start('regression',['-NoProfile','-ExecutionPolicy','Bypass','-File',regression/'tools/development/verify_wave_5_part_7.ps1','-GitSourceRepository',repo],executable='powershell.exe',cwd=regression,secret=key,bridge=True)
+        start('regression',['-NoProfile','-ExecutionPolicy','Bypass','-File',regression/'tools/development/verify_wave_5_part_7.ps1','-GitSourceRepository',git_repo],executable='powershell.exe',cwd=regression,secret=key,bridge=True)
         finish('regression',3600)
         prior_runs=sorted((regression/'.verification/wave5/w5_7').glob('run-*'))
         receipt=json.loads((prior_runs[-1]/'gate.json').read_text(encoding='utf-8-sig'))

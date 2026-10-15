@@ -1,5 +1,12 @@
 # ADR-0007 — Private session admission and direct connectivity
 
+Completion-scope amendment (2026-10-15):
+[ADR-0008](ADR-0008_WAVE_5_LAN_FIRST_COMPLETION_AND_WAN_DEFERRAL.md) supersedes
+the external-WAN owner acceptance prerequisite. W5.9 may proceed under revised
+LAN-first Wave 5 scope. Direct WAN owner acceptance is deferred to Wave 17.
+The design and original acceptance requirements below remain historical facts;
+this amendment does not assert a WAN PASS or rewrite any evidence.
+
 Status: W5.8 implementation; automated certification is determined by its full
 receipt. Real external human WAN acceptance remains pending.
 

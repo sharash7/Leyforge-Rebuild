@@ -3,10 +3,17 @@
 Application **0.6.0-wave5-w5.8**, network protocol **7**. Save/content/current
 worldgen remain **4/1/2**, with stored worldgen v1 supported. W5.7 is AUTOMATED
 CERTIFIED + OWNER ACCEPTED at 0.5.9-wave5-w5.7 / 54eb181423e02e584f45c76a79bd08edd6cdfe35.
-Wave 5 remains in progress. Do not begin W5.9 until genuine external WAN owner acceptance.
+Wave 5 remains in progress. Owner amendment dated 2026-10-15:
+**W5.9 may proceed under revised LAN-first Wave 5 scope. Direct WAN owner
+acceptance is deferred to Wave 17.** See
+[scope amendment](WAVE_5_MULTIPLAYER_SCOPE_AND_WAN_DEFERRAL.md) and ADR-0008.
 
 Automated certification is determined by the final complete W5.8 gate receipt.
-Owner LAN/WAN acceptance remains pending. **REAL_WAN_OWNER_TEST_REQUIRED = true**.
+W5.8 AUTOMATED CERTIFIED — PASS. W5.8 LOCALHOST OWNER TEST — PASS.
+Two-computer connectivity is OWNER REPORTED; CAPTURE TOPOLOGY/DETAILS.
+Direct WAN owner testing is DEFERRED TO WAVE 17. Revised local/LAN scope is
+closure eligible after relevant manual LAN evidence. The original receipt's
+**REAL_WAN_OWNER_TEST_REQUIRED = true** is retained unchanged as historical evidence.
 Localhost, same-PC interfaces, simulated delay, same-router traffic and VPN/overlay
 connections do not establish direct WAN certification.
 

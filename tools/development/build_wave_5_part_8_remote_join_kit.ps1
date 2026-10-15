@@ -8,10 +8,14 @@ if(Test-Path -LiteralPath $OutputPath){throw 'Kit output must be a new directory
 $sourceRoot=$repositoryRoot
 $sourceCommit='UNCOMMITTED-VERIFICATION-CANDIDATE'
 $certified=$true
+$application='0.6.0-wave5-w5.8'
 if($VerificationSnapshotPath){
  $sourceRoot=(Resolve-Path -LiteralPath $VerificationSnapshotPath).Path
  if(-not $sourceRoot.StartsWith([IO.Path]::GetTempPath(),[StringComparison]::OrdinalIgnoreCase)){throw 'Verification snapshot must be an isolated temporary candidate'}
  $inventory=Get-Content (Join-Path $sourceRoot '.verification_snapshot_inventory.json') -Raw | ConvertFrom-Json
+ $candidateProject=[IO.File]::ReadAllText((Join-Path $sourceRoot project.godot))
+ if($candidateProject -notmatch 'config/version="([^"]+)"'){throw 'Candidate application version missing'}
+ $application=$Matches[1]
  $sourceCommit='UNCOMMITTED-VERIFICATION-CANDIDATE';$certified=$false
 }else{
  $sourceCommit=(& git -C $repositoryRoot rev-parse HEAD)
@@ -64,5 +68,5 @@ $joinScript='param([string]$Address="", [int]$Port=25652)' + "`n" + '& (Join-Pat
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'tools/development/README_W5_8_REMOTE_TEST.txt') -Destination $OutputPath
 $hashes=@{}
 foreach($file in Get-ChildItem -LiteralPath $OutputPath -Recurse -File){$relative=$file.FullName.Substring($OutputPath.Length+1).Replace('\','/');$hashes[$relative]=(Get-FileHash $file.FullName).Hash}
-@{application='0.6.0-wave5-w5.8';protocol=7;source_commit=$sourceCommit;certified_source=$certified;files=$hashes} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $OutputPath kit_manifest.json) -Encoding UTF8
+@{application=$application;protocol=7;source_commit=$sourceCommit;certified_source=$certified;files=$hashes} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $OutputPath kit_manifest.json) -Encoding UTF8
 Write-Output "W5_8_REMOTE_KIT=$OutputPath"
