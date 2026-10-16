@@ -52,21 +52,21 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 
 ## Current playable build
 
-The current build is 0.5.2-wave5-w5.1: W5.1 Authority & State Separation
-preserves the normal Wave 4 survival/creation loop while adding a stable local
-profile, independent world-local character records, shared world owners and
-actor-aware commands. Identity lives at user://identity/local_profile.json;
-the owner launcher imports global classes before starting the graphical game.
-Finite sources now physically block the player; opening gameplay UI suppresses
-control input while gravity, collision, fall damage and world simulation continue.
-Historical generic profile data remains intact. Save v4 retains nondestructive
-v1/v2/v3 migration and
-the existing safe promotion and previous-copy recovery path.
+The latest implemented candidate is **0.6.1-wave5-w5.9**, protocol/save/content/
+worldgen **7/4/1/2**, with stored worldgen v1 supported. It includes private
+authoritative HOST/JOIN multiplayer, independent characters/resources/survival,
+voxel replication, crafting/storage/Kiln, reconnect and HOST-owned save/recovery.
+The full automated W5.9 certification belongs to
+`fe4411c6ca9cf2598d1564ff3ce5cd0461f8c29e`; subsequent workflow/documentation
+changes and pre-existing working-tree changes are not newly source-certified.
 
-See docs/WAVE_5_PART_1_AUTHORITY_AND_STATE_SEPARATION.md for identity,
-ownership, save shape, command boundaries, verification and the exact owner
-manual launch command. W5.1 owner manual acceptance is pending. It introduces
-no networking; W5.2 has not begun.
+On 2026-10-16 the owner reported W5.9 two-computer LAN success and approved
+Wave 6 progression. [Wave 5 is closed under LAN-first scope](docs/WAVE_5_CLOSURE.md),
+with missing manual checklist details recorded; WAN remains deferred to Wave 17.
+See [W5.9](docs/WAVE_5_PART_9_FINAL_LOCAL_LAN_MULTIPLAYER_CERTIFICATION.md) for
+the retained evidence/launch contracts and the
+[W6.1 proposal](docs/WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md)
+for the next bounded implementation task. This update implements no Wave 6 work.
 
 The connected playable loop and controls remain in
 docs/WAVE_4_SURVIVAL_AND_CREATION.md. Held gathering, Dense Stone unit cubes,

@@ -1,10 +1,13 @@
 # Wave 5 to Wave 6 readiness handoff
 
-Readiness document only, 2026-10-15. **Wave 6 implementation has not begun.**
-W6.1 — Readiness, UI & Integration Foundation may begin only after the complete
-W5.9 automated gate passes, owner local/LAN acceptance is recorded, blockers are
-resolved and Wave 5 is explicitly closed. This document grants no implementation
-authority. Direct WAN acceptance is deferred to Wave 17 under ADR-0008.
+Readiness document, updated 2026-10-16. **Wave 6 implementation has not begun
+in this task.** [Wave 5 is closed for owner-authorized LAN-first progression](WAVE_5_CLOSURE.md):
+the historical complete W5.9 automated PASS and the owner's reported two-computer
+success/approval are recorded with missing manual details and source-match limits.
+The [W6.1 proposal](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md) now
+defines bounded UI work, future equipment and integration contracts, verification
+and candidate dependencies. This task is documentation/planning only; implementation
+requires a subsequent authorized task. Direct WAN remains deferred to Wave 17.
 
 ## Stable interfaces to preserve
 
@@ -24,7 +27,7 @@ authority. Direct WAN acceptance is deferred to Wave 17 under ADR-0008.
 Application candidate is 0.6.1-wave5-w5.9; protocol 7, save/content/worldgen
 4/1/2, stored worldgen v1 supported. Source paths and current signatures must
 be read before extending them. Completion status comes from the final W5.9
-gate and subsequent human report, not this handoff.
+gate and subsequent [owner closure record](WAVE_5_CLOSURE.md), not this handoff.
 
 ## Hazards for the next production stages
 

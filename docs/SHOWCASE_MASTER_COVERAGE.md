@@ -8,6 +8,11 @@ It does not require full implementations. Each entry only needs a small real rep
 
 Every Forge workspace is its own showcase section. A placeholder window does not count; the workspace must eventually author or validate real content used by the game.
 
+Current planning: [Wave 5 closure](WAVE_5_CLOSURE.md) and
+[W6.1 readiness/UI/integration proposal](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md).
+The latter maps existing implementations and later dependencies; it does not mark
+these broad showcase categories complete or authorize their implementation.
+
 ## 01 — Product Shell & Player
 
 - [ ] Boot/title/main menu, Continue, World Library and pause flow

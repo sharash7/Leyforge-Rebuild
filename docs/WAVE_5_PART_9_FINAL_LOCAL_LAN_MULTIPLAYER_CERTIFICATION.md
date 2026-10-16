@@ -1,10 +1,17 @@
 # W5.9 — Final local/LAN multiplayer certification
 
+**Status update, 2026-10-16:** automated certification is retained at
+`fe4411c6ca9cf2598d1564ff3ce5cd0461f8c29e`; the owner reports W5.9 two-computer
+LAN success and approves Wave 6 progression. [Wave 5 is closed for that LAN-first
+scope](WAVE_5_CLOSURE.md), with missing manual checklist details and post-certification
+source-match limitations explicit. The original gate/form requirements below and
+historical receipts are retained; no individual manual result is inferred.
+
 Candidate: **0.6.1-wave5-w5.9**, network protocol **7**, save/content/worldgen
 **4/1/2**, with stored worldgen v1 supported. Owner authorization: 2026-10-15.
 W5.9 hardens and certifies the implemented Wave 4/5 loop; it adds no progression
 or Wave 6 gameplay. Automated certification is determined by a complete final
-source-matched receipt. Owner acceptance remains **LAN HUMAN ACCEPTANCE REQUIRED**.
+source-matched receipt. At certification time, owner acceptance was **LAN HUMAN ACCEPTANCE REQUIRED**.
 Wave 5 is not closed by an automated pass alone.
 
 ## Scope and retained history

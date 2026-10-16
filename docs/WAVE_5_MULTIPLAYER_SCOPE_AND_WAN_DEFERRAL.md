@@ -1,5 +1,12 @@
 # Wave 5 multiplayer scope and WAN deferral
 
+**2026-10-16 closure update:** the owner reports W5.9 two-computer LAN success
+and authorizes Wave 6 progression. [Wave 5 closure](WAVE_5_CLOSURE.md) records
+overall owner acceptance, incomplete manual traceability and exact certification
+limits. The dated amendment/history below remains the original 2026-10-15 record;
+its pending acceptance entries are superseded by that closure decision, not by
+invented per-test observations. WAN stays deferred to Wave 17.
+
 Owner-authorized governance amendment, **2026-10-15 (Australia/Perth)**.
 Authority: the owner's W5.9 direction, starting from main at
 `bbe49b2e79193ae241c9a6eaaa73485abae403ae`.
