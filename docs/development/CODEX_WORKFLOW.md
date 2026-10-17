@@ -27,8 +27,11 @@ the owner reports two-computer LAN success and approves Wave 6 progression.
 [Wave 5 is closed for that scope](../WAVE_5_CLOSURE.md), with manual checklist
 details incomplete and later documentation/dirty source not newly certified.
 WAN remains deferred to Wave 17. The [W6.1 specification](../WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md)
-is proposed; this task implements no Wave 6 systems. The next task must authorize
-the bounded implementation and its final gate.
+is now an owner-authorized W6.1 implementation candidate. Responsive inventory/Manual
+layout, authoritative transaction feedback and the targeted long-frame drop-follow
+repair are implemented. See the W6.1 specification for retained failure and repair
+evidence. Publication requires a complete final-source W6.1 gate PASS; owner UI
+acceptance remains separate. W6.2 remains unimplemented.
 
 This dated pointer creates no authority. Consult the [W5.9 policy](../WAVE_5_PART_9_FINAL_LOCAL_LAN_MULTIPLAYER_CERTIFICATION.md), [scope amendment](../WAVE_5_MULTIPLAYER_SCOPE_AND_WAN_DEFERRAL.md) and [readiness handoff](../WAVE_5_TO_WAVE_6_READINESS_HANDOFF.md) when status affects a decision. Retained receipt: `.verification/wave5/w5_9/run-20261015T092724971/gate.json`.
 

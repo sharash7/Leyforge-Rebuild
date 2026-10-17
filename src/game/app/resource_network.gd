@@ -95,6 +95,7 @@ func _packet(peer: int, bytes: PackedByteArray) -> void:
 			pending.erase(p["transaction_id"])
 			results.append(p.duplicate(true))
 			if results.size() > 256: results.pop_front()
+			if game.inventory_panel!=null: game.inventory_panel.record_result(req["packet"]["operation"],p["success"],p["reason"])
 			if game.player != null:
 				var feedback: String = "Hydration disabled in this profile; water retained" if p["reason"] == "thirst_disabled" else "No survival effect; item retained" if p["reason"] == "no_effect" else p["reason"] if not p["success"] else "Resting in shelter; move to stop" if req["packet"]["operation"] == "rest" else "Transaction committed"
 				game.player.show_status(feedback,2500)

@@ -1,13 +1,11 @@
 # Wave 5 to Wave 6 readiness handoff
 
-Readiness document, updated 2026-10-16. **Wave 6 implementation has not begun
-in this task.** [Wave 5 is closed for owner-authorized LAN-first progression](WAVE_5_CLOSURE.md):
-the historical complete W5.9 automated PASS and the owner's reported two-computer
-success/approval are recorded with missing manual details and source-match limits.
-The [W6.1 proposal](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md) now
-defines bounded UI work, future equipment and integration contracts, verification
-and candidate dependencies. This task is documentation/planning only; implementation
-requires a subsequent authorized task. Direct WAN remains deferred to Wave 17.
+Readiness handoff, updated 2026-10-16. [Wave 5 is closed for owner-authorized
+LAN-first progression](WAVE_5_CLOSURE.md); its historical record is unchanged.
+The owner has now authorized W6.1 implementation only. The [W6.1 specification](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md)
+records the UI candidate, retained architecture contracts, future equipment
+proposals and owner-established Forge-first W6.2–W6.18 sequence. Certification
+and owner UI acceptance remain separate. Direct WAN stays deferred to Wave 17.
 
 ## Stable interfaces to preserve
 

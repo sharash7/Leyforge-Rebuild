@@ -1,11 +1,11 @@
 # W6.1 — Readiness, UI & Integration Foundation
 
-**Proposed implementation specification, 2026-10-16. No implementation in this task.**
-Reviewed at `c14406f6143b9e03bb3906cd4c7f159a36afbaea` with pre-existing local
-changes preserved. [Wave 5 is closed for owner-authorized LAN-first progression](WAVE_5_CLOSURE.md),
-with incomplete manual traceability and historical certification limits recorded.
-The owner approves Wave 6 progression; a subsequent bounded task must authorize
-implementing this proposal. Candidate choices below are not owner-approved canon.
+**W6.1 implementation candidate, owner-authorized 2026-10-16.**
+Starting `main`: `7623595424dfb3ca6c98e45bfcf28afdab3e353c`.
+Wave 5's historical closure is unchanged. W6.1 includes the targeted drop-follow
+repair described below. Publication requires a complete final-source automated
+PASS receipt; owner UI acceptance remains a separate decision.
+W6.2 and later are not authorized.
 
 Authority: [build waves](SHOWCASE_BUILD_WAVES.md), [master coverage](SHOWCASE_MASTER_COVERAGE.md),
 [architecture boundaries](ARCHITECTURE_BOUNDARIES.md) and
@@ -26,22 +26,23 @@ over obsolete path/version/status descriptions in those documents.
 | Simulation | [Gameplay authority](../src/lfe/simulation/gameplay_authority.gd).advance_world → creation.advance; [survival adapter](../src/game/app/player_survival.gd) advances world once, then active actors | World/Kiln elapsed time exists; calendar/weather/offline catch-up/ecology and simulation LOD do not. Specify obligations, implement none here |
 | Forge | `src/forge_eng/` and `tools/forge/` contain only `.gitkeep` files | Existing runtime validation works; no editor framework or workspace is justified by this readiness slice |
 
-This is interface/code/test inspection plus retained W5.9 evidence, not a fresh
-playtest of the dirty checkout. Existing tools/durability, held gathering, drops,
+The table records the inspected baseline. Fresh candidate UI/input and regression
+results are recorded by the W6.1 gate; historical W5.9 evidence alone does not
+certify this candidate. Existing tools/durability, held gathering, drops,
 storage, crafting, Kiln, survival and reconnect remain implemented systems to
 preserve, not replacement projects. Relevant behavioral contracts are
 [W5.5](WAVE_5_PART_5_RESOURCES_INVENTORY_AND_TRANSACTIONS.md),
 [W5.6 Repair 1](WAVE_5_PART_6_OWNER_ACCEPTANCE_REPAIR_1.md) and
 [W5.7](WAVE_5_PART_7_RECONNECT_SESSION_TEARDOWN_AND_PERSISTENCE.md).
 
-## W6.1 implementation deliverables proposed
+## Implemented UI candidate
 
 1. Improve the existing inventory shell: viewport-anchored hotbar/panel, bounded
    scrolling/reflow when space is constrained, readable canonical name/count/tool
    durability and explicit context/equipment labels. All slots, output, close and
    Manual controls must remain reachable at 1280×720 and 1920×1080; at 960×540
-   use scrolling rather than hiding interactive controls. These are proposed
-   validation sizes, not measured current support. Keep existing input bindings.
+   use scrolling rather than hiding interactive controls. These are mandatory
+   validation sizes; results belong to the source-matched W6.1 receipt. Keep existing input bindings.
 2. Make source selection, incompatible/full destination, missing context, pending
    request and final result understandable. JOIN must not display a successful
    transfer solely because enqueue succeeded. Reuse existing result reasons and
@@ -63,38 +64,20 @@ new Forge workspaces, content registries, engine/plugin updates, save migrations
 and protocol changes. Discovering a required wire/save break pauses that part
 for a separately authorized design; it does not expand W6.1 automatically.
 
-## Complete future equipment contract — candidate, not runtime schema
+## Future equipment coverage — proposal only
 
-The rebuild has no authoritative full slot enumeration beyond `hand`/`body`.
-The following is a complete candidate set for review; anatomy-specific additions
-require a real later feature. Names/coverage and layering need owner ratification
-before expanding content, saves or packets. W6.1 retains the existing two slots.
+Runtime slots remain exactly `hand` and `body`. Candidate future coverage is
+head, chest, hands, legs, feet, cloak/mantle, belt/utility, left/right rings,
+amulet, backpack and wings. This is not a ratified schema or a complete slot set.
+Hand/offhand, layering, ammunition, trinkets and additional sockets remain future
+design decisions. No legacy-slot migration mapping is ratified.
 
-| Candidate semantic slots | Role / occupancy contract |
-| --- | --- |
-| `main_hand`, `off_hand` | Held tool/weapon/shield; a two-handed instance reserves both but is stored/counts once; later combat defines permitted combinations |
-| `head`, `neck`, `shoulders`, `torso`, `back`, `wrists`, `hands`, `waist`, `legs`, `feet` | Worn/attached categories; paired limbs are one slot per category in this proposal; no armour/clothing layering or protection values yet |
-| `ring_left`, `ring_right`, `trinket_1`, `trinket_2` | Explicit bounded accessory positions; no implicit effects or arbitrary unlimited accessories |
-| `ammunition`, `utility` | One ammunition stack and one carried utility item; quantities obey canonical stack rules; no automatic reload/container expansion yet |
-
-Contract for every slot: stable semantic ID, localized display label, canonical
-content compatibility, occupancy/conflict rules, stack limit, owning actor,
-instance/durability preservation, transfer/drop/death/reconnect/save behavior and
-visible rejection reason. Body sockets/visual attachments consume equipment state;
-they do not store a second item. The hotbar remains a view of inventory, not another
-ownership location. A selected tool and equipped hand tool follow the existing
-[harvest selection](../src/lfe/simulation/harvest_rules.gd) until an explicit later change.
-
-Future migration proposal: map legacy `hand` to `main_hand`, `body` to `torso`;
-retain all content/instance/durability exactly, initialize new slots empty, reject
-unresolvable conflicts without deleting items. Never reinterpret positional arrays
-or rename canonical content silently. Single-owner inventory/equipment transfers
-must prepare/validate all endpoints then commit atomically; full/invalid/stale
-destinations change nothing. Multi-slot occupancy requires one identity and one
-conservation contribution, including reservations. Current stack restrictions do
-not yet implement those semantics. Armour, visuals, two-hand handling and expanded
-equipment persistence belong to later authorized equipment/combat work (Wave 7),
-not living-world readiness. Proposed slots imply neither crafted items nor effects.
+Future equipment must define stable semantic IDs, canonical compatibility,
+occupancy/conflicts, stack limits, owning actor, instance/durability conservation,
+and atomic transfer/drop/death/reconnect/save behavior before implementation.
+Attachments consume equipment state without storing a second item. Multi-slot
+occupancy must count one instance once. The hotbar remains an inventory view.
+No new slots, items, arrays, packets, saves or placeholder UI are introduced here.
 
 ## Canonical voxel, structure and entity ownership
 
@@ -155,7 +138,7 @@ absent characters retain current freeze behavior. Later time/weather/ecology/far
 must name clock units, update cadence/budget, relevance, durable state and restart
 behavior. Partitioned elapsed-time and reload tests must account for reservations
 and once-only outputs. No offline awards or catch-up are implied by elapsed time.
-Full background simulation/LOD remains Wave 16 work.
+Simulation budgets/LOD require a separately authorized design; W6.17 integrates only implemented systems.
 
 Forge-ENG (`src/forge_eng/`) will own reusable validation/import/export/baking only
 when an actual authoring workflow needs it; Forge (`tools/forge/`) owns its creator UI.
@@ -167,7 +150,7 @@ Content changes alter the existing fingerprint; no hot reload or content negotia
 is promised. W6.1's deliverable is this integration contract, not empty framework code
 or a separate tooling registry. Future tooling scope must cite actual authoring pain.
 
-## Acceptance and verification for a future W6.1 implementation
+## Acceptance and verification
 
 | Criterion | Required evidence |
 | --- | --- |
@@ -183,53 +166,131 @@ Reuse [Wave 3 tests](../tests/wave_3/wave_3_test_runner.gd),
 and W5.7/W5.9 lifecycle/regression coverage. Add focused cases for changed behavior,
 not a second transaction implementation. Development checks do not certify completion.
 
-Before implementation, the authorized task must name its W6.1 final gate and evidence
-destination. There is no W6.1 gate today. Proposed final gate: a stage-specific UI
-entry point wrapping new focused/rendered checks plus the complete existing
-[W5.9 gate](../tools/development/verify_wave_5_part_9.ps1) and its full nested
-regressions on final source, approved runner and isolated profiles. Adding that
-entry point needs explicit future harness scope; do not edit W5.9 to make old
-receipts cover new work. Preserve failed attempts, source/runner manifests and
-raw reports. Record owner UI acceptance separately, including tested build and
-two-PC LAN results; do not carry forward unreported checklist rows as PASS.
+The dedicated entry point is `tools/development/verify_wave_6_part_1.ps1`.
+`-FocusedOnly` runs development UI/layout/input checks and never certifies.
+The default additionally runs the complete unchanged W5.9 chain, its default
+660-second soak and established source projection/runner rules. All W6.1 receipts
+are append-only under `.verification/wave6/w6_1/run-<UTC>/`; the nested W5.9
+receipt stays at its original path. Raw logs, manifests, screenshots and process
+reports are retained. Any failure prevents certification and publication.
+Owner UI acceptance is separate. Existing W5.9 launchers remain the owner entry
+points, now displaying the candidate UI; use matching HOST/JOIN source builds.
 
-## Proposed dependency obligations for W6.2–W6.18
+## Owner-established Wave 6 sequence
 
-Only the W6.1 title and broad Wave 6 domains are established in current repository
-plans. The numbering below is a candidate sequencing proposal, not recovered stage
-authority or permission to implement. Each stage needs its own bounded specification,
-save/network/content decisions and actual acceptance; revise ordering after review.
+This sequence is ratified for planning by the 2026-10-16 implementation request;
+it authorizes W6.1 only. Future stages still need bounded specifications and
+compatibility/acceptance decisions. Forge foundations precede world expansion.
 
-| Candidate stage / focus | Prerequisites and contract to carry forward |
+| Stage | Dependency obligation |
 | --- | --- |
-| W6.2 Biome/climate definitions | W6.1 ownership/version contract; canonical references and deterministic coordinate sampling |
-| W6.3 Biome terrain integration | W6.2; explicit new-world generator version, retained v1/v2 behavior and boundary tests |
-| W6.4 Geology/resources | W6.3; conserved extraction, canonical materials and deterministic regional placement |
-| W6.5 Caves/underground | W6.3–4; cross-chunk density/collision, edit overlays and safe spawn/readiness |
-| W6.6 Inland water foundation | Terrain/geology placement; bounded HOST liquid truth, storage/flow budget and persistence design before effects |
-| W6.7 World clock/calendar foundation | Existing once-per-world tick; units/save/restart semantics, no implied offline progression |
-| W6.8 Weather/environment | W6.2/7; authoritative samples and explicit interaction with shelter/independent survival |
-| W6.9 Flora/fungi | W6.2–4/8; stable instances or voxel identity, deterministic eligibility and conserved harvest/depletion |
-| W6.10 Structures/sites | Terrain/caves/flora placement policy; one template/instance contract, overlap priority and durable changed/cleared state |
-| W6.11 Creature foundation | Habitat/terrain readiness; HOST identity/state, bounded replication and durable lifecycle |
-| W6.12 Movement/behavior | W6.11; loaded collision/navigation ownership, relevance and cleanup independent of HOST camera |
-| W6.13 Ecology/populations | W6.9/11–12; finite budgets, no duplicate spawn/output, save/reload and tick partition checks |
-| W6.14 Farming | W6.6–9; plot identity, seed/input conservation, persisted growth and one authoritative clock |
-| W6.15 Husbandry | W6.11–14; ownership/feed/shelter/output conservation and restart behavior; breeding only if separately scoped |
-| W6.16 Biome/Worldgen/Structure Forge slice | Proven W6.2–10 authoring need; existing canonical inputs, validation and deterministic preview |
-| W6.17 Creature/Ecology/Agriculture Forge slice | Proven W6.9–15 authoring need; shared authoring primitives only where reused, runtime round-trip |
-| W6.18 Connected living-world verification | Authorized earlier slices; complete current regression chain, HOST/JOIN/save/recovery/performance evidence and owner acceptance |
+| W6.1 Readiness, UI & Integration Foundation | Current runtime ownership, transactions, compatibility and presentation |
+| W6.2 Forge-ENG & Unified Forge Foundation | W6.1 contracts; shared canonical definitions and actual authoring needs |
+| W6.3 Voxel Asset Forge | W6.2 validation/preview; stable voxel IDs and runtime-compatible outputs |
+| W6.4 Macro World Generation | W6.2–3 inputs; versioned deterministic coordinates and retained old worlds |
+| W6.5 Climate & Environmental Regions | W6.4 coordinate sampling and stable regional boundaries |
+| W6.6 Hydrology & Water Foundations | W6.4–5 terrain/climate; bounded HOST water truth and persistence |
+| W6.7 Geology & Terrain Composition | W6.4–6 placement dependencies and edit overlays |
+| W6.8 Resource Distribution | W6.7 materials; canonical references and finite extraction |
+| W6.9 Caves & Underground Generation | W6.4/6/7; cross-chunk density/collision and safe readiness |
+| W6.10 Biomes, Ecotones & Regional Ecology | W6.5–9 habitat inputs and deterministic transitions |
+| W6.11 Time, Weather & Environmental Systems | W6.5/10; one HOST clock, save/restart and survival semantics |
+| W6.12 Flora & Vegetation | W6.8/10/11; stable identity and conserved harvest/depletion |
+| W6.13 Agriculture & Farming | W6.6/11/12; plot identity, input/output conservation and persisted growth |
+| W6.14 Creatures & Wildlife | W6.9–12 habitats; HOST lifecycle, collision/relevance and bounded replication |
+| W6.15 Husbandry & Animal Management | W6.13–14; conserved feed/output, ownership and restart behavior |
+| W6.16 Structures, Landmarks & World History | Earlier terrain/ecology plus Forge; template/instance identity and durable cleared state |
+| W6.17 Complete Living World Integration | Authorized prior stages; shared budgets, deterministic overlap and lifecycle consistency |
+| W6.18 Hardening, Optimisation & Certification | Complete source-matched regressions, measured performance, HOST/JOIN/save/recovery and owner acceptance |
 
-Dependencies are not mandates for a complete simulation framework. Wave 17 online
-connectivity and Wave 18 ecosystem completion remain distinct from W6.17/W6.18.
+These living-world systems and Forge workspaces remain unimplemented by W6.1.
+Wave 17 online connectivity and Wave 18 ecosystem completion are distinct from
+W6.17/W6.18. No detailed future implementation plans are created here.
 
-## Decisions before implementation
+## Remaining decisions
 
-- Ratify the bounded UI deliverables and final gate/harness scope in the next task.
-- Confirm or revise candidate future equipment slots/migration/layering before any
-  expanded equipment implementation; this does not block preserving `hand`/`body` UI.
-- Ratify or replace the proposed W6.2–W6.18 sequence; no absent stage spec is assumed.
-- Reconcile the six pre-existing tracked changes and UID sidecars before selecting
-  a runtime certification source. Do not silently include, reset or certify them.
-- Obtain missing owner manual detail if checklist-complete physical acceptance is
-  required; keep the [closure record's limitations](WAVE_5_CLOSURE.md) visible.
+- Owner UI acceptance after a final automated PASS, recording tested source/build.
+- Future equipment ratification before changing the two-slot runtime model.
+- A bounded owner authorization for W6.2 after W6.1 acceptance.
+- Retain the Wave 5 closure record's missing manual traceability and WAN deferral.
+
+## Candidate changes and owner UI check
+
+The existing shell now anchors the hotbar and bounds the inventory to the viewport.
+It stacks context sections at constrained logical widths, scrolls retained controls,
+wraps slot names with separate quantities/durability and labels both equipment
+positions. Inventory UI renders above the survival HUD to prevent overlapping
+labels. The Manual uses bounded scrolling in the same shell. Bindings are unchanged.
+A persistent feedback label distinguishes pending, accepted and rejected commands;
+JOIN acceptance comes only from the existing authoritative result channel. No
+request enqueue is counted as a moved quantity. Independent state/results, rejected
+capacity/context and staged close behavior retain the existing transaction owner.
+
+Run development checks or the mandatory final gate from the repository:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\verify_wave_6_part_1.ps1 -FocusedOnly
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\verify_wave_6_part_1.ps1
+```
+
+For owner UI acceptance use matching candidate source on HOST/JOIN. Existing
+launchers preserve identity/save selection; record the tested commit and world:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File 'D:\AI\Projects\Leyforge-Rebuild\tools\development\run_wave_5_part_9_host.ps1'
+powershell -NoProfile -ExecutionPolicy Bypass -File 'D:\AI\Projects\Leyforge-Rebuild\tools\development\run_wave_5_part_9_join.ps1'
+```
+
+Use the current private invite in the masked JOIN prompt. Check I/C, normal RMB/E
+Workbench/storage/Kiln interaction, source selection, split/swap/quick transfer,
+Manual, output and close at 1920×1080, 1280×720 and 960×540. Check accepted and
+rejected/full transfers, staged close refusal, pending feedback, HOST loss and
+same-identity reconnect. Record readability/scrolling observations and the overall
+acceptance decision separately from the automated receipt. No owner acceptance
+is claimed here.
+
+## Targeted certification repair — 2026-10-17
+
+The prior failed complete attempt remains at
+`.verification/wave6/w6_1/run-20261016T110659565588100/gate.json`.
+The nested Repair 1 trace recorded a 0.06300044 m HOST target correction and a
+0.05028093 m visual step across a 131 ms rendered gap. Its remaining lag and
+production exponential follow imply a 0.13333371 s engine delta. The existing
+strict <0.04 m check correctly exposed a presentation weakness.
+
+Controlled graphical probes reproduced the weakness in both the unchanged
+previously certified source (`fe4411c6ca9cf2598d1564ff3ce5cd0461f8c29e`)
+and the unchanged W6.1 candidate. All nine stalled trials per source exceeded
+0.04 m with actual 131/200/400 ms main-thread stalls; normal trials remained
+approximately 0.01142 m. These probes use the production presenter and actual
+engine deltas, with post-draw timing and positions. No UI is needed to reproduce
+the defect. This establishes the mechanism independently of W6.1 UI; it does not
+identify the scheduler/render workload responsible for the original hitch or
+claim equal frame-time performance across UI versions.
+
+The minimal repair retains exponential follow at 12/sec and limits each JOIN
+small-correction visual step to 0.039 m, leaving room for the existing <0.001 m
+convergence snap under the strict 0.04 m frame-step bound. HOST record positions,
+10 Hz publication, >0.75 m snap behavior, identities, transactions, pickup and
+merge/despawn cleanup are unchanged. Neither the existing Repair 1 instrumentation
+nor its assertions/thresholds are changed.
+
+The new rendered `tests/networking/w6_1_drop_frames.gd` probe is included in the
+W6.1 gate. It blocks the actual main thread, records engine delta plus post-draw
+wall-clock timing/positions and checks strict step/lag/convergence bounds across
+three normal trials and three each at 131/200/400 ms. Three independent repaired
+runs passed all 36 trials; maximum measured step was 0.039000001 m. Raw baseline,
+candidate, failed and repaired evidence is retained under
+`.verification/wave6/w6_1/run-20261017T033008-drop-repair/`.
+
+Earlier failed attempts remain retained, including the corrected Manual nested
+scroll defect, an intermittent W5.3 packet-rejection case and Windows long-path
+cache cleanup with a long temporary root. Use a short disposable TEMP/TMP root
+such as `D:\lf61` for the complete gate. Targeted diagnostics do not replace
+complete certification. The final gate must run all required Waves 0–5 against
+this final source, with no skipped or shortened regressions. Its append-only
+`gate.json`, manifests, raw logs and nested receipts determine certification;
+publication is permitted only after that source-matched complete PASS.
+
+Owner UI acceptance and expanded equipment design remain separate decisions.
+W6.2 is not authorized by this repair or by any automated PASS.

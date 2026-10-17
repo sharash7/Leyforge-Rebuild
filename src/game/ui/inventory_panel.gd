@@ -3,6 +3,12 @@ extends CanvasLayer
 
 var _world: LeyforgeWave1Playground
 var _panel: PanelContainer
+var _scroll: ScrollContainer
+var _top: BoxContainer
+var _title: Label
+var _feedback: Label
+var _feedback_text: String = ""
+var _feedback_rejected: bool = false
 var _body: VBoxContainer
 var _hotbar: HBoxContainer
 var _buttons: Array[Dictionary] = []
@@ -21,22 +27,23 @@ var manual: LeyforgeCraftingManual
 
 func configure(world: LeyforgeWave1Playground) -> void:
 	_world=world
-	layer=3
+	layer=5
 	var base: Control = Control.new()
 	base.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	base.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	add_child(base)
-	_hotbar=HBoxContainer.new();_hotbar.position=Vector2(280,550)
+	_hotbar=HBoxContainer.new()
 	base.add_child(_hotbar)
 	for slot: int in 9:
 		var button: Button = Button.new()
-		button.custom_minimum_size=Vector2(76,54)
+		button.custom_minimum_size=Vector2(96,88)
 		button.clip_text=true
+		button.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		button.add_theme_font_size_override("font_size",14)
 		button.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 		button.pressed.connect(func() -> void: _world.command(_world.local_player_id,"select",{"slot":slot}))
 		_hotbar.add_child(button)
-	_panel=PanelContainer.new();_panel.position=Vector2(180,50)
-	_panel.custom_minimum_size=Vector2(920,570)
+	_panel=PanelContainer.new()
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color=Color(0.075,0.095,0.115,0.98)
 	style.border_color=Color(0.48,0.36,0.22);style.set_border_width_all(2)
@@ -44,9 +51,20 @@ func configure(world: LeyforgeWave1Playground) -> void:
 	style.content_margin_top=12;style.content_margin_bottom=12
 	_panel.add_theme_stylebox_override("panel",style)
 	base.add_child(_panel)
-	_body=VBoxContainer.new();_body.add_theme_constant_override("separation",6)
-	_panel.add_child(_body);_panel.hide()
+	_body=VBoxContainer.new();_body.size_flags_horizontal=Control.SIZE_EXPAND_FILL;_body.add_theme_constant_override("separation",6)
+	_scroll=ScrollContainer.new();_scroll.name="InventoryScroll"
+	var frame: VBoxContainer = VBoxContainer.new();_panel.add_child(frame)
+	var heading: HBoxContainer = HBoxContainer.new();frame.add_child(heading)
+	_title=_label(heading,"Inventory",20);_title.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	var manual_button: Button = Button.new();manual_button.name="OpenCraftingManual";manual_button.text="Crafting Manual"
+	manual_button.pressed.connect(func() -> void:manual.open());heading.add_child(manual_button)
+	_feedback=_label(frame,"",15);_feedback.name="TransactionFeedback"
+	_feedback.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	frame.add_child(_scroll);_scroll.add_child(_body);_panel.hide()
 	manual=LeyforgeCraftingManual.new();base.add_child(manual);manual.configure(world.block_catalog,world.creation.recipes)
+	base.resized.connect(_layout)
+	_layout()
 
 func open(storage: bool = false) -> bool:
 	var id: String = ""
@@ -73,11 +91,10 @@ func open_context(id: String = "", focus_crafting: bool = false, authorized: boo
 	var workbench: bool = false
 	for entry: Dictionary in _world.creation.objects():
 		if entry["instance"]==id:workbench=_world.block_catalog.content_definition(StringName(entry["content"])).get("function","")=="workbench"
-	_label(_body,"Workbench · 3×3 crafting" if workbench else "Stone kiln" if station!=null else "Storage" if stored!=null else "Inventory · personal crafting",22)
-	var manual_button: Button = Button.new();manual_button.name="OpenCraftingManual";manual_button.text="Crafting Manual"
-	manual_button.pressed.connect(manual.open);_body.add_child(manual_button)
-	_hint=_label(_body,"",13)
-	var top: HBoxContainer = HBoxContainer.new();top.add_theme_constant_override("separation",20);_body.add_child(top)
+	_title.text="Workbench · 3×3 crafting" if workbench else "Stone kiln" if station!=null else "Storage" if stored!=null else "Inventory · personal crafting"
+	_hint=_label(_body,"",14)
+	_top=BoxContainer.new();_top.add_theme_constant_override("separation",16);_body.add_child(_top)
+	var top: BoxContainer = _top
 	_storage_group=null
 	if station!=null:
 		var left: VBoxContainer = _column(top,"INPUT")
@@ -88,7 +105,7 @@ func open_context(id: String = "", focus_crafting: bool = false, authorized: boo
 		_label(process,_entries(recipe["inputs"])+"\nFuel: "+_entries(recipe["fuel"])+"\n→ "+_entries(recipe["outputs"]),12)
 		_progress=ProgressBar.new();_progress.custom_minimum_size=Vector2(180,24);process.add_child(_progress)
 		var fire: Button = Button.new();fire.name="StartProcess";fire.text="Fire kiln"
-		fire.pressed.connect(func() -> void: _world.player.show_status("Process requested" if _world.start_process(_object,"leyforge:charcoal_burn") else station.start_reason("leyforge:charcoal_burn")))
+		fire.pressed.connect(func() -> void: _ui_command("start_process",{"target":_object,"recipe":"leyforge:charcoal_burn"}))
 		process.add_child(fire)
 		_grid(_column(top,"OUTPUT"),station.output,3,0,3)
 	elif stored!=null:
@@ -108,7 +125,7 @@ func open_context(id: String = "", focus_crafting: bool = false, authorized: boo
 		var output_column: VBoxContainer = _column(top,"→ OUTPUT")
 		_output=_slot_button();_output.name="CraftOutput"
 		_output.pressed.connect(func() -> void:
-			_world.craft_recipe(_preview_recipe)
+			_ui_command("craft",{"recipe":_preview_recipe})
 			_refresh())
 		output_column.add_child(_output)
 		var guide: VBoxContainer = _column(top,"CRAFTING HINT")
@@ -118,19 +135,21 @@ func open_context(id: String = "", focus_crafting: bool = false, authorized: boo
 	_label(_body,"PLAYER INVENTORY",16);_grid(_body,_world.personal_resources.inventory,9,9,18)
 	_label(_body,"HOTBAR  ·  1–9",16);_grid(_body,_world.personal_resources.inventory,9,0,9)
 	_label(_body,"Click source, then destination. Right-click splits half; Shift-click quick transfers. Take crafting output to craft once.",12)
-	var close_button: Button = Button.new();close_button.text="Close [Escape] — returns staged crafting items"
+	var close_button: Button = Button.new();close_button.name="CloseInventory";close_button.text="Close [Escape] — returns staged crafting items"
 	close_button.pressed.connect(_world.close_inventory);_body.add_child(close_button)
 	_world.set_primary_action(false)
 	_panel.show();_hotbar.hide();_world.player.inventory_open=true
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
+	_layout()
+	_scroll.set_deferred("scroll_vertical",0);_scroll.set_deferred("scroll_horizontal",0)
 	_refresh()
 	return true
 
 func close(authorized: bool = false) -> bool:
 	if _world.session_options.mode == "JOIN" and not authorized:
-		_world.command(_world.local_player_id,"close_grid")
+		_ui_command("close_grid")
 		return false
-	if not authorized and crafting!=null and not _world.command(_world.local_player_id,"close_grid").success:
+	if not authorized and crafting!=null and not _ui_command("close_grid").success:
 		_world.player.show_status("Backpack full — return crafting items to free slots before closing or saving",5000)
 		return false
 	manual.close()
@@ -161,12 +180,14 @@ func _column(parent: Node, title: String) -> VBoxContainer:
 
 func _label(parent: Node, text: String, size: int) -> Label:
 	var label: Label = Label.new();label.text=text
+	if parent==_body:label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_font_size_override("font_size",size);parent.add_child(label)
 	return label
 
 func _slot_button() -> Button:
-	var button: Button = Button.new();button.custom_minimum_size=Vector2(86,50)
-	button.add_theme_font_size_override("font_size",12);button.clip_text=true
+	var button: Button = Button.new();button.custom_minimum_size=Vector2(92,88)
+	button.add_theme_font_size_override("font_size",14);button.clip_text=true
+	button.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	button.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	var normal: StyleBoxFlat = StyleBoxFlat.new();normal.bg_color=Color(0.13,0.16,0.19)
 	normal.border_color=Color(0.36,0.42,0.45);normal.set_border_width_all(1);normal.set_corner_radius_all(3)
@@ -217,12 +238,9 @@ func _click_slot(inventory: LfeInventory, slot: int, split: bool, shift: bool) -
 		var source: Dictionary = _picked_inventory.stack_at(_picked_slot)
 		if not source.is_empty() and _allowed(_picked_inventory) and _allowed(inventory,true):
 			var count: int = maxi(1,int(source["quantity"])/2) if split else int(source["quantity"])
-			var moved: int = 0
 			if not split and not stack.is_empty() and stack["content"] != source["content"]:
-				var response: LfeCommandResult = _world.command(_world.local_player_id,"swap",{"source":_world.resource_endpoint_name(_picked_inventory),"destination":_world.resource_endpoint_name(inventory),"source_slot":_picked_slot,"destination_slot":slot,"expected":source})
-				if response.success: moved=count
-			else: moved = _transfer(_picked_inventory,_picked_slot,inventory,count,slot)
-			_world.player.show_status("Transfer pending" if _world.session_options.mode == "JOIN" else "Moved %d" % moved if moved>0 else "Transfer rejected — slot/context/full output")
+				_ui_command("swap",{"source":_world.resource_endpoint_name(_picked_inventory),"destination":_world.resource_endpoint_name(inventory),"source_slot":_picked_slot,"destination_slot":slot,"expected":source})
+			else: _transfer(_picked_inventory,_picked_slot,inventory,count,slot)
 		_picked_inventory=null;_picked_slot=-1
 	_refresh()
 
@@ -239,9 +257,15 @@ func _process(_delta: float) -> void:
 
 func _refresh() -> void:
 	if _hint==null:return
+	if _feedback!=null:
+		var waiting: bool = _world.resource_network!=null and not _world.resource_network.pending.is_empty()
+		_feedback.text="Pending HOST transaction — waiting for authoritative result" if waiting else _feedback_text
+		_feedback.modulate=Color(1,0.65,0.5) if _feedback_rejected and not waiting else Color(1,0.85,0.45)
 	for entry: Dictionary in _buttons:
 		var button: Button = entry["button"]
 		button.text=_stack_text(entry["inventory"],entry["slot"]);button.tooltip_text=button.text
+		if entry["inventory"]==_world.personal_resources.equipment:
+			button.text=LfePlayerResourceState.EQUIPMENT_SLOTS[entry["slot"]].capitalize()+" · "+button.text
 		button.modulate=Color(1,0.78,0.35) if entry["inventory"]==_picked_inventory and entry["slot"]==_picked_slot else Color.WHITE
 	if crafting!=null:
 		var match: Dictionary = crafting.preview();_preview_recipe=match.get("recipe","")
@@ -262,14 +286,37 @@ func _stack_text(inventory: LfeInventory, slot: int) -> String:
 	var stack: Dictionary = inventory.stack_at(slot)
 	if stack.is_empty():
 		if inventory == _world.personal_resources.equipment:
-			return LfePlayerResourceState.EQUIPMENT_SLOTS[slot].capitalize() + "
-Empty"
+			return "Empty"
 		return "—"
 	var name: String = _world.block_catalog.content_definition(StringName(stack["content"]))["display_name"]
 	if stack.has("durability"):
-		return "%s\n%d / %d" % [name,int(stack["durability"]),int(_world.block_catalog.content_definition(StringName(stack["content"]))["tool"]["durability"])]
+		return "%s\nDur %d/%d" % [name,int(stack["durability"]),int(_world.block_catalog.content_definition(StringName(stack["content"]))["tool"]["durability"])]
 	return "%s\n×%d" % [name,int(stack["quantity"])]
 
 func _transfer(source: LfeInventory,slot: int,destination: LfeInventory,count: int,target_slot: int) -> int:
-	var result: LfeCommandResult=_world.command(_world.local_player_id,"transfer",{"source":_world.resource_endpoint_name(source),"destination":_world.resource_endpoint_name(destination),"source_slot":slot,"destination_slot":target_slot,"quantity":count,"expected":source.stack_at(slot)})
-	return count if result.data.get("pending",false) else int(result.data.get("quantity",0))
+	var result: LfeCommandResult=_ui_command("transfer",{"source":_world.resource_endpoint_name(source),"destination":_world.resource_endpoint_name(destination),"source_slot":slot,"destination_slot":target_slot,"quantity":count,"expected":source.stack_at(slot)})
+	return int(result.data.get("quantity",0))
+
+# Layout follows the logical viewport (including canvas stretch). The content
+# scrolls rather than dropping controls or shrinking text at small resolutions.
+func _layout() -> void:
+	if _panel==null:return
+	var viewport: Vector2 = get_viewport().get_visible_rect().size
+	_panel.position=Vector2(16,16)
+	_panel.size=Vector2(minf(1120,viewport.x-32),viewport.y-32)
+	_panel.position.x=(viewport.x-_panel.size.x)/2
+	_scroll.custom_minimum_size=Vector2.ZERO
+	if _top!=null:_top.vertical=viewport.x<1200
+	_hotbar.position=Vector2(maxf(8,(viewport.x-_hotbar.get_combined_minimum_size().x)/2),viewport.y-104)
+
+func record_result(operation: String, success: bool, reason: String, pending: bool = false) -> void:
+	_feedback_rejected=not success
+	_feedback_text=("Pending HOST: " if pending else "Accepted: " if success else "Rejected: ")+operation.replace("_"," ")
+	if not success:_feedback_text+=" · "+reason.replace("_"," ")
+	if pending:_feedback_text+=" — waiting for authoritative result"
+	if _world.player!=null:_world.player.show_status(_feedback_text,3500)
+
+func _ui_command(operation: String, args: Dictionary = {}) -> LfeCommandResult:
+	var result: LfeCommandResult = _world.command(_world.local_player_id,operation,args)
+	record_result(operation,result.success,result.reason_code,result.data.get("pending",false))
+	return result

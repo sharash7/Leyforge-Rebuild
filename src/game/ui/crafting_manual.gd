@@ -5,6 +5,8 @@ extends Control
 var catalog: LfeBlockCatalog
 var recipes: LfeRecipeCatalog
 var _panel: PanelContainer
+var _recipe_scroll: ScrollContainer
+var _detail_scroll: ScrollContainer
 var _list: VBoxContainer
 var _details: VBoxContainer
 var selected_recipe: String = ""
@@ -16,7 +18,7 @@ func configure(c: LfeBlockCatalog, source: LfeRecipeCatalog) -> void:
 	name="CraftingManual"
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter=Control.MOUSE_FILTER_STOP
-	_panel=PanelContainer.new(); _panel.position=Vector2(220,70); _panel.custom_minimum_size=Vector2(840,500)
+	_panel=PanelContainer.new()
 	var style: StyleBoxFlat = StyleBoxFlat.new(); style.bg_color=Color(0.055,0.07,0.09,1)
 	style.set_content_margin_all(14); style.set_border_width_all(2); style.border_color=Color(0.65,0.5,0.3)
 	_panel.add_theme_stylebox_override("panel",style); add_child(_panel)
@@ -28,10 +30,23 @@ func configure(c: LfeBlockCatalog, source: LfeRecipeCatalog) -> void:
 	close_button.pressed.connect(close); heading.add_child(close_button)
 	var columns: HBoxContainer = HBoxContainer.new(); columns.add_theme_constant_override("separation",18); body.add_child(columns)
 	var scroll: ScrollContainer = ScrollContainer.new(); scroll.custom_minimum_size=Vector2(270,430)
+	_recipe_scroll=scroll
 	columns.add_child(scroll); _list=VBoxContainer.new(); _list.size_flags_horizontal=Control.SIZE_EXPAND_FILL; scroll.add_child(_list)
 	var detail_scroll: ScrollContainer = ScrollContainer.new(); detail_scroll.custom_minimum_size=Vector2(500,430); columns.add_child(detail_scroll)
+	_detail_scroll=detail_scroll
 	_details=VBoxContainer.new(); _details.size_flags_horizontal=Control.SIZE_EXPAND_FILL; detail_scroll.add_child(_details)
+	resized.connect(_layout)
+	_layout()
 	hide()
+
+func _layout() -> void:
+	if _panel==null:return
+	var viewport: Vector2 = get_viewport_rect().size
+	_recipe_scroll.custom_minimum_size.y=minf(430,viewport.y-140)
+	_detail_scroll.custom_minimum_size.y=minf(430,viewport.y-140)
+	var bounds: Vector2 = Vector2(minf(1000,viewport.x-48),viewport.y-48)
+	_panel.position=Vector2((viewport.x-bounds.x)/2,24)
+	_panel.set_deferred("size",bounds)
 
 func open() -> void:
 	for child: Node in _list.get_children(): _list.remove_child(child); child.queue_free()

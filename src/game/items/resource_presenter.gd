@@ -9,6 +9,8 @@ var _animation: float = 0.0
 # JOIN visuals follow complete HOST targets; authoritative pickup uses record positions.
 const DROP_SNAP_DISTANCE: float = 0.75
 const DROP_FOLLOW_SPEED: float = 12.0
+# Leave room for the sub-millimetre convergence snap below the 0.04 m bound.
+const DROP_MAX_FRAME_STEP: float = 0.039
 var _drop_targets: Dictionary = {}
 
 func configure(world: LeyforgeWave1Playground) -> void:
@@ -63,7 +65,8 @@ func _process(delta: float) -> void:
 	for id: String in _nodes:
 		if _world.authority == null:
 			var target: Vector3 = _drop_targets[id]
-			_nodes[id].position = _nodes[id].position.lerp(target,1.0-exp(-DROP_FOLLOW_SPEED*delta))
+			var followed: Vector3 = _nodes[id].position.lerp(target,1.0-exp(-DROP_FOLLOW_SPEED*delta))
+			_nodes[id].position = _nodes[id].position.move_toward(followed,DROP_MAX_FRAME_STEP)
 			if _nodes[id].position.distance_to(target)<0.001: _nodes[id].position=target
 		var phase: float = float(String(id).substr(0,6).hex_to_int()%1000)/1000.0*TAU
 		var visual: MeshInstance3D = _nodes[id].get_node("Visual")

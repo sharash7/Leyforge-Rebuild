@@ -42,9 +42,10 @@ Biomes/climate; caves/geology/resources; weather/time; water foundations; flora;
 
 2026-10-16: [Wave 5 closed for owner-accepted LAN-first progression](WAVE_5_CLOSURE.md),
 with manual traceability/source-match limitations retained. Next is the
-[proposed W6.1 readiness/UI/integration specification](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md),
-including candidate dependencies for W6.2–W6.18. This is planning, not implementation
-authority; future equipment expansion and living-world systems remain later work.
+[W6.1 readiness/UI/integration specification](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md),
+including the owner-established Forge-first sequence for W6.2–W6.18. W6.1 alone
+is authorized for implementation; future equipment expansion and living-world
+systems remain later work.
 
 ## Wave 7 — Adventure & Progression
 Combat/gear; loot/relics; status effects; boss/threat; skills/perks; map/codex/research; equipment/animation/rig/hitbox/knowledge Forge slices.
