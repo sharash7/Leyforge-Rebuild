@@ -40,12 +40,13 @@ implementation starts. See `WAVE_5_MULTIPLAYER_SCOPE_AND_WAN_DEFERRAL.md` and AD
 ## Wave 6 — The World Becomes Alive
 Biomes/climate; caves/geology/resources; weather/time; water foundations; flora; creatures; farming/husbandry; Biome/Worldgen/Structure/Creature/Ecology Forge slices.
 
-2026-10-16: [Wave 5 closed for owner-accepted LAN-first progression](WAVE_5_CLOSURE.md),
-with manual traceability/source-match limitations retained. Next is the
-[W6.1 readiness/UI/integration specification](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md),
-including the owner-established Forge-first sequence for W6.2–W6.18. W6.1 alone
-is authorized for implementation; future equipment expansion and living-world
-systems remain later work.
+2026-10-18: [W6.1 closed with owner acceptance](WAVE_6_PART_1_CLOSURE.md).
+[Wave 5 LAN-first closure](WAVE_5_CLOSURE.md), its traceability limits and WAN
+deferral remain unchanged. The [W6.2 Forge foundation specification](WAVE_6_PART_2_FORGE_FOUNDATION.md)
+awaits owner approval; implementation has not begun. Preserve the owner-established
+Forge-first W6.2–W6.18 sequence in the
+[W6.1 specification](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md).
+Future equipment expansion and living-world systems remain later work.
 
 ## Wave 7 — Adventure & Progression
 Combat/gear; loot/relics; status effects; boss/threat; skills/perks; map/codex/research; equipment/animation/rig/hitbox/knowledge Forge slices.

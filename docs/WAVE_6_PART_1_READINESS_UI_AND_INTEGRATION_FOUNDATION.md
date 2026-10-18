@@ -1,5 +1,11 @@
 # W6.1 — Readiness, UI & Integration Foundation
 
+**W6.1 CLOSED — OWNER ACCEPTED 2026-10-18.** See the
+[closure record](WAVE_6_PART_1_CLOSURE.md) for the certified publication, retained
+automated evidence and the owner's 9/9 UI PASS. W6.2 is
+[proposed for approval](WAVE_6_PART_2_FORGE_FOUNDATION.md), not implementation.
+
+The following implementation/repair contract is retained as history.
 **W6.1 implementation candidate, owner-authorized 2026-10-16.**
 Starting `main`: `7623595424dfb3ca6c98e45bfcf28afdab3e353c`.
 Wave 5's historical closure is unchanged. W6.1 includes the targeted drop-follow
@@ -207,11 +213,11 @@ These living-world systems and Forge workspaces remain unimplemented by W6.1.
 Wave 17 online connectivity and Wave 18 ecosystem completion are distinct from
 W6.17/W6.18. No detailed future implementation plans are created here.
 
-## Remaining decisions
+## Remaining decisions (updated 2026-10-18)
 
-- Owner UI acceptance after a final automated PASS, recording tested source/build.
+- Owner UI acceptance completed at the published commit; see [closure](WAVE_6_PART_1_CLOSURE.md).
 - Future equipment ratification before changing the two-slot runtime model.
-- A bounded owner authorization for W6.2 after W6.1 acceptance.
+- Owner approval of the [bounded W6.2 specification](WAVE_6_PART_2_FORGE_FOUNDATION.md) before implementation.
 - Retain the Wave 5 closure record's missing manual traceability and WAN deferral.
 
 ## Candidate changes and owner UI check

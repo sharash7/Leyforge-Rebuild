@@ -52,21 +52,23 @@ See `docs/PRODUCTION_COVERAGE_MAP.md` for the broad known game/LFE/Forge surface
 
 ## Current playable build
 
-The latest implemented candidate is **0.6.1-wave5-w5.9**, protocol/save/content/
+The current runtime version remains **0.6.1-wave5-w5.9**, protocol/save/content/
 worldgen **7/4/1/2**, with stored worldgen v1 supported. It includes private
 authoritative HOST/JOIN multiplayer, independent characters/resources/survival,
 voxel replication, crafting/storage/Kiln, reconnect and HOST-owned save/recovery.
-The full automated W5.9 certification belongs to
-`fe4411c6ca9cf2598d1564ff3ce5cd0461f8c29e`; subsequent workflow/documentation
-changes and pre-existing working-tree changes are not newly source-certified.
+W6.1 adds responsive inventory/Manual UI, authoritative feedback and the targeted
+long-frame drop-follow repair. Its complete automated certification belongs to
+`16d6ccd2da86a0f71d2929e18caa373c0206d48b`; later documentation and pre-existing
+working-tree changes are not newly source-certified.
 
 On 2026-10-16 the owner reported W5.9 two-computer LAN success and approved
 Wave 6 progression. [Wave 5 is closed under LAN-first scope](docs/WAVE_5_CLOSURE.md),
 with missing manual checklist details recorded; WAN remains deferred to Wave 17.
-See [W5.9](docs/WAVE_5_PART_9_FINAL_LOCAL_LAN_MULTIPLAYER_CERTIFICATION.md) for
-the retained evidence/launch contracts and the
-[W6.1 proposal](docs/WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md)
-for the next bounded implementation task. This update implements no Wave 6 work.
+On 2026-10-18 the owner accepted W6.1 at that published commit: all 9/9 UI checks
+PASS, no reported blocking defects. See [W6.1 closure](docs/WAVE_6_PART_1_CLOSURE.md)
+for separate automated/owner evidence and [W5.9](docs/WAVE_5_PART_9_FINAL_LOCAL_LAN_MULTIPLAYER_CERTIFICATION.md)
+for retained launch contracts. The [W6.2 Forge foundation specification](docs/WAVE_6_PART_2_FORGE_FOUNDATION.md)
+awaits owner approval; no Forge implementation or W6.2 harness has begun.
 
 The connected playable loop and controls remain in
 docs/WAVE_4_SURVIVAL_AND_CREATION.md. Held gathering, Dense Stone unit cubes,

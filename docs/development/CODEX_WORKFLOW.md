@@ -20,18 +20,17 @@ Search named directories/files first with `rg`; batch independent reads and insp
 
 During development use focused checks; run affected integrations when contracts cross systems. Required final certification remains complete and source-matched. See `$leyforge-verification` for claim boundaries. Report behavior, concise results, evidence paths, limitations and commit/push state; avoid pasting whole receipts repeatedly.
 
-## Current status pointer — 2026-10-16
+## Current status pointer — 2026-10-18
 
-W5.9 automated **PASS** at `fe4411c6ca9cf2598d1564ff3ce5cd0461f8c29e`;
-the owner reports two-computer LAN success and approves Wave 6 progression.
-[Wave 5 is closed for that scope](../WAVE_5_CLOSURE.md), with manual checklist
-details incomplete and later documentation/dirty source not newly certified.
-WAN remains deferred to Wave 17. The [W6.1 specification](../WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md)
-is now an owner-authorized W6.1 implementation candidate. Responsive inventory/Manual
-layout, authoritative transaction feedback and the targeted long-frame drop-follow
-repair are implemented. See the W6.1 specification for retained failure and repair
-evidence. Publication requires a complete final-source W6.1 gate PASS; owner UI
-acceptance remains separate. W6.2 remains unimplemented.
+[W6.1 is CLOSED — OWNER ACCEPTED](../WAVE_6_PART_1_CLOSURE.md): final automated
+certification at `16d6ccd2da86a0f71d2929e18caa373c0206d48b`, followed by the owner's
+9/9 UI PASS with no reported blocking defects. The closure preserves exact receipt
+and manifest identity, historical failures and separate owner/automated evidence.
+[Wave 5 LAN-first closure](../WAVE_5_CLOSURE.md) and its incomplete manual checklist
+traceability remain unchanged; WAN stays deferred to Wave 17. Subsequent docs and
+dirty source are not newly runtime-certified. The
+[W6.2 Forge foundation specification](../WAVE_6_PART_2_FORGE_FOUNDATION.md) awaits
+owner approval. W6.2/W6.3 implementation and the W6.2 harness have not begun.
 
 This dated pointer creates no authority. Consult the [W5.9 policy](../WAVE_5_PART_9_FINAL_LOCAL_LAN_MULTIPLAYER_CERTIFICATION.md), [scope amendment](../WAVE_5_MULTIPLAYER_SCOPE_AND_WAN_DEFERRAL.md) and [readiness handoff](../WAVE_5_TO_WAVE_6_READINESS_HANDOFF.md) when status affects a decision. Retained receipt: `.verification/wave5/w5_9/run-20261015T092724971/gate.json`.
 
