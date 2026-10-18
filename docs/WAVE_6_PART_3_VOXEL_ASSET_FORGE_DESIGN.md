@@ -1,12 +1,19 @@
-# W6.3 — Voxel Asset Forge design proposal
+# W6.3 — Voxel Asset Forge design
 
-**PROPOSED — OWNER RATIFICATION AND IMPLEMENTATION AUTHORIZATION REQUIRED.**
+**OWNER RATIFIED — BOUNDED W6.3 IMPLEMENTATION AUTHORIZED 2026-10-18.**
+The owner approved D1–D8 against `main` at
+`3579e765a63293ea5ca28b50b22d9fa231f0995d`, including the clarifications below.
+Implementation and verification status is recorded in
+[the W6.3 implementation guide](WAVE_6_PART_3_IMPLEMENTATION.md).
+Automated certification and owner acceptance remain separate requirements.
+
+The following design was originally prepared as a documentation-only proposal.
+Its original inspection baseline and engineering contracts are retained:
 Prepared 2026-10-18 (Australia/Perth), inspecting `main` at
 `d886702bac6a8ca9aec245ed08ca74371f7136c6` in
 `D:\AI\Projects\Leyforge-Rebuild`. [W6.2 is owner accepted](WAVE_6_PART_2_CLOSURE.md).
-This task changes documentation only. All new schema, bounds, tools, paths and
-runtime behavior below are recommendations, not established canon or implemented
-features. Preserve the [Forge-first sequence](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md#owner-established-wave-6-sequence)
+The design itself did not implement runtime features. The owner now approves
+the specified bounded schema, tools and runtime proof. Preserve the [Forge-first sequence](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md#owner-established-wave-6-sequence)
 and [ownership boundaries](ARCHITECTURE_BOUNDARIES.md).
 
 ## Inspected interfaces and research
@@ -38,10 +45,10 @@ installed plugin supports every proposed custom-model behavior. No engine/plugin
 upgrade or dependency is proposed. The W6.3 runtime proof below uses native mesh
 buffers and explicit box collision, without depending on that future adapter.
 
-## Owner decisions requiring ratification
+## Owner decisions — D1–D8 approved
 
-Approve or amend each row, then authorize implementation against a fresh baseline.
-No response means these remain proposals.
+All eight recommendations below were explicitly approved by the owner's W6.3
+implementation authorization on 2026-10-18. Alternatives remain design context.
 
 | Decision | Recommendation | Tradeoff / alternative |
 | --- | --- | --- |
@@ -405,5 +412,50 @@ multi-part assemblies, larger grids, functional blocks, terrain placement,
 destruction, ownership, network replication and saved instances need their own
 contracts. Do not prebuild their schemas or UI now.
 
-W6.3 implementation awaits owner ratification of D1–D8 and an explicit bounded
-implementation task. This proposal authorizes no source, runtime or content edits.
+## Owner visual and architectural clarifications
+
+The editor must author genuine 3D pixel-art geometry: independently placed,
+removed and coloured cubes, hard edges, aligned cells and visible depth. No
+smoothing, bevels, subdivision or fake 2D replacement. Normal lighting is allowed.
+Block-shaped detailed and small non-block-shaped examples use the same modeller
+in disposable fixtures; demonstration assets must not enter production content.
+
+The unified Forge retains four major domains: **Asset Forge**, **Entity Forge**,
+**Blueprint Forge** and **World Forge**. W6.3 implements shared voxel authoring,
+camera/picking, tools, palette references, history, drafts, validation, preview,
+compilation, publication/recovery and LFE runtime loading where needed by this
+workflow. It does not implement all future workspaces or a generic workspace bus.
+
+Full **Block Forge remains planned and important**. Voxel Asset Forge supplies
+reusable geometry; later block definitions may pin an asset ID/version/hash.
+Block gameplay properties, 32×32 textures, hardness, gathering/mining, drops,
+placement, collision integration and damage states remain later Block Forge work.
+The pickaxe example does not prioritize Item/Tool/Equipment Forge above Block Forge.
+Existing numeric world voxel IDs and the canonical block catalogue stay unchanged.
+
+World blocks remain authoritative 1 m cubes. Initial model geometry has explicit
+dimensions `[16,16,16]` and density `16` fine voxels/metre (0.0625 m per cell,
+4,096 positions). Base block **textures remain 32×32 pixels**; geometry cells
+are separate from surface pixels. Only opaque colour/material swatches ship in
+W6.3. Larger/non-cubic dimensions, independent densities, advanced material
+references and per-face textures need later scoped support; no resize UI now.
+
+Future mining may show cracks, chipped corners, missing fragments and local fine
+voxel pieces while retaining one authoritative world block. W6.3 implements no
+mining damage, per-cell world saves, terrain replication or harvesting changes.
+Persistent sub-block sculpting requires a separate architecture decision.
+
+## W6.3.1 — Repository Alignment, Audit & Amendments
+
+Planned **after W6.3 automated certification and owner acceptance**, before
+W6.4 Macro World Generation. W6.4–W6.18 numbering stays unchanged. This is a
+review-first checkpoint, not authorization to execute an audit or fill gaps now.
+
+Later reconcile W6.1–W6.3 coverage, Forge-ENG, four Forge domains, full Block/
+Material/Texture/Item/Tool/Equipment Forge requirements, expanded equipment
+positions, canonical ownership, selected Overworld content targets, 32×32 texture
+standards, fine voxel architecture, mining-damage visuals, publication/baking,
+runtime consumers, multiplayer, persistence/migrations and W6.4–W6.18 dependencies.
+Classify findings A (immediate prerequisite correction), B (scheduled in Wave 6),
+C (justified later wave) or D (already covered/no action). Do not invent missing
+canonical content selections. W6.3.1 execution and W6.4 remain unauthorized.

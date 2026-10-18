@@ -2,6 +2,27 @@ extends "res://tests/networking/w5_9_process.gd"
 
 var _held_results: Array = []
 
+func _button(button: Control, right: bool = false, shift: bool = false) -> void:
+	if button==null:failures.append("missing graphical button");return
+	var parent: Node=button.get_parent()
+	while parent!=null:
+		if parent is ScrollContainer:parent.ensure_control_visible(button)
+		parent=parent.get_parent()
+	await create_timer(0.15).timeout
+	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
+	var point: Vector2=root.get_final_transform()*button.get_global_rect().get_center()
+	var motion: InputEventMouseMotion=InputEventMouseMotion.new();motion.position=point;motion.global_position=point
+	Input.parse_input_event(motion);await process_frame
+	var hovered: Control=root.gui_get_hovered_control()
+	pointer_fact={"button":str(button.get_path()),"rect":str(button.get_global_rect()),"transform":str(root.get_final_transform()),"point":[point.x,point.y],"hovered":str(hovered.get_path()) if hovered!=null else "","paired_click":true}
+	# Several rendered fixtures share a desktop cursor. A timer between a GUI
+	# press/release allowed foreign desktop motion to cancel the held button.
+	# Queue one ordinary click pair together, exactly as the Forge UI harness.
+	var event: InputEventMouseButton=InputEventMouseButton.new();event.button_index=MOUSE_BUTTON_RIGHT if right else MOUSE_BUTTON_LEFT;event.position=point;event.global_position=point;event.shift_pressed=shift;event.pressed=true
+	Input.parse_input_event(event);event=event.duplicate();event.pressed=false;Input.parse_input_event(event)
+	if game.resource_network!=null and not game.resource_network.pending.is_empty():last_request=game.resource_network.pending.values()[0]["packet"].duplicate(true)
+	await _observe_input_request();await _settle_ui()
+
 func _hold_results(peer: int, bytes: PackedByteArray) -> void:
 	var packet: Dictionary = LfeResourceProtocol.decode(bytes,game.block_catalog)
 	if packet.get("kind")=="resource_result":_held_results.append([peer,bytes]);return
@@ -65,8 +86,27 @@ func _command(c: Dictionary) -> void:
 		panel._scroll.ensure_control_visible(close_button)
 		await create_timer(0.1).timeout
 		_expect(panel._scroll.get_global_rect().encloses(close_button.get_global_rect()),"close reachable after scroll",result)
-		await _button(panel.find_child("OpenCraftingManual",true,false))
+		var manual_button: Button=panel.find_child("OpenCraftingManual",true,false)
+		var manual_events: Array=[]
+		var on_down: Callable=func() -> void:manual_events.append({"event":"down","msec":Time.get_ticks_msec()})
+		var on_up: Callable=func() -> void:manual_events.append({"event":"up","msec":Time.get_ticks_msec()})
+		var on_pressed: Callable=func() -> void:manual_events.append({"event":"pressed","msec":Time.get_ticks_msec()})
+		var on_visible: Callable=func() -> void:manual_events.append({"event":"manual visibility","visible":panel.manual.visible,"msec":Time.get_ticks_msec()})
+		var on_enter: Callable=func() -> void:manual_events.append({"event":"mouse enter","msec":Time.get_ticks_msec()})
+		var on_exit: Callable=func() -> void:manual_events.append({"event":"mouse exit","msec":Time.get_ticks_msec()})
+		var on_input: Callable=func(event: InputEvent) -> void:
+			if event is InputEventMouseButton:manual_events.append({"event":"mouse","pressed":event.pressed,"button":event.button_index,"position":str(event.position),"msec":Time.get_ticks_msec()})
+		manual_button.button_down.connect(on_down);manual_button.button_up.connect(on_up);manual_button.pressed.connect(on_pressed);manual_button.gui_input.connect(on_input);panel.manual.visibility_changed.connect(on_visible);manual_button.mouse_entered.connect(on_enter);manual_button.mouse_exited.connect(on_exit)
+		await _button(manual_button)
+		manual_button.button_down.disconnect(on_down);manual_button.button_up.disconnect(on_up);manual_button.pressed.disconnect(on_pressed);manual_button.gui_input.disconnect(on_input);panel.manual.visibility_changed.disconnect(on_visible);manual_button.mouse_entered.disconnect(on_enter);manual_button.mouse_exited.disconnect(on_exit)
+		result["manual_events"]=manual_events
 		_expect(panel.manual.visible,"manual normal pointer open",result)
+		result["manual_pointer"]=pointer_fact.duplicate(true)
+		if not panel.manual.visible:
+			# Preserve the original failing assertion and actual pointer evidence;
+			# do not mask it with a secondary empty recipe-list exception.
+			await _capture("manual-open-failure")
+			commands.append(result);_write_report();return
 		_expect(viewport.encloses(panel.manual._panel.get_global_rect()),"manual inside viewport",result)
 		# Select an initially scrolled-out recipe through the real pointer path.
 		var recipe_id: String = panel.manual.listed_ids.back()

@@ -34,13 +34,13 @@ explicitly approved for bounded implementation on 2026-10-18. Its standalone
 Forge and stage gate now exist. [W6.2 is CLOSED — OWNER ACCEPTED](../WAVE_6_PART_2_CLOSURE.md)
 at `d886702bac6a8ca9aec245ed08ca74371f7136c6`, with separate historical automated
 certification and the owner's 2026-10-18 10/10 PASS; no blocking defect reported.
-[W6.3 design](../WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) is proposed only;
-ratify decisions D1–D8 and explicitly authorize implementation before starting it.
-No runtime gate is rerun for the documentation-only closure/design. For a future
-authorized certification task, run the full W6.2 stage gate with
-`powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\verify_wave_6_part_2.ps1`.
+[W6.3 design](../WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) has owner approval
+of D1–D8 and bounded implementation authorization at `3579e765` on 2026-10-18.
+See [implementation and launch guidance](../WAVE_6_PART_3_IMPLEMENTATION.md).
+Its full gate is `powershell -NoProfile -ExecutionPolicy Bypass -File
+.\tools\development\verify_wave_6_part_3.ps1` and nests complete W6.2 verification.
 `-FocusedOnly` is development evidence and cannot certify the stage. The full
-gate includes the unchanged complete W6.1 regression chain. Launch the isolated
+W6.2 gate includes the unchanged complete W6.1 regression chain. Launch the isolated
 Forge with `tools/development/run_forge.ps1`; drafts are in the separate
 `APPDATA/LeyforgeForge` profile. Never run publication tests against live content.
 

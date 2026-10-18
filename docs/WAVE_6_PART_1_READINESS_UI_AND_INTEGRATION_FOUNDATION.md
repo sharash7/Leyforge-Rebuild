@@ -217,7 +217,7 @@ W6.17/W6.18. No detailed future implementation plans are created here.
 
 - Owner UI acceptance completed at the published commit; see [closure](WAVE_6_PART_1_CLOSURE.md).
 - Future equipment ratification before changing the two-slot runtime model.
-- Owner approval of the [bounded W6.2 specification](WAVE_6_PART_2_FORGE_FOUNDATION.md) before implementation.
+- [W6.2 is CLOSED — OWNER ACCEPTED](WAVE_6_PART_2_CLOSURE.md); its original approval prerequisite is satisfied.
 - Retain the Wave 5 closure record's missing manual traceability and WAN deferral.
 
 ## Candidate changes and owner UI check

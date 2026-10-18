@@ -16,6 +16,8 @@ var discard_dialog: ConfirmationDialog
 var draft_problem: bool = false
 var selected_id: String = "leyforge:stone"
 var last_result: Dictionary = {}
+var voxel_workspace: VBoxContainer
+var catalog_actions: HBoxContainer
 
 func _ready() -> void:
 	get_window().title = "Leyforge — The Forge"
@@ -31,6 +33,7 @@ func _ready() -> void:
 	var shell: VBoxContainer = VBoxContainer.new(); margin.add_child(shell)
 	var title: Label = Label.new(); title.text = "THE FORGE  /  Content authoring"; title.add_theme_font_size_override("font_size", 24); shell.add_child(title)
 	var actions: HBoxContainer = HBoxContainer.new(); shell.add_child(actions)
+	catalog_actions=actions
 	undo_button = _button(actions, "Undo", func() -> void: _result(document.undo()); document.validate(); _refresh())
 	redo_button = _button(actions, "Redo", func() -> void: _result(document.redo()); document.validate(); _refresh())
 	_button(actions, "Save draft", func() -> void:
@@ -43,7 +46,9 @@ func _ready() -> void:
 	presentation = preload("res://tools/forge/workspaces/block_surface/content_presentation.gd").new(); presentation.name = "Content Presentation"; pages.add_child(presentation)
 	validation_view = preload("res://tools/forge/workspaces/validation/validation.gd").new(); validation_view.name = "Validation"; pages.add_child(validation_view)
 	preview = preload("res://tools/forge/workspaces/preview_test/preview_viewport.gd").new(); preview.name = "3D Preview"; pages.add_child(preview)
+	voxel_workspace = preload("res://tools/forge/workspaces/voxel_asset/voxel_asset.gd").new(); voxel_workspace.name = "Voxel Asset"; pages.add_child(voxel_workspace)
 	status = Label.new(); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; status.custom_minimum_size.y = 38; shell.add_child(status)
+	pages.tab_changed.connect(func(index: int) -> void:catalog_actions.visible=index!=4;status.visible=index!=4)
 	confirmation = ConfirmationDialog.new(); confirmation.title = "Publish canonical content"; confirmation.ok_button_text = "Publish"; add_child(confirmation)
 	publish_review = RichTextLabel.new(); publish_review.custom_minimum_size = Vector2(580, 240); publish_review.selection_enabled = true; confirmation.add_child(publish_review)
 	confirmation.confirmed.connect(func() -> void: _result(document.publish(true)); _refresh())
@@ -116,6 +121,7 @@ func _export() -> void:
 	else: _result(document.result(false, "Save a draft before exporting"))
 
 func _close() -> void:
+	if not voxel_workspace.close_document(): return
 	if document.dirty() and not draft_problem:
 		var saved: Dictionary = document.save_draft()
 		if not saved.success: _result(saved); return

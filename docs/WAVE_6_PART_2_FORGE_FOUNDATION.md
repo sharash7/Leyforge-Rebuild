@@ -5,8 +5,9 @@ at published commit `d886702bac6a8ca9aec245ed08ca74371f7136c6`; owner reports
 10/10 PASS with no blocking defect. The closure records historical automated
 certification separately and preserves failed evidence. Acceptance-pending text
 below describes the implementation-era requirement, now satisfied by that
-separate record. [W6.3 design](WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) remains
-proposed, pending owner ratification and implementation authorization.
+separate record. [W6.3 design](WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) received
+owner ratification of D1–D8 and bounded implementation authorization on 2026-10-18;
+that later authorization does not change the historical W6.2 scope below.
 
 **OWNER-APPROVED IMPLEMENTATION SPECIFICATION.** Prepared 2026-10-18
 (Australia/Perth) against `main` at `16d6ccd2da86a0f71d2929e18caa373c0206d48b`.

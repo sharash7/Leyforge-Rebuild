@@ -14,6 +14,9 @@ var distance: float = 3.4
 var focus: Vector3 = Vector3(0.5, 0.5, 0.5)
 var dragging: int = 0
 var info: Label
+var asset_mode: bool = false
+signal asset_input(event: InputEvent)
+signal capture_cancelled
 
 func _ready() -> void:
 	var toolbar: HBoxContainer = HBoxContainer.new(); add_child(toolbar)
@@ -28,8 +31,8 @@ func _ready() -> void:
 	var light: DirectionalLight3D = DirectionalLight3D.new(); light.rotation_degrees = Vector3(-40, -25, 0); preview_root.add_child(light)
 	_grid()
 	surface.gui_input.connect(_viewport_input)
-	surface.mouse_exited.connect(func() -> void: dragging = 0; surface.release_focus())
-	surface.focus_exited.connect(func() -> void: dragging = 0)
+	surface.mouse_exited.connect(func() -> void: dragging = 0; capture_cancelled.emit(); surface.release_focus())
+	surface.focus_exited.connect(func() -> void: dragging = 0; capture_cancelled.emit())
 	var help: Label = Label.new(); help.text = "Click to focus · LMB orbit · Shift+LMB / MMB pan · Wheel zoom · F frame"; help.add_theme_font_size_override("font_size", 13); add_child(help)
 	_update_camera()
 
@@ -68,9 +71,18 @@ func selection_ray(position: Vector2) -> Dictionary:
 	return {"origin": camera.project_ray_origin(position), "direction": camera.project_ray_normal(position), "id": identity, "bounds": bounds}
 
 func frame_selection() -> void:
-	focus = bounds.get_center(); distance = 3.4; _update_camera()
+	focus = bounds.get_center()
+	if asset_mode:
+		var aspect: float = maxf(0.1, surface.size.x / maxf(1.0,surface.size.y))
+		distance = maxf(0.15, bounds.size.length() / (2.0 * tan(deg_to_rad(camera.fov)*0.5) * minf(1.0,aspect)) * 1.3)
+	else: distance = 3.4
+	_update_camera()
 
 func _viewport_input(event: InputEvent) -> void:
+	if asset_mode:
+		_asset_camera_input(event)
+		asset_input.emit(event)
+		return
 	if event is InputEventMouseButton:
 		if event.pressed: surface.grab_focus()
 		if not surface.has_focus(): return
@@ -83,6 +95,39 @@ func _viewport_input(event: InputEvent) -> void:
 		else:
 			yaw -= event.relative.x * 0.008; pitch = clampf(pitch + event.relative.y * 0.008, -1.4, 1.4)
 	elif event is InputEventKey and surface.has_focus() and event.pressed and event.keycode == KEY_F: frame_selection()
+	_update_camera()
+
+func _asset_camera_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.pressed: surface.grab_focus()
+		if event.button_index in [MOUSE_BUTTON_RIGHT,MOUSE_BUTTON_MIDDLE]:
+			dragging=event.button_index if event.pressed else 0; capture_cancelled.emit()
+		if event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+			distance=clampf(distance*(0.86 if event.button_index==MOUSE_BUTTON_WHEEL_UP else 1.16),0.08,30.0)
+	elif event is InputEventMouseMotion and dragging!=0 and surface.has_focus():
+		if dragging==MOUSE_BUTTON_MIDDLE: focus+=(-camera.global_basis.x*event.relative.x+camera.global_basis.y*event.relative.y)*distance*0.002
+		else: yaw-=event.relative.x*0.008; pitch=clampf(pitch+event.relative.y*0.008,-1.55,1.55)
+	elif event is InputEventKey and event.pressed and surface.has_focus() and event.keycode==KEY_F: frame_selection()
+	_update_camera()
+
+func asset_ray(position: Vector2) -> Dictionary:
+	var pixels: Vector2 = position * Vector2(viewport.size) / surface.size
+	return selection_ray(pixels)
+
+func show_asset(bundle: Dictionary, id: String, revision: int) -> void:
+	asset_mode=true; identity=id; validated_revision=revision
+	if content!=null: content.free();content=null
+	info.text=id+" · 16³ cells · 1 m · X right / Y up / −Z front"
+	if not bundle.is_empty():
+		var loader = preload("res://src/lfe/voxel/voxel_asset_loader.gd")
+		content=MeshInstance3D.new();content.mesh=loader.mesh(bundle);content.material_override=loader.material();preview_root.add_child(content)
+	bounds=AABB(Vector3.ZERO,Vector3.ONE)
+
+func set_view(axis: String) -> void:
+	match axis:
+		"Front": yaw=PI;pitch=0
+		"Top": yaw=0;pitch=1.55
+		"Side": yaw=PI/2;pitch=0
 	_update_camera()
 
 func _update_camera() -> void:

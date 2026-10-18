@@ -42,8 +42,11 @@ Biomes/climate; caves/geology/resources; weather/time; water foundations; flora;
 
 2026-10-18: [W6.1 closed with owner acceptance](WAVE_6_PART_1_CLOSURE.md).
 [Wave 5 LAN-first closure](WAVE_5_CLOSURE.md), its traceability limits and WAN
-deferral remain unchanged. The [W6.2 Forge foundation specification](WAVE_6_PART_2_FORGE_FOUNDATION.md)
-awaits owner approval; implementation has not begun. Preserve the owner-established
+deferral remain unchanged. [W6.2 is CLOSED — OWNER ACCEPTED](WAVE_6_PART_2_CLOSURE.md).
+The [W6.3 design](WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) is owner ratified and
+authorized for bounded implementation; certification/owner acceptance remain
+separate. Planned W6.3.1 Repository Alignment, Audit & Amendments follows W6.3
+acceptance and precedes W6.4; its audit is not authorized now. Preserve the owner-established
 Forge-first W6.2–W6.18 sequence in the
 [W6.1 specification](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md).
 Future equipment expansion and living-world systems remain later work.

@@ -92,11 +92,14 @@ on their next normal startup. No game save is opened by Forge.
 
 Click the preview to focus it: LMB orbit, Shift+LMB or MMB pan, wheel zoom,
 F / Frame Selection to frame the unit voxel. Leaving the viewport releases focus.
-Only existing solid block name/colour authoring is implemented. W6.3 is not
-implemented or authorized. The [W6.3 voxel authoring proposal](docs/WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md)
+The Voxel Asset tab adds independent spatial cell authoring; see the
+[W6.3 implementation guide](docs/WAVE_6_PART_3_IMPLEMENTATION.md) for controls,
+draft recovery, publication and the separate LFE runtime test. Its owner-ratified
+[W6.3 voxel authoring design](docs/WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md)
 recommends a bounded spatial editor, canonical source, deterministic bake and LFE
-runtime consumer; owner ratification of its dimensions/scale/schema/tools/runtime
-scope is required before implementation.
+runtime consumer. D1–D8 and bounded W6.3 implementation are authorized; complete
+automated certification and owner acceptance are separate. W6.3.1 and W6.4 have
+not begun.
 
 The connected playable loop and controls remain in
 docs/WAVE_4_SURVIVAL_AND_CREATION.md. Held gathering, Dense Stone unit cubes,
