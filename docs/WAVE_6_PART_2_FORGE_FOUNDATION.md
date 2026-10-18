@@ -1,5 +1,13 @@
 # W6.2 — Forge-ENG & Unified Forge Foundation
 
+**Status update — 2026-10-18:** [W6.2 CLOSED — OWNER ACCEPTED](WAVE_6_PART_2_CLOSURE.md)
+at published commit `d886702bac6a8ca9aec245ed08ca74371f7136c6`; owner reports
+10/10 PASS with no blocking defect. The closure records historical automated
+certification separately and preserves failed evidence. Acceptance-pending text
+below describes the implementation-era requirement, now satisfied by that
+separate record. [W6.3 design](WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) remains
+proposed, pending owner ratification and implementation authorization.
+
 **OWNER-APPROVED IMPLEMENTATION SPECIFICATION.** Prepared 2026-10-18
 (Australia/Perth) against `main` at `16d6ccd2da86a0f71d2929e18caa373c0206d48b`.
 The owner explicitly authorized bounded W6.2 implementation and the required

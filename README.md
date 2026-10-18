@@ -70,8 +70,11 @@ for separate automated/owner evidence and [W5.9](docs/WAVE_5_PART_9_FINAL_LOCAL_
 for retained launch contracts. The [W6.2 Forge foundation specification](docs/WAVE_6_PART_2_FORGE_FOUNDATION.md)
 is owner-approved for implementation. W6.2 provides a standalone native Forge
 for existing solid-block presentation, persistent drafts/history, validation,
-explicit safe publication and a real voxel-plugin preview. Certification and
-owner acceptance remain separate; consult fresh W6.2 receipts before claiming PASS.
+explicit safe publication and a real voxel-plugin preview.
+[W6.2 is CLOSED — OWNER ACCEPTED](docs/WAVE_6_PART_2_CLOSURE.md) at
+`d886702bac6a8ca9aec245ed08ca74371f7136c6`: the owner reports 10/10 PASS on
+2026-10-18, with no blocking defect. The closure identifies historical automated
+certification separately; later documentation and dirty files are not newly certified.
 
 Launch from this repository (imports/profile are isolated outside the checkout):
 
@@ -90,7 +93,10 @@ on their next normal startup. No game save is opened by Forge.
 Click the preview to focus it: LMB orbit, Shift+LMB or MMB pan, wheel zoom,
 F / Frame Selection to frame the unit voxel. Leaving the viewport releases focus.
 Only existing solid block name/colour authoring is implemented. W6.3 is not
-implemented or authorized; its asset schema still needs approval.
+implemented or authorized. The [W6.3 voxel authoring proposal](docs/WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md)
+recommends a bounded spatial editor, canonical source, deterministic bake and LFE
+runtime consumer; owner ratification of its dimensions/scale/schema/tools/runtime
+scope is required before implementation.
 
 The connected playable loop and controls remain in
 docs/WAVE_4_SURVIVAL_AND_CREATION.md. Held gathering, Dense Stone unit cubes,

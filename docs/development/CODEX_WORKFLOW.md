@@ -31,8 +31,13 @@ traceability remain unchanged; WAN stays deferred to Wave 17. Subsequent docs an
 dirty source are not newly runtime-certified. The
 [W6.2 Forge foundation specification](../WAVE_6_PART_2_FORGE_FOUNDATION.md) was
 explicitly approved for bounded implementation on 2026-10-18. Its standalone
-Forge and stage gate now exist; fresh automated certification and owner acceptance
-are required separately. W6.3 has not begun. Run the full stage gate with
+Forge and stage gate now exist. [W6.2 is CLOSED — OWNER ACCEPTED](../WAVE_6_PART_2_CLOSURE.md)
+at `d886702bac6a8ca9aec245ed08ca74371f7136c6`, with separate historical automated
+certification and the owner's 2026-10-18 10/10 PASS; no blocking defect reported.
+[W6.3 design](../WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) is proposed only;
+ratify decisions D1–D8 and explicitly authorize implementation before starting it.
+No runtime gate is rerun for the documentation-only closure/design. For a future
+authorized certification task, run the full W6.2 stage gate with
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\verify_wave_6_part_2.ps1`.
 `-FocusedOnly` is development evidence and cannot certify the stage. The full
 gate includes the unchanged complete W6.1 regression chain. Launch the isolated
