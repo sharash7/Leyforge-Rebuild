@@ -159,13 +159,22 @@ def probe(name, mode, key, profile=None, world='wave5-w59-fixture'):
 def converge(name):
     return wait(name,lambda r:r.get('ready') and r.get('final_error',99)<.12,30)
 
-def move_actor(host, name, position):
+def move_actor(host, name, position, settle=False):
     command(host,op='actor_position',player_id=read(name)['player_id'],position=position)
-    # A pre-teleport report can have zero reconciliation error. Require the
-    # requested new horizontal position as well before preparing physical aim.
-    return wait(name,lambda r:r.get('ready') and r.get('final_error',99)<.12 and
-                abs(r.get('position',[1e9,0,1e9])[0]-position[0])<.12 and
-                abs(r.get('position',[1e9,0,1e9])[2]-position[2])<.12,30)
+    # Water aim needs a settled camera; other fixture teleports retain their
+    # original arrival predicate (some deliberately overlap placed material).
+    # Opt-in settling keeps the existing bounded relocation deadline.
+    def settled(r):
+        arrived=(r.get('ready') and r.get('final_error',99)<.12 and
+                 abs(r.get('position',[1e9,0,1e9])[0]-position[0])<.12 and
+                 abs(r.get('position',[1e9,0,1e9])[2]-position[2])<.12)
+        if not settle or not arrived:return arrived
+        body=read(host).get('bodies',{}).get(r.get('player_id'),{}).get('state',{})
+        return (r.get('grounded') and abs(r.get('velocity',[0,99,0])[1])<.02 and
+                r.get('settled_physics_frames',0)>=6 and body.get('grounded') and
+                abs(body.get('velocity',[0,99,0])[1])<.02 and
+                abs(body.get('position',[0,1e9,0])[1]-r['position'][1])<.12)
+    return wait(name,settled,30)
 
 def quantity(personal, content):
     return sum(int(s.get('quantity',1)) for s in personal.get('inventory',[])+personal.get('equipment',[]) if s and s.get('content')==content)
@@ -326,16 +335,26 @@ try:
     # The HOST camera stays far away while a real renewable held intent reaches
     # a finite canonical cache at the remote body's own streamed position.
     water=next(s for s in read('host')['sources'] if s['source']=='trail_water' and s['remaining']>0)
+    for name in ['host','client']:
+        command(name,op='w59_harvest_probe',source=water['instance'],actor=ids[1])
     wx,wy,wz=water['position']
-    move_actor('host','client',[wx,int(wy)+.05,wz+2])
+    arrival=move_actor('host','client',[wx,int(wy)+.05,wz+2],settle=True)
     wait('client',lambda r:water['instance'] in r.get('source_nodes',[]))
     before_water=quantity(read('client')['personal'],'leyforge:drinking_water')
     before_hunger=read('client')['survival']['hunger']
-    command('client',op='source_look',id=water['instance']);command('client',op='harvest_input',active=True)
+    before_total=read('host')['totals']['leyforge:drinking_water']
+    command('client',op='source_look',id=water['instance'])
+    aimed=wait('client',lambda r:r.get('harvest_probe',{}).get('target_source')==water['instance'] and r.get('settled_physics_frames',0)>=6,15)
+    host_aimed=wait('host',lambda r:r.get('harvest_probe',{}).get('host_source_reason')=='ok',15)
+    command('client',op='harvest_input',active=True)
     wait('host',lambda r:next(s for s in r['sources'] if s['instance']==water['instance'])['remaining']==0,15)
     command('client',op='harvest_input',active=False)
     wait('client',lambda r:quantity(r['personal'],'leyforge:drinking_water')==before_water+4)
     check(read('client')['survival']['hunger']<before_hunger and read('third')['state']=='CONNECTED','distant survival and independent third continue')
+    check(read('host')['totals']['leyforge:drinking_water']==before_total+4 and read('host')['graph_valid'] and read('host')['instances_unique'],'finite water output conserved across authoritative resource graph')
+    check(abs(read('host')['position'][0]-read('client')['position'][0])>128,'HOST camera remains outside water harvesting relevance')
+    write_json(evidence/'water-readiness.json',dict(arrival=arrival['harvest_probe'],aimed=aimed['harvest_probe'],host_aimed=host_aimed['harvest_probe'],before_water=before_water,after_water=quantity(read('client')['personal'],'leyforge:drinking_water'),before_total=before_total,after_total=read('host')['totals']['leyforge:drinking_water'],remaining=next(s for s in read('host')['sources'] if s['instance']==water['instance'])['remaining']))
+    for name in ['host','client']:command(name,op='w59_harvest_probe')
     gate['distant_resource_simulation']=dict(host_camera_x=distant[0],finite_output=4,source=water['instance'],normal_held_input=True)
     command('host',op='actor_position',player_id=ids[0],position=original_host_position)
     ready('host')

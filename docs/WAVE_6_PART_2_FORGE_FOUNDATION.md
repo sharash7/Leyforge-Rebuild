@@ -1,9 +1,10 @@
 # W6.2 — Forge-ENG & Unified Forge Foundation
 
-**PROPOSED SPECIFICATION — awaiting owner approval.** Prepared 2026-10-18
+**OWNER-APPROVED IMPLEMENTATION SPECIFICATION.** Prepared 2026-10-18
 (Australia/Perth) against `main` at `16d6ccd2da86a0f71d2929e18caa373c0206d48b`.
-This task authorizes documentation and publication only. No W6.2 implementation
-or verification harness is authorized or created by this document.
+The owner explicitly authorized bounded W6.2 implementation and the required
+verification/publication workflow on 2026-10-18, starting at
+`b7964c8bcce21242d7881f6e2e01a24b50f7de13`. W6.3 remains excluded.
 
 [W6.1 is owner accepted](WAVE_6_PART_1_CLOSURE.md). Preserve the owner-established
 [Forge-first W6.2–W6.18 sequence](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md#owner-established-wave-6-sequence)
@@ -179,7 +180,7 @@ untouched. The existing dirty crate is not a W6.2 input to publish without appro
 
 ## Acceptance, verification and implementation gate
 
-Required future entry point (proposed; **does not exist yet**):
+Stage verification entry point:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\verify_wave_6_part_2.ps1
@@ -188,7 +189,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\verify_w
 `-FocusedOnly` may run development diagnostics but must report uncertified. The
 full gate must use the approved shutdown-fixed console runner and adjacent
 graphical runner, isolated writable project/profile and short TEMP/TMP roots.
-Never import the live checkout or open owner saves. No harness is built in this task.
+Never import the live checkout or open owner saves. The W6.2 harness implements
+this isolation and retains focused/full status separately.
 
 | Acceptance example | Focused / owner-visible proof required |
 | --- | --- |
@@ -222,5 +224,90 @@ Main implementation risks are existing-loader diagnostics being coarse, plugin
 preview meshing/resource lifecycle, byte-sensitive compatibility and Windows
 replacement/conflict handling. Resolve these with focused proofs inside the
 approved boundaries; if a runtime/schema or multi-file change becomes necessary,
-stop that portion for owner scope approval. This plan awaits approval; no W6.2
-implementation has begun.
+stop that portion for owner scope approval.
+
+## W6.2 implementation and evidence usage
+
+The approved file ownership above is implemented with path-based native Godot
+resources. No LFE/game/content/project/addon changes are owned by W6.2. Newly
+imported resources may generate UID sidecars only in isolated projects; source
+references use paths and no unrelated UID sidecars are admitted.
+
+`run_forge.ps1` snapshots current source into a disposable project, imports it
+with the approved console runner, then launches the standalone Forge using the
+adjacent graphical runner. The canonical root is explicitly selected through
+`LEYFORGE_FORGE_ROOT`; the draft profile is a stable Forge-only subdirectory of
+APPDATA/LOCALAPPDATA outside the checkout. Validation workers copy only source,
+the class cache and candidate content into a separate project. They invoke the
+unchanged runtime catalog, recipes, crate and gathering-source loaders there.
+
+The plugin spike retained under `.verification/wave6/w6_2/spike-20261018T125813/`
+proved a padded disposable `VoxelBuffer`, `VoxelMesherBlocky`, the existing
+library factory and runtime material produce a rendered voxel before substantial
+viewport work. The production preview uses that same meshing path, an isolated
+SubViewport World3D, camera, light, grid and axes. Selection replaces the mesh;
+validated content revisions remain separate from camera state.
+
+History stores ID/field/before/after commands and a redo cursor. Resume replays
+commands through the same permission boundary and checks the saved payload.
+A conflicted or unsupported draft remains available to Export/Discard; Save
+cannot silently overwrite it. Validation diagnostics are ordered and revisioned.
+Publication revalidates the staged tree, verifies allowed fields and the raw base
+hash, flushes the sibling candidate and out-of-content recovery base, then uses
+Windows/.NET File.Replace under a bounded named mutex. Failed attempts keep the
+draft and original; a pre-replace crash is recovered on reopen by archiving the
+pending candidate and removing the fingerprint-visible sibling temporary file.
+External concurrent editing remains unsupported; observed changes block publish.
+
+Each stage run retains `gate.json`, checks, source/runner/protected manifests,
+raw logs, normal-input event reports, rendered screenshots and draft/recovery
+fixtures. A focused PASS is not certification. Only a fresh full certified receipt
+whose final source matches, including its nested W6.1/full W5.9 chain, can support
+publication. A publication receipt must reconcile the owned Git blobs and record
+the resulting commit. Owner acceptance remains pending until actual observations
+are supplied. Native Windows capture-helper timeouts from development are not
+reported as pointer/keyboard owner acceptance; the stage harness exercises normal
+Godot input events in a separate rendered OS process.
+
+Owner checklist: launch Home; browse Stone and read-only air/items; edit name and
+colour without JSON; undo/redo and branch history; navigate and restart the saved
+draft; validate and inspect before/after changes; explicitly publish only in a
+disposable test copy; provoke an external-file conflict; review export/recovery;
+exercise orbit, pan, zoom and Frame Selection with text-focus isolation; inspect
+1920x1080, 1280x720 and 960x540 layouts. Record observations at the published commit.
+
+W6.3 readiness is limited to the session/history/diagnostic/viewport/publication
+seams implemented here. Owner acceptance and an approved voxel-asset format are
+still required before W6.3 authorization. No spatial editing or asset compiler
+is present.
+
+
+## Owner amendment: W5.9 remote water fixture repair
+
+The owner separately authorized investigation and narrow fixture changes in
+`tools/development/w5_9_verify.py` and, as necessary,
+`tests/networking/w5_9_process.gd`. Production LFE/gameplay changes remain excluded.
+The W6.2 Forge implementation is preserved.
+
+Targeted real HOST/JOIN/third-process diagnostics confirmed the old horizontal
+relocation predicate could allow one-shot aim while the camera was still falling.
+A negative control aimed at actor Y=16.042 with vertical velocity -0.327 m/s,
+then landed at Y=15.021 with its old -0.563-radian pitch targeting terrain. Normal
+held input reached HOST but the finite water cache remained at four. Re-aiming
+from the settled position at -0.120 radians depleted the same cache and increased
+water from three to seven through unchanged authenticated gameplay. Retained
+negative-control evidence: `.verification/wave5/w5_9/run-20261018T061345857/`.
+
+The water relocation opts into six consecutive stable physics observations of grounded
+position/camera and vertical velocity, matching grounded HOST/client heights,
+and the original horizontal/reconciliation conditions within the original
+30-second relocation deadline. Other relocation scenarios retain their original
+horizontal/reconciliation predicate. Before holding, the client must genuinely target
+the source and the unchanged HOST source validator must return `ok`. The original
+15-second depletion deadline, exact four-water output and remote relevance checks
+remain. Additional authoritative graph conservation assertions and bounded,
+read-only water telemetry preserve the demonstrated cause and completion state.
+The trace is flushed and disabled after this scenario, before the normal soak.
+No source quantity, player resource, movement prediction or HOST validation is
+changed by this repair. Full W6.2 certification remains mandatory after targeted
+reliability checks; diagnostic receipts cannot certify the stage.

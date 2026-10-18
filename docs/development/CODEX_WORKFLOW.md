@@ -29,8 +29,15 @@ and manifest identity, historical failures and separate owner/automated evidence
 [Wave 5 LAN-first closure](../WAVE_5_CLOSURE.md) and its incomplete manual checklist
 traceability remain unchanged; WAN stays deferred to Wave 17. Subsequent docs and
 dirty source are not newly runtime-certified. The
-[W6.2 Forge foundation specification](../WAVE_6_PART_2_FORGE_FOUNDATION.md) awaits
-owner approval. W6.2/W6.3 implementation and the W6.2 harness have not begun.
+[W6.2 Forge foundation specification](../WAVE_6_PART_2_FORGE_FOUNDATION.md) was
+explicitly approved for bounded implementation on 2026-10-18. Its standalone
+Forge and stage gate now exist; fresh automated certification and owner acceptance
+are required separately. W6.3 has not begun. Run the full stage gate with
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\verify_wave_6_part_2.ps1`.
+`-FocusedOnly` is development evidence and cannot certify the stage. The full
+gate includes the unchanged complete W6.1 regression chain. Launch the isolated
+Forge with `tools/development/run_forge.ps1`; drafts are in the separate
+`APPDATA/LeyforgeForge` profile. Never run publication tests against live content.
 
 This dated pointer creates no authority. Consult the [W5.9 policy](../WAVE_5_PART_9_FINAL_LOCAL_LAN_MULTIPLAYER_CERTIFICATION.md), [scope amendment](../WAVE_5_MULTIPLAYER_SCOPE_AND_WAN_DEFERRAL.md) and [readiness handoff](../WAVE_5_TO_WAVE_6_READINESS_HANDOFF.md) when status affects a decision. Retained receipt: `.verification/wave5/w5_9/run-20261015T092724971/gate.json`.
 

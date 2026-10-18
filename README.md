@@ -68,7 +68,29 @@ On 2026-10-18 the owner accepted W6.1 at that published commit: all 9/9 UI check
 PASS, no reported blocking defects. See [W6.1 closure](docs/WAVE_6_PART_1_CLOSURE.md)
 for separate automated/owner evidence and [W5.9](docs/WAVE_5_PART_9_FINAL_LOCAL_LAN_MULTIPLAYER_CERTIFICATION.md)
 for retained launch contracts. The [W6.2 Forge foundation specification](docs/WAVE_6_PART_2_FORGE_FOUNDATION.md)
-awaits owner approval; no Forge implementation or W6.2 harness has begun.
+is owner-approved for implementation. W6.2 provides a standalone native Forge
+for existing solid-block presentation, persistent drafts/history, validation,
+explicit safe publication and a real voxel-plugin preview. Certification and
+owner acceptance remain separate; consult fresh W6.2 receipts before claiming PASS.
+
+Launch from this repository (imports/profile are isolated outside the checkout):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\development\run_forge.ps1
+```
+
+Use Home, Content Presentation, Validation and 3D Preview. Apply a name or close
+the native colour picker to commit one edit. Undo/Redo changes the draft. Save or
+close retains history in the Forge-specific profile; Export preserves a recovery
+copy. Validate, review the field diff, then explicitly confirm Publish. IDs and
+voxel mappings remain immutable. Publishing requires exclusive authoring access;
+external edits produce a conflict. Running games consume published content only
+on their next normal startup. No game save is opened by Forge.
+
+Click the preview to focus it: LMB orbit, Shift+LMB or MMB pan, wheel zoom,
+F / Frame Selection to frame the unit voxel. Leaving the viewport releases focus.
+Only existing solid block name/colour authoring is implemented. W6.3 is not
+implemented or authorized; its asset schema still needs approval.
 
 The connected playable loop and controls remain in
 docs/WAVE_4_SURVIVAL_AND_CREATION.md. Held gathering, Dense Stone unit cubes,

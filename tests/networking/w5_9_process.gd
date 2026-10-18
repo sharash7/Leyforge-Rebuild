@@ -7,6 +7,14 @@ var frame_count: int = 0
 var frame_usec_total: float = 0.0
 var frame_usec_max: float = 0.0
 var captured_desktop_motion_events: int = 0
+var settled_physics_frames: int = 0
+var previous_position: Vector3 = Vector3.INF
+var previous_camera: Vector3 = Vector3.INF
+var harvest_probe_source: String = ""
+var harvest_probe_actor: String = ""
+var harvest_probe_trace: Array = []
+var early_source_look: Dictionary = {}
+var early_aim_observation: Dictionary = {}
 
 class MetricsSampler extends Node:
 	var driver: Variant
@@ -29,6 +37,13 @@ func _run() -> void:
 	_metrics_node=MetricsSampler.new();_metrics_node.driver=self;root.add_child(_metrics_node)
 	while Time.get_ticks_msec()-started<2400000 and not stop_requested:
 		await physics_frame
+		_observe_settling()
+		if not early_source_look.is_empty() and game.player!=null:
+			var destination: Vector3=LfeMovementProtocol.vec3(early_source_look["position"])
+			if absf(game.player.global_position.x-destination.x)<0.12 and absf(game.player.global_position.z-destination.z)<0.12:
+				await super._command({"op":"source_look","id":early_source_look["source"]})
+				early_aim_observation=_harvest_probe()
+				early_source_look.clear()
 		var path: String=directory.path_join(label+".command.json")
 		if FileAccess.file_exists(path):
 			var parser: JSON=JSON.new()
@@ -68,6 +83,9 @@ func _extend_quality_report(report: Dictionary) -> void:
 	super._extend_quality_report(report)
 	report["measurements"]=metrics_samples
 	report["captured_desktop_motion_events"]=captured_desktop_motion_events
+	report["settled_physics_frames"]=settled_physics_frames
+	report["harvest_probe"]=_harvest_probe()
+	report["early_aim_observation"]=early_aim_observation
 	if game.world_save!=null:
 		report["graph_valid"]=not game.world_save._validate_snapshot(game.authority.players_snapshot(),game.world_resources.snapshot(),game.creation.snapshot(),game.world_save.owner_player_id).is_empty()
 	if game.network_session!=null: report["upnp_enabled"]=game.session_options.enable_upnp
@@ -77,6 +95,14 @@ func _command(c: Dictionary) -> void:
 		await super._command(c);_write_report();return
 	var result: Dictionary={"op":c["op"],"msec":Time.get_ticks_msec()}
 	match c["op"]:
+		"w59_harvest_probe":
+			if not harvest_probe_source.is_empty():
+				harvest_probe_trace.append(_harvest_probe());_flush_harvest_probe()
+			harvest_probe_source=c.get("source","")
+			harvest_probe_actor=c.get("actor",game.local_player_id)
+		"w59_early_source_look":
+			# Diagnostic negative control: expose the old horizontal-only race.
+			early_source_look=c.duplicate(true);early_aim_observation={}
 		"w59_boundary_arena":
 			var y: int=int(c["y"])
 			var tool: VoxelTool=game.terrain.get_voxel_tool();tool.set_channel(VoxelBuffer.CHANNEL_TYPE)
@@ -132,3 +158,36 @@ func _command(c: Dictionary) -> void:
 			if c.get("jump",false): Input.action_press("jump")
 		"w59_freeze": game.set_physics_process(not c["active"])
 	commands.append(result);_write_report()
+
+func _observe_settling() -> void:
+	if game.player == null: settled_physics_frames=0; return
+	var position: Vector3=game.player.global_position
+	var camera: Vector3=game.player.get_camera().global_position
+	if game.is_runtime_ready() and game.player.is_on_floor() and absf(game.player.velocity.y)<0.02 and position.distance_to(previous_position)<0.002 and camera.distance_to(previous_camera)<0.002:
+		settled_physics_frames+=1
+	else: settled_physics_frames=0
+	previous_position=position;previous_camera=camera
+	if not harvest_probe_source.is_empty():
+		harvest_probe_trace.append(_harvest_probe())
+		if harvest_probe_trace.size()>1800: harvest_probe_trace.pop_front()
+		if Engine.get_physics_frames()%30==0:
+			_flush_harvest_probe()
+
+func _flush_harvest_probe() -> void:
+	var file: FileAccess=FileAccess.open(directory.path_join(label+"-harvest-probe.json"),FileAccess.WRITE)
+	file.store_string(JSON.stringify(harvest_probe_trace));file.close()
+
+func _harvest_probe() -> Dictionary:
+	if game.player == null: return {}
+	var camera: Camera3D=game.player.get_camera()
+	var probe: Dictionary={"msec":Time.get_ticks_msec(),"position":LfeMovementProtocol.array3(game.player.global_position),"velocity":LfeMovementProtocol.array3(game.player.velocity),"grounded":game.player.is_on_floor(),"camera":LfeMovementProtocol.array3(camera.global_position),"direction":LfeMovementProtocol.array3(-camera.global_basis.z),"yaw":game.player.rotation.y,"pitch":game.player.movement_pitch(),"settled_frames":settled_physics_frames,"target_source":game.player.target_source(),"held":Input.is_action_pressed("break_block"),"captured":Input.mouse_mode==Input.MOUSE_MODE_CAPTURED,"inventory_open":game.player.inventory_open,"region_ready":game.player.voxel_region_ready}
+	if game.voxel_network != null: probe["action_target"]=game.voxel_network.action_target.duplicate(true)
+	if not harvest_probe_source.is_empty():
+		probe["source"]=game.creation.source(harvest_probe_source)
+		probe["visible"]=game.creation_presenter!=null and game.creation_presenter._nodes.has(harvest_probe_source)
+		if game.authority!=null and game.movement.bodies.has(harvest_probe_actor):
+			var body: LeyforgeAuthoritativePlayerBody=game.movement.bodies[harvest_probe_actor]
+			probe["remote"]={"position":LfeMovementProtocol.array3(body.global_position),"velocity":LfeMovementProtocol.array3(body.velocity),"grounded":body.is_on_floor(),"pitch":body.pitch,"yaw":body.rotation.y,"ready":body.ready_for_movement}
+			probe["host_source_reason"]=game._actor_source_reason(harvest_probe_actor,harvest_probe_source)
+			probe["host_harvest"]=game._actor_harvests.get(harvest_probe_actor,{}).duplicate(true)
+	return probe
