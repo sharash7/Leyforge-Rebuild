@@ -102,12 +102,13 @@ at `447bbd310afa6278bc3bdb359e3707585372b27d`; complete historical automated
 certification and the later owner decision are recorded separately. The
 [W6.3.1 alignment audit](docs/WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md),
 [proposed amendments](docs/WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) and
-[unified Forge UX plan](docs/WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) await owner
-review. The owner has accepted the reconciliation direction with refinements;
-W6.3.1 is DOCUMENTATION RECONCILIATION AUTHORISED, FINAL OWNER REVIEW PENDING
-for final text and the exact publication set. The documents establish Block Forge
-and early shared interaction planning contracts; implementation/publication is
-not authorised. W6.4 remains NOT AUTHORISED.
+[unified Forge UX plan](docs/WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) retain the
+review and planning chronology. W6.3.1 subsequently became **CLOSED — OWNER ACCEPTED**
+through verified publication commit `a2a2d92f8b5c9870fde99311b930a9214de31e67`.
+This current-status pointer records that later closure without rewriting the
+historical review documents or evidence. The accepted Block Forge and shared
+interaction contracts remain planning; no implementation is authorised.
+W6.4 remains NOT AUTHORISED.
 
 The connected playable loop and controls remain in
 docs/WAVE_4_SURVIVAL_AND_CREATION.md. Held gathering, Dense Stone unit cubes,

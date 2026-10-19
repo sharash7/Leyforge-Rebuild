@@ -42,11 +42,12 @@ The closure separately identifies complete historical certification and the supp
 later human decision, retaining the supplied chronology and observation limits.
 The [W6.3.1 audit](../WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md),
 [proposed amendments](../WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) and
-[unified UX plan](../WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) await owner review.
-The owner accepts the reconciliation direction with M01–M10 refinements;
-W6.3.1 is DOCUMENTATION RECONCILIATION AUTHORISED, FINAL OWNER REVIEW PENDING
-for final text and exact publication set. No staging, commits, pushes, branch
-changes or implementation are authorised; W6.4 remains NOT AUTHORISED.
+[unified UX plan](../WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) retain the
+pre-publication owner-review chronology. W6.3.1 subsequently became
+**CLOSED — OWNER ACCEPTED** through verified publication commit
+`a2a2d92f8b5c9870fde99311b930a9214de31e67`.
+The historical audit, proposals and publication evidence remain unchanged.
+No implementation is authorised; W6.4 remains NOT AUTHORISED.
 The revised plan establishes full Block Forge and shared interaction contracts
 now, with provisional delivery before W6.7/earlier W6.6 need and early coordinated
 shell/interaction review after useful Block/Texture and World patterns. W6.17–18

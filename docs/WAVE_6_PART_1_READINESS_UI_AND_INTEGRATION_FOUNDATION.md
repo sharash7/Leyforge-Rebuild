@@ -5,11 +5,12 @@
 automated evidence and the owner's 9/9 UI PASS. Current status, 2026-10-19:
 [W6.2](WAVE_6_PART_2_CLOSURE.md) and [W6.3](WAVE_6_PART_3_CLOSURE.md) are also
 closed with owner acceptance. The [W6.3.1 audit](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md)
-and [reconciled amendments](WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) record the
-owner-accepted direction. W6.3.1: DOCUMENTATION RECONCILIATION AUTHORISED;
-FINAL OWNER REVIEW PENDING for text and publication set. The numbered sequence
-below is unchanged. No staging/publication or implementation is authorised;
-W6.4 is NOT AUTHORISED.
+and [reconciled amendments](WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) retain the
+owner-review chronology. W6.3.1 subsequently became **CLOSED — OWNER ACCEPTED**
+through verified publication commit `a2a2d92f8b5c9870fde99311b930a9214de31e67`.
+This later status does not rewrite the historical audit, proposals or evidence.
+The numbered sequence below is unchanged. No implementation is authorised;
+W6.4 remains NOT AUTHORISED.
 
 The following implementation/repair contract is retained as history.
 **W6.1 implementation candidate, owner-authorized 2026-10-16.**

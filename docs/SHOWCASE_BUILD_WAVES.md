@@ -47,14 +47,14 @@ deferral remain unchanged. [W6.2 is CLOSED — OWNER ACCEPTED](WAVE_6_PART_2_CLO
 historical automated certification and the later owner decision remain separate.
 The [W6.3.1 audit](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md),
 [proposed amendments](WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) and
-[unified UX plan](WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) are delivered for owner
-review before W6.4. The owner accepts the reconciliation direction with refinements;
-W6.3.1 documentation reconciliation is authorised, FINAL OWNER REVIEW PENDING
-for final text and the exact publication set. Block/Material/Texture delivery is
+[unified UX plan](WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) retain the pre-publication
+review chronology. W6.3.1 subsequently became **CLOSED — OWNER ACCEPTED** through
+verified publication commit `a2a2d92f8b5c9870fde99311b930a9214de31e67`.
+Historical audit/proposal text and evidence remain unchanged. Block/Material/Texture delivery is
 provisionally before W6.7 consumption, earlier if W6.6 water needs it; existing-cube
 W6.4 need not await completed Block Forge. Shared interaction design is defined
 now, with early implementation review after useful Block/Texture and World
-patterns; W6.17–18 integrate/harden. No implementation/publication is authorised;
+patterns; W6.17–18 integrate/harden. No implementation is authorised;
 W6.4 remains NOT AUTHORISED. Preserve the owner-established
 Forge-first W6.2–W6.18 sequence in the
 [W6.1 specification](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md).
