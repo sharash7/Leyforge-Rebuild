@@ -20,7 +20,7 @@ Search named directories/files first with `rg`; batch independent reads and insp
 
 During development use focused checks; run affected integrations when contracts cross systems. Required final certification remains complete and source-matched. See `$leyforge-verification` for claim boundaries. Report behavior, concise results, evidence paths, limitations and commit/push state; avoid pasting whole receipts repeatedly.
 
-## Current status pointer — 2026-10-18
+## Current status pointer — 2026-10-19
 
 [W6.1 is CLOSED — OWNER ACCEPTED](../WAVE_6_PART_1_CLOSURE.md): final automated
 certification at `16d6ccd2da86a0f71d2929e18caa373c0206d48b`, followed by the owner's
@@ -37,6 +37,21 @@ certification and the owner's 2026-10-18 10/10 PASS; no blocking defect reported
 [W6.3 design](../WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) has owner approval
 of D1–D8 and bounded implementation authorization at `3579e765` on 2026-10-18.
 See [implementation and launch guidance](../WAVE_6_PART_3_IMPLEMENTATION.md).
+[W6.3 is CLOSED — OWNER ACCEPTED](../WAVE_6_PART_3_CLOSURE.md) at `447bbd3`.
+The closure separately identifies complete historical certification and the supplied
+later human decision, retaining the supplied chronology and observation limits.
+The [W6.3.1 audit](../WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md),
+[proposed amendments](../WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) and
+[unified UX plan](../WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) await owner review.
+The owner accepts the reconciliation direction with M01–M10 refinements;
+W6.3.1 is DOCUMENTATION RECONCILIATION AUTHORISED, FINAL OWNER REVIEW PENDING
+for final text and exact publication set. No staging, commits, pushes, branch
+changes or implementation are authorised; W6.4 remains NOT AUTHORISED.
+The revised plan establishes full Block Forge and shared interaction contracts
+now, with provisional delivery before W6.7/earlier W6.6 need and early coordinated
+shell/interaction review after useful Block/Texture and World patterns. W6.17–18
+remain integration/hardening. The commands below retain the
+implementation verification contract; documentation closure reruns no runtime gate.
 Its full gate is `powershell -NoProfile -ExecutionPolicy Bypass -File
 .\tools\development\verify_wave_6_part_3.ps1` and nests complete W6.2 verification.
 `-FocusedOnly` is development evidence and cannot certify the stage. The full

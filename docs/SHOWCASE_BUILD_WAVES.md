@@ -40,13 +40,22 @@ implementation starts. See `WAVE_5_MULTIPLAYER_SCOPE_AND_WAN_DEFERRAL.md` and AD
 ## Wave 6 — The World Becomes Alive
 Biomes/climate; caves/geology/resources; weather/time; water foundations; flora; creatures; farming/husbandry; Biome/Worldgen/Structure/Creature/Ecology Forge slices.
 
-2026-10-18: [W6.1 closed with owner acceptance](WAVE_6_PART_1_CLOSURE.md).
+Status reviewed 2026-10-19: [W6.1 closed with owner acceptance](WAVE_6_PART_1_CLOSURE.md).
 [Wave 5 LAN-first closure](WAVE_5_CLOSURE.md), its traceability limits and WAN
 deferral remain unchanged. [W6.2 is CLOSED — OWNER ACCEPTED](WAVE_6_PART_2_CLOSURE.md).
-The [W6.3 design](WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md) is owner ratified and
-authorized for bounded implementation; certification/owner acceptance remain
-separate. Planned W6.3.1 Repository Alignment, Audit & Amendments follows W6.3
-acceptance and precedes W6.4; its audit is not authorized now. Preserve the owner-established
+[W6.3 is CLOSED — OWNER ACCEPTED](WAVE_6_PART_3_CLOSURE.md) at `447bbd3`;
+historical automated certification and the later owner decision remain separate.
+The [W6.3.1 audit](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md),
+[proposed amendments](WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) and
+[unified UX plan](WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) are delivered for owner
+review before W6.4. The owner accepts the reconciliation direction with refinements;
+W6.3.1 documentation reconciliation is authorised, FINAL OWNER REVIEW PENDING
+for final text and the exact publication set. Block/Material/Texture delivery is
+provisionally before W6.7 consumption, earlier if W6.6 water needs it; existing-cube
+W6.4 need not await completed Block Forge. Shared interaction design is defined
+now, with early implementation review after useful Block/Texture and World
+patterns; W6.17–18 integrate/harden. No implementation/publication is authorised;
+W6.4 remains NOT AUTHORISED. Preserve the owner-established
 Forge-first W6.2–W6.18 sequence in the
 [W6.1 specification](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md).
 Future equipment expansion and living-world systems remain later work.

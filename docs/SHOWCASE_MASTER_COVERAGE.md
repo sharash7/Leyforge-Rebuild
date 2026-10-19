@@ -8,10 +8,16 @@ It does not require full implementations. Each entry only needs a small real rep
 
 Every Forge workspace is its own showcase section. A placeholder window does not count; the workspace must eventually author or validate real content used by the game.
 
-Current planning: [Wave 5 closure](WAVE_5_CLOSURE.md) and
-[W6.1 readiness/UI/integration proposal](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md).
-The latter maps existing implementations and later dependencies; it does not mark
-these broad showcase categories complete or authorize their implementation.
+Current review, 2026-10-19: [W6.3 closure](WAVE_6_PART_3_CLOSURE.md) and
+[W6.3.1 alignment audit](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md), with
+[proposed amendments](WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) and a
+[unified Forge UX plan](WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md). The owner accepts
+the reconciliation direction with refinements; W6.3.1 documentation reconciliation
+is authorised, FINAL OWNER REVIEW PENDING for final text and exact publication set.
+The [W6.1 integration contracts and numbered sequence](WAVE_6_PART_1_READINESS_UI_AND_INTEGRATION_FOUNDATION.md)
+remain authoritative; [Wave 5 closure](WAVE_5_CLOSURE.md) is unchanged.
+Accepted bounded foundations do not mark these broad showcase categories complete
+or authorise implementation/publication. W6.4 remains NOT AUTHORISED.
 
 ## 01 — Product Shell & Player
 

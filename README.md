@@ -97,9 +97,17 @@ The Voxel Asset tab adds independent spatial cell authoring; see the
 draft recovery, publication and the separate LFE runtime test. Its owner-ratified
 [W6.3 voxel authoring design](docs/WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md)
 recommends a bounded spatial editor, canonical source, deterministic bake and LFE
-runtime consumer. D1–D8 and bounded W6.3 implementation are authorized; complete
-automated certification and owner acceptance are separate. W6.3.1 and W6.4 have
-not begun.
+runtime consumer. [W6.3 is CLOSED — OWNER ACCEPTED](docs/WAVE_6_PART_3_CLOSURE.md)
+at `447bbd310afa6278bc3bdb359e3707585372b27d`; complete historical automated
+certification and the later owner decision are recorded separately. The
+[W6.3.1 alignment audit](docs/WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md),
+[proposed amendments](docs/WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) and
+[unified Forge UX plan](docs/WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) await owner
+review. The owner has accepted the reconciliation direction with refinements;
+W6.3.1 is DOCUMENTATION RECONCILIATION AUTHORISED, FINAL OWNER REVIEW PENDING
+for final text and the exact publication set. The documents establish Block Forge
+and early shared interaction planning contracts; implementation/publication is
+not authorised. W6.4 remains NOT AUTHORISED.
 
 The connected playable loop and controls remain in
 docs/WAVE_4_SURVIVAL_AND_CREATION.md. Held gathering, Dense Stone unit cubes,

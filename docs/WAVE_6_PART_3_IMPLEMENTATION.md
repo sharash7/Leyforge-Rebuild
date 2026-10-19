@@ -5,10 +5,18 @@ Owner authorization: 2026-10-18, `main` starting at
 [design](WAVE_6_PART_3_VOXEL_ASSET_FORGE_DESIGN.md). W6.2 is formally
 [CLOSED — OWNER ACCEPTED](WAVE_6_PART_2_CLOSURE.md).
 
-Status: **implementation candidate; complete certification and owner acceptance
-required**. Focused results alone cannot certify or authorize publication of the
-stage. Append-only receipts under `.verification/wave6/w6_3/run-*/` identify the
-exact tested source. No owner acceptance is claimed by this document.
+Status update — 2026-10-19: **CLOSED — OWNER ACCEPTED** at published implementation
+`447bbd310afa6278bc3bdb359e3707585372b27d`. See the
+[closure record](WAVE_6_PART_3_CLOSURE.md) for historical complete certification,
+the supplied later owner decision, chronological clarifications and evidence
+limits. The original append-only receipts retain their acceptance-pending fields.
+The [W6.3.1 audit](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md) is delivered for owner review;
+the owner accepts the reconciliation direction with refinements, while final text
+and the exact publication set await separate approval. W6.3.1 documentation
+reconciliation is authorised; no implementation/publication is authorised and
+W6.4 remains NOT AUTHORISED. The guide below
+retains implementation-era verification requirements; no runtime gate was rerun
+for documentation-only closure.
 
 ## Launch and edit
 
@@ -114,6 +122,11 @@ and the existing Forge shell/viewport owns creator interaction. Full Block Forge
 will integrate stable asset references with block definitions later. No duplicate
 content registry or future workspace framework is introduced.
 
-W6.3.1 Repository Alignment, Audit & Amendments is planned after full W6.3
-certification **and owner acceptance**, before W6.4. The design records its future
-review coverage and A/B/C/D classifications; neither checkpoint nor W6.4 starts here.
+W6.3.1 Repository Alignment, Audit & Amendments follows full W6.3 certification
+and owner acceptance, before W6.4. Its entry conditions are now satisfied and the
+[audit](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md),
+[UX proposal](WAVE_6_PART_3_1_UNIFIED_FORGE_UX_PLAN.md) and
+[proposed amendments](WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) await owner review.
+The direction is accepted; FINAL OWNER REVIEW PENDING applies to reconciled text
+and exact publication set. No staging/commits/pushes or audit-finding implementation
+is authorised by this documentation task. W6.4 remains NOT AUTHORISED.

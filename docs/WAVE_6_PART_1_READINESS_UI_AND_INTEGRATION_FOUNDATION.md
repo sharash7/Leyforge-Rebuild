@@ -2,8 +2,14 @@
 
 **W6.1 CLOSED — OWNER ACCEPTED 2026-10-18.** See the
 [closure record](WAVE_6_PART_1_CLOSURE.md) for the certified publication, retained
-automated evidence and the owner's 9/9 UI PASS. W6.2 is
-[proposed for approval](WAVE_6_PART_2_FORGE_FOUNDATION.md), not implementation.
+automated evidence and the owner's 9/9 UI PASS. Current status, 2026-10-19:
+[W6.2](WAVE_6_PART_2_CLOSURE.md) and [W6.3](WAVE_6_PART_3_CLOSURE.md) are also
+closed with owner acceptance. The [W6.3.1 audit](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md)
+and [reconciled amendments](WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md) record the
+owner-accepted direction. W6.3.1: DOCUMENTATION RECONCILIATION AUTHORISED;
+FINAL OWNER REVIEW PENDING for text and publication set. The numbered sequence
+below is unchanged. No staging/publication or implementation is authorised;
+W6.4 is NOT AUTHORISED.
 
 The following implementation/repair contract is retained as history.
 **W6.1 implementation candidate, owner-authorized 2026-10-16.**
@@ -72,11 +78,30 @@ for a separately authorized design; it does not expand W6.1 automatically.
 
 ## Future equipment coverage — proposal only
 
-Runtime slots remain exactly `hand` and `body`. Candidate future coverage is
-head, chest, hands, legs, feet, cloak/mantle, belt/utility, left/right rings,
-amulet, backpack and wings. This is not a ratified schema or a complete slot set.
-Hand/offhand, layering, ammunition, trinkets and additional sockets remain future
-design decisions. No legacy-slot migration mapping is ratified.
+Runtime slots remain exactly `hand` and `body`. The owner-directed W6.3.1
+reconciliation preserves this explicit **12-position candidate planning model**:
+
+1. Head
+2. Chest
+3. Hands
+4. Legs
+5. Feet
+6. Cloak/mantle
+7. Belt/utility
+8. Left ring
+9. Right ring
+10. Amulet
+11. Backpack
+12. Wings
+
+This is not an approved runtime schema. Unresolved: legacy `hand`/`body` mapping;
+main-hand/offhand semantics; layering/attachment conflicts; occupancy and multi-slot
+relationships; instance conservation, durability and migration; whether the 12
+positions include or supplement held equipment. Ammunition, trinkets and additional
+sockets remain further design questions, not additional approved candidate slots.
+Expansion normally belongs to Wave 7 unless separately authorised for an earlier
+genuine consumer. See [M06](WAVE_6_PART_3_1_PROPOSED_AMENDMENTS.md#twelve-position-equipment-candidate).
+No placeholder runtime slots or legacy migration mapping are introduced.
 
 Future equipment must define stable semantic IDs, canonical compatibility,
 occupancy/conflicts, stack limits, owning actor, instance/durability conservation,

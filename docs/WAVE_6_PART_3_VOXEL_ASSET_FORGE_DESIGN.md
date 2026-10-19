@@ -1,5 +1,13 @@
 # W6.3 — Voxel Asset Forge design
 
+**Current status — 2026-10-19:** [W6.3 CLOSED — OWNER ACCEPTED](WAVE_6_PART_3_CLOSURE.md)
+at `447bbd310afa6278bc3bdb359e3707585372b27d`. Historical design/approval language
+below is retained. The [W6.3.1 alignment audit](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md)
+records the owner-accepted reconciliation direction with refinements. W6.3.1
+documentation reconciliation is authorised; FINAL OWNER REVIEW PENDING applies
+to final text and the exact publication set. No implementation/publication is
+authorised. W6.4 remains NOT AUTHORISED.
+
 **OWNER RATIFIED — BOUNDED W6.3 IMPLEMENTATION AUTHORIZED 2026-10-18.**
 The owner approved D1–D8 against `main` at
 `3579e765a63293ea5ca28b50b22d9fa231f0995d`, including the clarifications below.
@@ -446,6 +454,12 @@ mining damage, per-cell world saves, terrain replication or harvesting changes.
 Persistent sub-block sculpting requires a separate architecture decision.
 
 ## W6.3.1 — Repository Alignment, Audit & Amendments
+
+Historical checkpoint plan, followed by the separately authorised
+[review deliverables](WAVE_6_PART_3_1_ALIGNMENT_AUDIT.md) and owner-directed
+documentation reconciliation. The owner accepts the refined direction; final text
+and publication approval remain pending. The following entry
+conditions and coverage were recorded before that audit was authorised:
 
 Planned **after W6.3 automated certification and owner acceptance**, before
 W6.4 Macro World Generation. W6.4–W6.18 numbering stays unchanged. This is a
